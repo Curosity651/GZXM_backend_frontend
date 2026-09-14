@@ -1,0 +1,13 @@
+spring:
+  flyway:
+    enabled: false
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+app:
+  bootstrap:
+    enabled: false
+  security:
+    jwt-secret: test-only-secret-key-with-at-least-thirty-two-characters
