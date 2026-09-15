@@ -64,6 +64,61 @@ class TopicIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JdbcTemplate jdbc;
     @Autowired TopicService service;
+    @Autowired com.gzxm.server.modules.topic.application.TopicQueryService queries;
+    @Autowired com.gzxm.server.modules.topic.application.TopicIdentityFacts identityFacts;
+
+    @Test
+    void publicContractProvidesScopedImmutableFacts() throws Exception {
+        long topic = create("QUERY", "1", List.of("2")).path("id").asLong();
+        SecurityContextHolder.getContext().setAuthentication(auth(actor("INTERNAL_TOPIC_UNIT", 2L)));
+        assertThat(queries.getTopic(topic).projectId()).isEqualTo(1);
+        assertThat(queries.isLeadUnit(topic, 1)).isTrue();
+        assertThat(queries.isLeadUnit(topic, 2)).isFalse();
+        assertThat(queries.listMembers(topic, false)).hasSize(2);
+        assertThatThrownBy(() -> queries.listMembers(topic, false).clear()).isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> queries.isLeadUnit(topic, 0)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void publicContractRejectsCrossTopicDisabledAndAnonymousConsumers() throws Exception {
+        long topic = create("QUERY", "1", List.of("2")).path("id").asLong();
+        SecurityContextHolder.getContext().setAuthentication(auth(actor("INTERNAL_TOPIC_UNIT", 3L)));
+        assertThatThrownBy(() -> queries.getTopic(topic)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> queries.listMembers(topic, true)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> queries.isLeadUnit(topic, 1)).isInstanceOf(BusinessException.class);
+        SecurityContextHolder.getContext().setAuthentication(auth(actor("INTERNAL_TOPIC_UNIT", 2L)));
+        jdbc.update("UPDATE biz_topic_unit_membership SET enabled=0 WHERE topic_id=? AND unit_id=2", topic);
+        assertThatThrownBy(() -> queries.listMembers(topic, true)).isInstanceOf(BusinessException.class);
+        SecurityContextHolder.clearContext();
+        assertThatThrownBy(() -> queries.getTopic(topic)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void publicContractKeepsHistoricalReadsAndSeparatesLeadFactFromWritePermission() throws Exception {
+        long topic = create("QUERY", "1", List.of("2")).path("id").asLong();
+        jdbc.update("UPDATE biz_topic SET enabled=0,status='CLOSED' WHERE id=?", topic);
+        jdbc.update("UPDATE biz_topic_unit_membership SET enabled=0 WHERE topic_id=? AND unit_id=2", topic);
+        SecurityContextHolder.getContext().setAuthentication(auth(actor("SYSTEM_ADMIN", null)));
+        assertThat(queries.getTopic(topic).enabled()).isFalse();
+        assertThat(queries.listMembers(topic, false)).hasSize(1);
+        assertThat(queries.listMembers(topic, true)).hasSize(2);
+        assertThat(queries.isLeadUnit(topic, 1)).isTrue();
+        assertThatThrownBy(() -> queries.getTopic(Long.MAX_VALUE)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void trustedIdentityContractLoadsWithoutCurrentUserAndReflectsChanges() throws Exception {
+        long topic = create("QUERY", "1", List.of("2")).path("id").asLong();
+        SecurityContextHolder.clearContext();
+        assertThat(identityFacts.activeMembershipsForUnit(1)).singleElement()
+                .satisfies(member -> assertThat(member.membershipType()).isEqualTo("LEAD"));
+        jdbc.update("UPDATE biz_topic SET enabled=0,status='PAUSED' WHERE id=?", topic);
+        assertThat(identityFacts.activeMembershipsForUnit(2)).hasSize(1);
+        jdbc.update("UPDATE biz_topic_unit_membership SET enabled=0 WHERE topic_id=? AND unit_id=2", topic);
+        assertThat(identityFacts.activeMembershipsForUnit(2)).isEmpty();
+        assertThat(identityFacts.activeMembershipsForUnit(999)).isEmpty();
+        assertThatThrownBy(() -> identityFacts.activeMembershipsForUnit(-1)).isInstanceOf(BusinessException.class);
+    }
 
     @BeforeEach
     void fixtures() {

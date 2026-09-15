@@ -5,6 +5,8 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface TopicMembershipMapper {
+    @Select("SELECT m.* FROM biz_topic_unit_membership m JOIN biz_topic t ON t.id=m.topic_id WHERE m.unit_id=#{unitId} AND m.enabled=1 ORDER BY m.topic_id,m.id")
+    List<TopicMembershipEntity> activeForUnit(long unitId);
     @Select("SELECT * FROM biz_topic_unit_membership WHERE topic_id=#{topicId} ORDER BY CASE WHEN membership_type='LEAD' THEN 0 ELSE 1 END,id")
     List<TopicMembershipEntity> list(long topicId);
     @Select("SELECT * FROM biz_topic_unit_membership WHERE topic_id=#{topicId} AND unit_id=#{unitId}")
