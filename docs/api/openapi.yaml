@@ -192,11 +192,13 @@ paths:
     get:
       tags: [Indicators]
       operationId: listTimeNodes
+      description: 要求page:topic-indicator权限。查询唯一有效重点项目的启用节点，按sortOrder和id排序；没有节点时返回空数组，没有或存在多个有效项目时返回409。
       responses: { '200': { description: 考核节点, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TimeNode' } } } } } }
   /indicator-definitions:
     get:
       tags: [Indicators]
       operationId: listIndicatorDefinitions
+      description: 要求page:topic-indicator权限。仅返回启用指标定义，按id排序；尚未初始化定义时返回空数组。
       responses: { '200': { description: 五类基础成果和固定专项指标, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/IndicatorDefinition' } } } } } }
   /topics/{topicId}/indicator-targets:
     get:

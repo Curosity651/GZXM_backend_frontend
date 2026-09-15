@@ -122,6 +122,8 @@ class TopicIntegrationTest {
 
     @BeforeEach
     void fixtures() {
+        jdbc.update("DELETE FROM time_node");
+        jdbc.update("DELETE FROM indicator_definition");
         jdbc.update("DELETE FROM biz_topic_unit_membership");
         jdbc.update("DELETE FROM biz_topic");
         jdbc.update("DELETE FROM biz_project");
@@ -135,6 +137,31 @@ class TopicIntegrationTest {
     }
 
     @AfterEach void clearSecurity() { SecurityContextHolder.clearContext(); }
+
+    @Test
+    void indicatorCatalogReadsConfiguredEnabledRowsWithPagePermission() throws Exception {
+        jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order,enabled) VALUES(1,1,'MID','Midpoint','2027-01-01',1,1),(2,1,'END','Final','2028-01-01',2,0)");
+        jdbc.update("INSERT INTO indicator_definition(id,code,name,achievement_type,category,unit_name,enabled) VALUES(1,'PAPER','Papers','PAPER','BASE','篇',1),(2,'DISABLED','Disabled','PATENT','BASE','件',0)");
+        var reader = new CurrentUser(101, "synthetic-reader", null, "RESEARCH_ASSISTANT",
+                Set.of("page:topic-indicator"), List.of(), 0);
+        mvc.perform(get("/api/v1/time-nodes").with(authentication(auth(reader))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value("1"));
+        mvc.perform(get("/api/v1/indicator-definitions").with(authentication(auth(reader))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].unit").value("篇"));
+        jdbc.update("UPDATE biz_project SET enabled=0");
+        mvc.perform(get("/api/v1/time-nodes").with(authentication(auth(reader))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void indicatorCatalogRejectsMissingPagePermissionAndAnonymousRequests() throws Exception {
+        for (String path : List.of("/api/v1/time-nodes", "/api/v1/indicator-definitions")) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            call(get(path), "RESEARCH_ASSISTANT", null).andExpect(status().isForbidden());
+        }
+    }
     @AfterAll static void stopContainer() { if (container != null) container.stop(); }
 
     @Test

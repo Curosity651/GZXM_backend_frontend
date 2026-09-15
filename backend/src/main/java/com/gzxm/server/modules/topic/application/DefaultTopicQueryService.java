@@ -10,10 +10,23 @@ import java.util.List;
 public class DefaultTopicQueryService implements TopicQueryService {
     private final TopicService topics;
     private final TopicMapper mapper;
+    private final com.gzxm.server.common.security.SecurityContextFacade security;
 
-    public DefaultTopicQueryService(TopicService topics, TopicMapper mapper) {
+    public DefaultTopicQueryService(TopicService topics, TopicMapper mapper,
+                                   com.gzxm.server.common.security.SecurityContextFacade security) {
         this.topics = topics;
         this.mapper = mapper;
+        this.security = security;
+    }
+
+    @Override
+    public long currentProjectId() {
+        security.requireCurrentUser();
+        var projects = mapper.configuredProjects();
+        if (projects.size() != 1)
+            throw com.gzxm.server.common.exception.BusinessException.conflict(
+                    "PROJECT_CONFIGURATION_REQUIRED", "必须先配置且仅配置一个有效重点项目");
+        return projects.getFirst();
     }
 
     @Override

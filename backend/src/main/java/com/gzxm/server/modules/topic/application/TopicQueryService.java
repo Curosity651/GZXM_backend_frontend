@@ -4,6 +4,8 @@ import java.util.List;
 
 /** Read-only contract for request-bound consumers such as report/archive. */
 public interface TopicQueryService {
+    /** Configured single project for authenticated catalogue consumers. */
+    long currentProjectId();
     TopicSummary getTopic(long topicId);
     List<Member> listMembers(long topicId, boolean includeDisabled);
     /** Identity fact only; consumers must separately authorize their own write actions. */

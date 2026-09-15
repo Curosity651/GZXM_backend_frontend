@@ -5,6 +5,8 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface TopicMapper {
+    @Select("SELECT id FROM biz_project WHERE enabled=1 ORDER BY id LIMIT 2")
+    List<Long> configuredProjects();
     String FILTER = """
         <where>
           <if test="unitId != null">
