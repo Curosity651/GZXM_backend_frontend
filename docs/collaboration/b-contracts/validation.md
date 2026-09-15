@@ -43,6 +43,7 @@ node 'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js' test
 node 'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js' install --prefix "$env:TEMP\gzxm-b-lint-runtime" --no-save --package-lock=false --ignore-scripts @oxlint/binding-win32-x64-msvc@1.75.0
 $env:NAPI_RS_NATIVE_LIBRARY_PATH = "$env:TEMP\gzxm-b-lint-runtime\node_modules\@oxlint\binding-win32-x64-msvc\oxlint.win32-x64-msvc.node"
 node 'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js' run lint
+$env:NAPI_RS_NATIVE_LIBRARY_PATH = $null # lint专用变量不能传给Vite/rolldown，否则可能加载错误的原生库。
 node 'C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js' run build
 ```
 

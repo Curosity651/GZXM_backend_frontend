@@ -94,3 +94,8 @@ This generated password is for development use only. Your security configuration
 2026-09-15T10:55:09.970+08:00  INFO 28556 --- [gzxm-backend] [nio-8080-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 3 ms
 2026-09-15T10:55:51.052+08:00  INFO 28556 --- [gzxm-backend] [nio-8080-exec-6] o.springdoc.api.AbstractOpenApiResource  : Init duration for springdoc-openapi is: 441 ms
 2026-09-15T14:31:57.924+08:00  WARN 28556 --- [gzxm-backend] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=2h31m32s170ms459µs100ns).
+2026-09-15T16:30:17.592+08:00  WARN 28556 --- [gzxm-backend] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1m47s955ms795µs400ns).
+2026-09-15T16:32:02.250+08:00  WARN 28556 --- [gzxm-backend] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1m44s656ms855µs400ns).
+2026-09-15T16:33:08.986+08:00  WARN 28556 --- [gzxm-backend] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=1m6s736ms205µs600ns).
+2026-09-15T17:09:35.438+08:00  WARN 28556 --- [gzxm-backend] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=55s942ms425µs100ns).
+2026-09-15T17:38:44.267+08:00  WARN 28556 --- [gzxm-backend] [l-1:housekeeper] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=2m34s832ms620µs200ns).
