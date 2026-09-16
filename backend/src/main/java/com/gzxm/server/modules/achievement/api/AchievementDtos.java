@@ -20,5 +20,6 @@ public final class AchievementDtos {
     public record AchievementView(String id,String topicId,String unitId,String nodeId,String indicatorDefinitionId,
                                   String achievementType,String title,String responsiblePerson,String status,boolean countsToIndicator,
                                   int recordVersion,int submittedVersion,JsonNode detail,List<FileView> materials,
-                                  List<MaterialLink> materialLinks,OffsetDateTime createdAt,OffsetDateTime updatedAt) {}
+                                  List<MaterialLink> materialLinks,OffsetDateTime createdAt,OffsetDateTime updatedAt,
+                                  List<AchievementHistoryDtos.ApprovalView> approvals) {}
 }

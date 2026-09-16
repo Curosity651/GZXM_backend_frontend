@@ -72,9 +72,11 @@
 
 | 字段 | 含义 |
 |---|---|
-| `record_version` | 当前记录被编辑了多少版，用于避免两个人互相覆盖修改 |
-| `submitted_version` | 每次正式提交审核时递增，对应一份不可变提交快照 |
+| `record_version` | 成果每次成功编辑、动作或审批递增，用于避免并发覆盖；幂等重放不递增 |
+| `submitted_version` | 成果每次预审、正式或补充提交审核时递增，对应一份不可变提交快照 |
 | `counts_to_indicator` | 终审通过且满足统计条件后，是否已经计入指标完成数 |
+
+第 7 步新增 B 表 `achievement_workflow_operation`：achievement_id、actor_id、request_key、operation_kind、request_json、response_json、created_at。唯一键 `(actor_id, request_key)` 使用 ASCII 大小写敏感比较；只保存成功操作，事务失败不留键。该表只服务成果动作/审批，不是 A 的公共 api_idempotency 替代实现。成果审批/快照继续使用既有共享表，所有 B SQL 固定 business_type='ACHIEVEMENT'，不改 REPORT 数据。详见[第 7 步说明](../collaboration/b-contracts/achievement-step7.md)。
 
 ## 6. 月报和季报表
 

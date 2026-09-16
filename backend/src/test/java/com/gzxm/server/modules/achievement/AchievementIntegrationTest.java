@@ -44,7 +44,7 @@ class AchievementIntegrationTest {
     @AfterAll static void stopContainer(){if(container!=null) container.stop();}
     @Autowired MockMvc mvc;@Autowired JdbcTemplate jdbc;@Autowired ObjectMapper json;
     @BeforeEach void fixtures() {
-        for(String table:List.of("achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
+        for(String table:List.of("achievement_workflow_operation","achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
                 "topic_indicator_publication","topic_indicator_draft_target","topic_indicator_draft","topic_indicator","time_node","indicator_definition",
                 "biz_topic_unit_membership","biz_topic","biz_project","sys_unit","audit_log")) jdbc.update("DELETE FROM "+table);
         jdbc.update("INSERT INTO biz_project(id,code,name) VALUES(1,'P','Synthetic project')");
@@ -184,6 +184,15 @@ class AchievementIntegrationTest {
         }
         jdbc.update("UPDATE biz_topic SET status='ACTIVE'");jdbc.update("UPDATE achievement SET status='SUBMITTED'");
         call(put("/api/v1/achievements/"+id).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
+    }
+    @Test void formalSubmissionCannotBypassMissingProductionFileCapability() throws Exception {
+        String id=create(5,2).path("id").asText();
+        jdbc.update("UPDATE achievement SET status='FORMAL_DRAFT',detail_json=? WHERE id=?","{\"actualGraduationDate\":\"2026-01-01\"}",id);
+        call(post("/api/v1/achievements/"+id+"/actions").header("Idempotency-Key","formal-without-files")
+                .content("{\"action\":\"SUBMIT_FORMAL\",\"recordVersion\":1}"),"INTERNAL_TOPIC_UNIT",2L)
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("FILE_REFERENCE_CAPABILITY_UNAVAILABLE"));
+        assertThat(jdbc.queryForObject("SELECT status FROM achievement WHERE id=?",String.class,id)).isEqualTo("FORMAL_DRAFT");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM achievement_workflow_operation",Integer.class)).isZero();
     }
     @Test void malformedAndUnauthorizedRequestsAreRejected() throws Exception {
         for(String role:List.of("SYSTEM_ADMIN","PROJECT_TECH_LEADER","RESEARCH_ASSISTANT"))

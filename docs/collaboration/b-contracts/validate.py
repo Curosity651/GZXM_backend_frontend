@@ -97,10 +97,13 @@ def check():
         ("IndicatorTargetBatch", {"nodeId": "1", "targets": [{"indicatorDefinitionId": "1", "targetQuantity": 1.5}]}, False),
         ("UnitAllocationBatch", {"nodeId": "1", "allocations": [{"unitId": "1", "indicatorDefinitionId": "1", "targetQuantity": 2}]}, True),
         ("UnitAllocationBatch", {"nodeId": "1", "allocations": [{"indicatorDefinitionId": "1", "targetQuantity": 2}]}, False),
-        ("AchievementActionRequest", {"action": "SUBMIT_PRE_REVIEW"}, True),
+        ("AchievementActionRequest", {"action": "SUBMIT_PRE_REVIEW", "recordVersion": 1}, True),
+        ("AchievementActionRequest", {"action": "SUBMIT_PRE_REVIEW"}, False),
         ("AchievementActionRequest", {"action": "FORCE_APPROVE"}, False),
         ("ReviewRequest", {"decision": "APPROVE"}, True),
         ("ReviewRequest", {"decision": "APPROVED"}, False),
+        ("AchievementReviewRequest", {"decision": "APPROVE", "recordVersion": 2, "submittedVersion": 1}, True),
+        ("AchievementReviewRequest", {"decision": "APPROVE", "submittedVersion": 1}, False),
     ]
     for schema, payload, expected in cases:
         require(Draft202012Validator(schemas[schema]).is_valid(payload) == expected,

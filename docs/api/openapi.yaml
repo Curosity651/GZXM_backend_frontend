@@ -252,7 +252,7 @@ paths:
     get:
       tags: [Achievements]
       operationId: listAchievements
-      description: 按当前有效成员关系过滤：管理角色全局、牵头本课题全单位、承担单位仅自身。第六步仅草稿，pendingForMe=true返回空列表；审批待办在第七步接入。
+      description: 按当前有效成员关系过滤：管理角色全局、牵头本课题全单位、承担单位仅自身。pendingForMe=true按科研助理初审权限或技术负责人终审权限过滤当前待办；其他用户返回空列表。
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/Size' }
@@ -279,29 +279,32 @@ paths:
     put:
       tags: [Achievements]
       operationId: updateAchievement
-      description: 仅所属单位可编辑DRAFT，必须匹配recordVersion，否则409。课题、单位、节点、指标归属不可更换。detail为完整替换；materialAttachments省略保留、空数组移除当前关联但留历史，同类可多文件。非空附件在文件能力接入前返回503并回滚。
+      description: 仅所属单位可编辑草稿、退回、待见刊或待授权补充状态，审批中及生效后锁定；必须匹配recordVersion，否则409。课题、单位、节点、指标归属不可更换。detail为完整替换；materialAttachments省略保留、空数组移除当前关联但留历史，同类可多文件。非空附件在文件能力接入前返回503并回滚。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
       responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/actions:
     post:
       tags: [Achievements]
       operationId: executeAchievementAction
+      description: 按成果类型和当前状态执行预审提交、投稿登记、进入正式草稿、正式或补充提交。必须携带recordVersion。每次提交生成新不可变快照；正式和补充必须满足材料及日期规则，文件能力未接入返回503。Idempotency-Key在当前用户的成果动作与审批中共享，同键同请求重放原响应，同键不同请求409。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementActionRequest' } } } }
-      responses: { '200': { description: 状态流转完成, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+      responses: { '200': { description: 状态流转完成, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/reviews:
     post:
       tags: [Achievements]
       operationId: reviewAchievement
+      description: 仅科研助理初审、项目技术负责人终审，角色和动作权限同时检查；必须匹配recordVersion与submittedVersion，退回意见必填。退回重提回初审。论文/专利正式终审后等待补充，补充终审才计数；其他三类正式终审生效。成功重试返回原审批记录。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReviewRequest' } } } }
-      responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementReviewRequest' } } } }
+      responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/snapshots:
     get:
       tags: [Achievements]
       operationId: listAchievementSnapshots
+      description: 按当前成果数据范围返回不可变提交快照，提交版本倒序，仅查询ACHIEVEMENT；与审批记录分开，审批历史见成果详情approvals。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }]
-      responses: { '200': { description: 不可变提交版本, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SubmissionSnapshot' } } } } } }
+      responses: { '200': { description: 不可变提交版本, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SubmissionSnapshot' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievement-progress:
     get:
       tags: [Achievements]
@@ -629,15 +632,30 @@ components:
     Achievement:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, title, status, recordVersion, submittedVersion, materials]
-      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { type: string }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialLinks: { type: array, items: { $ref: '#/components/schemas/AchievementMaterialLink' } }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { $ref: '#/components/schemas/AchievementStatus' }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialLinks: { type: array, items: { $ref: '#/components/schemas/AchievementMaterialLink' } }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, approvals: { type: array, items: { $ref: '#/components/schemas/ApprovalRecord' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
     AchievementWriteRequest:
       type: object
       required: [topicId, nodeId, indicatorDefinitionId, title, responsiblePerson]
       properties: { topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, title: { type: string, minLength: 1, maxLength: 500 }, responsiblePerson: { type: string, minLength: 1, maxLength: 100 }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialAttachments: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AchievementMaterialInput' } }, materialFileIds: { type: array, maxItems: 0, deprecated: true, items: { type: string }, description: 非空旧式文件ID列表会返回422，请改用结构化材料 }, recordVersion: { type: integer, minimum: 1, maximum: 2147483647 } }
     AchievementActionRequest:
       type: object
-      required: [action]
-      properties: { action: { type: string, enum: [SUBMIT_PRE_REVIEW, REGISTER_EXTERNAL_SUBMISSION, START_FORMAL, SUBMIT_FORMAL, SUBMIT_SUPPLEMENT] }, externalSubmissionDate: { type: string, format: date }, externalSubmissionNumber: { type: string } }
+      required: [action, recordVersion]
+      properties:
+        action: { type: string, enum: [SUBMIT_PRE_REVIEW, REGISTER_EXTERNAL_SUBMISSION, START_FORMAL, SUBMIT_FORMAL, SUBMIT_SUPPLEMENT] }
+        recordVersion: { type: integer, minimum: 1, maximum: 2147483647 }
+        externalSubmissionDate: { type: string, format: date, description: 仅登记动作使用且必填；论文映射submissionDate，专利映射applicationDate }
+        externalSubmissionNumber: { type: string, maxLength: 500, description: 仅登记动作使用，可选；论文映射externalSubmissionNumber，专利映射applicationNumber }
+    AchievementReviewRequest:
+      type: object
+      required: [decision, recordVersion, submittedVersion]
+      properties:
+        decision: { type: string, enum: [APPROVE, RETURN] }
+        opinion: { type: string, maxLength: 1000, description: RETURN时必填且不能是空白 }
+        recordVersion: { type: integer, minimum: 1, maximum: 2147483647 }
+        submittedVersion: { type: integer, minimum: 1, maximum: 2147483647 }
+    AchievementStatus:
+      type: string
+      enum: [DRAFT, PRE_INITIAL, PRE_FINAL, PRE_RETURNED, PRE_APPROVED, EXTERNAL_SUBMITTED, FORMAL_DRAFT, FORMAL_INITIAL, FORMAL_FINAL, FORMAL_RETURNED, WAIT_PUBLICATION, WAIT_GRANT, SUPPLEMENT_INITIAL, SUPPLEMENT_FINAL, SUPPLEMENT_RETURNED, EFFECTIVE]
     AchievementPage:
       type: object
       required: [items, page, size, total]

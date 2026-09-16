@@ -4,7 +4,7 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface AchievementMapper {
-    record Filter(Long unit,List<Long> memberTopics,List<Long> leadTopics,Long topic,Long node,Long requestedUnit,Long definition,String status,boolean pending,long offset,long size) {}
+    record Filter(Long unit,List<Long> memberTopics,List<Long> leadTopics,Long topic,Long node,Long requestedUnit,Long definition,String status,List<String> pendingStates,long offset,long size) {}
     String FILTER="""
         <where>
         <if test='unit != null'>
@@ -16,7 +16,7 @@ public interface AchievementMapper {
         <if test='requestedUnit != null'>AND unit_id=#{requestedUnit}</if>
         <if test='definition != null'>AND indicator_definition_id=#{definition}</if>
         <if test='status != null'>AND status=#{status}</if>
-        <if test='pending'>AND 1=0</if>
+        <if test='pendingStates != null'>AND status IN <foreach collection='pendingStates' item='s' open='(' close=')' separator=','>#{s}</foreach></if>
         </where>
         """;
     @Select("<script>SELECT * FROM achievement "+FILTER+" ORDER BY id DESC LIMIT #{size} OFFSET #{offset}</script>")
@@ -32,4 +32,7 @@ public interface AchievementMapper {
     void insert(AchievementEntity row);
     @Update("UPDATE achievement SET title=#{title},responsible_person=#{responsiblePerson},detail_json=#{detailJson},record_version=record_version+1,updated_by=#{updatedBy} WHERE id=#{id} AND record_version=#{recordVersion}")
     int update(AchievementEntity row);
+
+    @Update("UPDATE achievement SET status=#{status},counts_to_indicator=#{countsToIndicator},detail_json=#{detailJson},record_version=record_version+1,submitted_at=CASE WHEN submitted_version < #{submittedVersion} THEN CURRENT_TIMESTAMP(3) ELSE submitted_at END,submitted_version=#{submittedVersion},updated_by=#{updatedBy} WHERE id=#{id} AND record_version=#{recordVersion}")
+    int transition(AchievementEntity row);
 }

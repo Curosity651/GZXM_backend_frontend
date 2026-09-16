@@ -89,7 +89,7 @@
 
 ## 6. 成果管理
 
-第 6 步当前实现：列表、创建、详情、编辑四个接口，编辑仅允许 DRAFT；动作、审批、退回后编辑和快照尚待第 7 步。创建必须绑定本单位已下发的基础指标，零目标允许。归属由服务端确定，编辑携带最新 recordVersion。五类 detail 及结构化 materialAttachments 见 OpenAPI；非空附件因 A 的文件能力未接入返回 503 并回滚。当前审批待办为空，已有当前材料的记录查询也会因缺少元数据能力返回 503。详见[第 6 步验收说明](../collaboration/b-contracts/achievement-step6.md)。
+第 7 步已实现列表、创建、详情、编辑、动作、审批、快照七个接口。五类均先两级预审，论文/专利再经正式及补充两级审批后计数；其他三类正式终审生效。编辑仅限草稿、退回和待补充；动作携带 recordVersion，审批携带 recordVersion + submittedVersion，并使用 Idempotency-Key。详情含 approvals，pendingForMe 按当前审批级别过滤。正式/补充提交及非空附件仍等待 A 的文件公开能力，未接入返回 503 并回滚；已有当前材料的记录查询也受限。详见[第 7 步验收说明](../collaboration/b-contracts/achievement-step7.md)。
 
 
 

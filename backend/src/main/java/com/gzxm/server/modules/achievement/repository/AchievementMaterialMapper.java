@@ -11,4 +11,6 @@ public interface AchievementMaterialMapper {
     void retire(long id);
     @Insert("INSERT INTO achievement_material(achievement_id,file_id,material_type,file_version,material_status,active,created_by) VALUES(#{achievement},#{file},#{type},#{version},'UNSUBMITTED',1,#{actor})")
     void insert(@Param("achievement") long achievement,@Param("file") long file,@Param("type") String type,@Param("version") int version,@Param("actor") long actor);
+    @Update("UPDATE achievement_material SET material_status=#{status} WHERE achievement_id=#{id} AND active=1")
+    void markCurrent(@Param("id") long id,@Param("status") String status);
 }

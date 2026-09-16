@@ -6,6 +6,8 @@ import com.gzxm.server.common.exception.BusinessException;
 import com.gzxm.server.common.security.*;
 import com.gzxm.server.modules.achievement.api.AchievementDtos.*;
 import com.gzxm.server.modules.achievement.domain.AchievementEntity;
+import com.gzxm.server.modules.achievement.domain.AchievementWorkflow;
+import com.gzxm.server.modules.achievement.api.AchievementHistoryDtos.*;
 import com.gzxm.server.modules.achievement.repository.*;
 import com.gzxm.server.modules.indicator.application.AchievementAssignmentQuery;
 import com.gzxm.server.modules.system.application.SystemService;
@@ -26,11 +28,12 @@ public class AchievementService {
     private final AchievementDetailValidator details;
     private final ObjectProvider<AchievementFileGateway> files;
     private final ObjectMapper json;
+    private final AchievementHistoryMapper history;
     public AchievementService(AchievementMapper records,AchievementMaterialMapper materials,TopicQueryService topics,
                               AchievementAssignmentQuery assignments,SecurityContextFacade security,SystemService system,
-                              AchievementDetailValidator details,ObjectProvider<AchievementFileGateway> files,ObjectMapper json) {
+                              AchievementDetailValidator details,ObjectProvider<AchievementFileGateway> files,ObjectMapper json,AchievementHistoryMapper history) {
         this.records=records;this.materials=materials;this.topics=topics;this.assignments=assignments;this.security=security;
-        this.system=system;this.details=details;this.files=files;this.json=json;
+        this.system=system;this.details=details;this.files=files;this.json=json;this.history=history;
     }
 
     @Transactional(readOnly=true)
@@ -47,7 +50,11 @@ public class AchievementService {
             memberTopics.add(member.topicId());
             if(topics.isLeadUnit(member.topicId(),user.unitId())) leadTopics.add(member.topicId());
         }
-        var filter=new AchievementMapper.Filter(user.isGlobalRole()?null:user.unitId(),memberTopics,leadTopics,topic,node,unit,definition,status,pending,(page-1)*size,size);
+        List<String> pendingStates=null;
+        if(pending) pendingStates="RESEARCH_ASSISTANT".equals(user.roleCode()) && user.authorities().contains("achievement.initial.approve")
+                ?List.copyOf(AchievementWorkflow.INITIAL):"PROJECT_TECH_LEADER".equals(user.roleCode()) && user.authorities().contains("achievement.final.approve")
+                ?List.copyOf(AchievementWorkflow.FINAL):List.of("__NONE__");
+        var filter=new AchievementMapper.Filter(user.isGlobalRole()?null:user.unitId(),memberTopics,leadTopics,topic,node,unit,definition,status,pendingStates,(page-1)*size,size);
         return PageResult.of(records.list(filter).stream().map(this::view).toList(),page,size,records.count(filter));
     }
 
@@ -76,7 +83,7 @@ public class AchievementService {
         var row=records.lock(id);
         readable(row);
         if(!Objects.equals(row.getUnitId(),user.unitId())) throw BusinessException.forbidden("ACHIEVEMENT_OWNER_REQUIRED","只能维护本单位成果");
-        if(!"DRAFT".equals(row.getStatus())) throw conflict("ACHIEVEMENT_READ_ONLY","当前仅支持编辑草稿，阶段动作在第七步实现");
+        if(!AchievementWorkflow.EDITABLE.contains(row.getStatus())) throw conflict("ACHIEVEMENT_READ_ONLY","只能编辑草稿、退回或待补充成果");
         if(request.recordVersion()==null || !Objects.equals(request.recordVersion(),row.getRecordVersion())) throw conflict("ACHIEVEMENT_VERSION_CONFLICT","请携带最新recordVersion");
         if(row.getTopicId()!=TopicService.id(request.topicId()) || row.getNodeId()!=TopicService.id(request.nodeId())
                 || row.getIndicatorDefinitionId()!=TopicService.id(request.indicatorDefinitionId())) throw conflict("ACHIEVEMENT_OWNERSHIP_IMMUTABLE","创建后的课题、节点和指标归属不可更换");
@@ -127,7 +134,7 @@ public class AchievementService {
         materials.retire(row.getId());
         desired.forEach((file,type)->materials.insert(row.getId(),file,type,previous+1,actor));
     }
-    private AchievementView view(AchievementEntity row) {
+    AchievementView view(AchievementEntity row) {
         try {
             var links=materials.list(row.getId());
             var currentFiles=links.stream().filter(AchievementMaterialMapper.Material::active).map(item->gateway().readMetadata(item.fileId())).toList();
@@ -135,10 +142,11 @@ public class AchievementService {
                     row.getIndicatorDefinitionId().toString(),row.getAchievementType(),row.getTitle(),row.getResponsiblePerson(),row.getStatus(),row.isCountsToIndicator(),
                     row.getRecordVersion(),row.getSubmittedVersion(),json.readTree(row.getDetailJson()),currentFiles,
                     links.stream().map(item->new MaterialLink(Long.toString(item.id()),Long.toString(item.fileId()),item.materialType(),item.fileVersion(),item.active(),item.materialStatus())).toList(),
-                    row.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime(),row.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime());
+                    row.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime(),row.getUpdatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime(),
+                    history.approvals(row.getId()).stream().map(this::approvalView).toList());
         } catch(com.fasterxml.jackson.core.JsonProcessingException ex) { throw new IllegalStateException("Invalid persisted achievement detail",ex); }
     }
-    private AchievementFileGateway gateway() {
+    AchievementFileGateway gateway() {
         var service=files.getIfAvailable();
         if(service==null) throw new BusinessException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,"FILE_REFERENCE_CAPABILITY_UNAVAILABLE","文件公开关联能力尚未接入");
         return service;
@@ -148,7 +156,7 @@ public class AchievementService {
         if(!user.isGlobalRole() && (!(user.isInternalUnit() || user.isExternalUnit()) || user.unitId()==null)) throw BusinessException.forbidden("ACHIEVEMENT_SCOPE_DENIED","没有成果数据范围");
         return user;
     }
-    private CurrentUser writer() {
+    CurrentUser writer() {
         var user=reader();
         if(!(user.isInternalUnit() || user.isExternalUnit()) || !user.authorities().contains("achievement.submit"))
             throw BusinessException.forbidden("ACHIEVEMENT_UNIT_REQUIRED","只有具有填报权限的课题单位可以维护成果");
@@ -156,7 +164,7 @@ public class AchievementService {
             throw BusinessException.forbidden("ACHIEVEMENT_UNIT_DISABLED","所属单位已停用");
         return user;
     }
-    private void readable(AchievementEntity row) {
+    void readable(AchievementEntity row) {
         if(!canRead(row))
             throw BusinessException.forbidden("ACHIEVEMENT_SCOPE_DENIED","无权查看其他单位成果");
     }
@@ -165,12 +173,25 @@ public class AchievementService {
         return topics.canReadTopic(row.getTopicId()) && (user.isGlobalRole() || Objects.equals(row.getUnitId(),user.unitId())
                 || topics.isLeadUnit(row.getTopicId(),user.unitId()));
     }
-    private AchievementEntity require(long id) {
+    AchievementEntity require(long id) {
         TopicService.id(Long.toString(id));var row=records.find(id);
         if(row==null) throw BusinessException.notFound("ACHIEVEMENT_NOT_FOUND","成果不存在");return row;
     }
-    private void writable(TopicQueryService.TopicSummary topic) {
+    void writable(TopicQueryService.TopicSummary topic) {
         if(!topic.enabled() || Set.of("PAUSED","CLOSED").contains(topic.status())) throw conflict("TOPIC_NOT_OPERATIONAL","课题当前只读");
+    }
+    @Transactional(readOnly=true)
+    public List<SnapshotView> snapshots(long id) {
+        readable(require(id));
+        return history.snapshots(id).stream().map(row->{
+            try { return new SnapshotView(Long.toString(row.id()),"ACHIEVEMENT",Long.toString(row.businessId()),row.stage(),row.submittedVersion(),
+                    row.submittedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime(),Long.toString(row.submitterId()),json.readTree(row.payloadJson())); }
+            catch(com.fasterxml.jackson.core.JsonProcessingException ex) {throw new IllegalStateException("Invalid submission snapshot",ex);}
+        }).toList();
+    }
+    ApprovalView approvalView(AchievementHistoryMapper.Approval row) {
+        return new ApprovalView(Long.toString(row.id()),"ACHIEVEMENT",Long.toString(row.businessId()),row.stage(),row.approvalLevel(),row.decision(),row.opinion(),
+                Long.toString(row.operatorId()),row.operatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime(),row.submittedVersion());
     }
     private static BusinessException invalid(String code,String message) {return BusinessException.validation(code,message);}
     private static BusinessException conflict(String code,String message) {return BusinessException.conflict(code,message);}
