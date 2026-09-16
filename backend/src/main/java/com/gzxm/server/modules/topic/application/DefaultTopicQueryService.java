@@ -30,6 +30,18 @@ public class DefaultTopicQueryService implements TopicQueryService {
     }
 
     @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public TopicSummary lockTopic(long topicId) {
+        security.requireCurrentUser();
+        TopicService.id(Long.toString(topicId));
+        var entity = mapper.lock(topicId);
+        if (entity == null) throw com.gzxm.server.common.exception.BusinessException.notFound("TOPIC_NOT_FOUND", "课题不存在");
+        topics.get(topicId);
+        return new TopicSummary(topicId, entity.getProjectId(), entity.getCode(), entity.getName(),
+                entity.getLeadUnitId(), entity.getStatus(), entity.isEnabled());
+    }
+
+    @Override
     public TopicSummary getTopic(long topicId) {
         // Reuse the same authorization as HTTP reads, within one consistent transaction snapshot.
         var visible = topics.get(topicId);

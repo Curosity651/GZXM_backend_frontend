@@ -83,7 +83,10 @@
 
 指标目录补充：`/time-nodes` 与 `/indicator-definitions` 检查 `page:topic-indicator` 权限，只返回启用目录项。节点取唯一有效项目并按 `sortOrder/id` 排序；项目配置不唯一返回 409。目录尚未初始化返回空数组，不自动创建业务配置。
 
+课题指标第 4 步：GET 默认读取生效目标；`view=draft` 仅限有 `indicator.manage` 的科研助理，并返回 `X-Draft-Version`。PUT 完整替换草稿，首次版本 0，后续 `draftVersion` 必须匹配；空数组清空草稿，不影响生效数据。发布必须携带 `draftVersion` 与 `Idempotency-Key`，保留历史；同键同请求重放 204，不同请求 409。数量非负、节点累计不递减、专项不超过同类基础。已发布目标的删除或降额草稿暂不能下发，须后续接入完成量与分配调整约束。见 [验收说明](../collaboration/b-contracts/topic-step4.md)。
+
 ## 6. 成果管理
+
 
 | 方法 | 地址 | 接口用途 | 使用者/限制 |
 |---|---|---|---|

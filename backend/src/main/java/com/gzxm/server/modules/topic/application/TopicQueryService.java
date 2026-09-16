@@ -6,6 +6,8 @@ import java.util.List;
 public interface TopicQueryService {
     /** Configured single project for authenticated catalogue consumers. */
     long currentProjectId();
+    /** Must be called inside a business write transaction; locks status against concurrent changes. */
+    TopicSummary lockTopic(long topicId);
     TopicSummary getTopic(long topicId);
     List<Member> listMembers(long topicId, boolean includeDisabled);
     /** Identity fact only; consumers must separately authorize their own write actions. */

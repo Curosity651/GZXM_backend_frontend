@@ -122,6 +122,10 @@ class TopicIntegrationTest {
 
     @BeforeEach
     void fixtures() {
+        jdbc.update("DELETE FROM topic_indicator_publication");
+        jdbc.update("DELETE FROM topic_indicator_draft_target");
+        jdbc.update("DELETE FROM topic_indicator_draft");
+        jdbc.update("DELETE FROM topic_indicator");
         jdbc.update("DELETE FROM time_node");
         jdbc.update("DELETE FROM indicator_definition");
         jdbc.update("DELETE FROM biz_topic_unit_membership");
@@ -419,7 +423,7 @@ class TopicIntegrationTest {
 
     @Test
     void flywayAndRuntimeOpenApiContainTopicModule() throws Exception {
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1 AND version IN ('202609150900','202609160100')", Integer.class)).isEqualTo(2);
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/topics'].get.operationId").value("listTopics"))
                 .andExpect(jsonPath("$.paths['/api/v1/topics/{topicId}/members'].post.operationId").value("addTopicParticipant"));
@@ -429,6 +433,219 @@ class TopicIntegrationTest {
         var result = call(post("/api/v1/topics").content(json.writeValueAsString(write(code, lead, participants, null))),
                 "RESEARCH_ASSISTANT", null).andExpect(status().isCreated()).andReturn();
         return json.readTree(result.getResponse().getContentAsString());
+    }
+
+    private String indicatorTopic() throws Exception {
+        jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order,enabled) VALUES(1,1,'MID','Mid','2027-01-01',1,1),(2,1,'END','End','2028-01-01',2,1),(3,1,'OFF','Off','2029-01-01',3,0)");
+        jdbc.update("INSERT INTO indicator_definition(id,code,name,achievement_type,category,unit_name,enabled) VALUES(1,'PAPER','Paper','PAPER','BASE','篇',1),(2,'SPECIAL','Special','PAPER','SPECIAL','篇',1),(3,'OFF','Off','PATENT','BASE','件',0)");
+        return create("INDICATOR", "1", List.of("2")).path("id").asText();
+    }
+
+    private ResultActions saveTarget(String topic,int node,int revision,String targets) throws Exception {
+        return call(put("/api/v1/topics/"+topic+"/indicator-targets").content(
+                "{\"nodeId\":\""+node+"\",\"draftVersion\":"+revision+",\"targets\":"+targets+"}"),"RESEARCH_ASSISTANT",null);
+    }
+
+    private String target(int quantity) { return "[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":"+quantity+"}]"; }
+
+    private ResultActions publishTarget(String topic,int node,int revision,String key) throws Exception {
+        return call(post("/api/v1/topics/"+topic+"/indicator-targets:publish").header("Idempotency-Key",key)
+                .content("{\"nodeId\":\""+node+"\",\"draftVersion\":"+revision+"}"),"RESEARCH_ASSISTANT",null);
+    }
+
+    @Test
+    void indicatorDraftReplacementVersionsAndPublishedIsolation() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk()).andExpect(header().string("X-Draft-Version","1"));
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"INTERNAL_TOPIC_UNIT",2L)
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        saveTarget(topic,1,0,target(3)).andExpect(status().isConflict());
+        saveTarget(topic,1,1,"[]").andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        publishTarget(topic,1,2,"empty-draft-key").andExpect(status().isUnprocessableEntity());
+        saveTarget(topic,1,2,target(2)).andExpect(status().isOk());
+        publishTarget(topic,1,3,"initial-publication").andExpect(status().isNoContent());
+        saveTarget(topic,1,3,target(4)).andExpect(status().isOk());
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"INTERNAL_TOPIC_UNIT",2L)
+                .andExpect(jsonPath("$[0].targetQuantity").value(2)).andExpect(jsonPath("$[0].version").value(1));
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1&view=draft"),"RESEARCH_ASSISTANT",null)
+                .andExpect(status().isOk()).andExpect(header().string("X-Draft-Version","4"))
+                .andExpect(jsonPath("$[0].targetQuantity").value(4));
+        publishTarget(topic,1,4,"second-publication").andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT JSON_EXTRACT(targets_json,'$.\"1\"') FROM topic_indicator_publication WHERE publish_version=1",String.class)).isEqualTo("2");
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"INTERNAL_TOPIC_UNIT",2L)
+                .andExpect(jsonPath("$[0].targetQuantity").value(4)).andExpect(jsonPath("$[0].version").value(2));
+    }
+
+    @Test
+    void indicatorPublicationReplaysOriginalRevisionAfterLaterDraftAndRejectsKeyReuse() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
+        publishTarget(topic,1,1,"durable-publication").andExpect(status().isNoContent());
+        saveTarget(topic,1,1,target(4)).andExpect(status().isOk());
+        publishTarget(topic,1,1,"durable-publication").andExpect(status().isNoContent());
+        publishTarget(topic,1,2,"durable-publication").andExpect(status().isConflict());
+        publishTarget(topic,2,1,"durable-publication").andExpect(status().isConflict());
+        publishTarget(topic,1,1,"stale-revision-key").andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT target_quantity FROM topic_indicator",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action_code='indicator.publish'",Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void indicatorChecksBothCumulativeDirectionsAndRechecksEffectiveValuesAtPublish() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
+        saveTarget(topic,2,0,target(1)).andExpect(status().isUnprocessableEntity());
+        saveTarget(topic,2,0,target(5)).andExpect(status().isOk());
+        saveTarget(topic,1,1,target(6)).andExpect(status().isUnprocessableEntity());
+        publishTarget(topic,1,1,"cumulative-midpoint").andExpect(status().isNoContent());
+        publishTarget(topic,2,1,"cumulative-endpoint").andExpect(status().isNoContent());
+        saveTarget(topic,1,1,target(1)).andExpect(status().isOk());
+        publishTarget(topic,1,2,"unsupported-reduction").andExpect(status().isConflict());
+        saveTarget(topic,1,2,"[]").andExpect(status().isOk());
+        publishTarget(topic,1,3,"empty-revision-publish").andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT target_quantity FROM topic_indicator WHERE node_id=1",Integer.class)).isEqualTo(2);
+    }
+
+    @Test
+    void indicatorRejectsInvalidDimensionsNodesAndSpecialOverBase() throws Exception {
+        String topic=indicatorTopic();
+        for(String targets:List.of("[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":-1}]",
+                "[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":1.5}]",
+                "[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":2147483648}]",
+                "[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":1},{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":1}]",
+                "[{\"indicatorDefinitionId\":\"3\",\"targetQuantity\":1}]",
+                "[{\"indicatorDefinitionId\":\"999\",\"targetQuantity\":1}]",
+                "[{\"indicatorDefinitionId\":\"2\",\"targetQuantity\":1}]",
+                "[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":1},{\"indicatorDefinitionId\":\"2\",\"targetQuantity\":2}]"))
+            saveTarget(topic,1,0,targets).andExpect(status().isUnprocessableEntity());
+        saveTarget(topic,3,0,target(1)).andExpect(status().isUnprocessableEntity());
+        saveTarget(topic,999,0,target(1)).andExpect(status().isUnprocessableEntity());
+        jdbc.update("INSERT INTO biz_project(id,code,name,enabled) VALUES(2,'OTHER','Other',0)");
+        jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order) VALUES(4,2,'OTHER','Other','2027-01-01',1)");
+        saveTarget(topic,4,0,target(1)).andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_draft",Integer.class)).isZero();
+        saveTarget(topic,1,0,"[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":2},{\"indicatorDefinitionId\":\"2\",\"targetQuantity\":1}]")
+                .andExpect(status().isOk());
+        publishTarget(topic,1,1,"special-indicator-key").andExpect(status().isNoContent());
+    }
+
+    @Test
+    void indicatorReadsEnforceScopeAndDraftPrivacyAndStatusBlocksWrites() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
+        for(String role:List.of("SYSTEM_ADMIN","PROJECT_TECH_LEADER","INTERNAL_TOPIC_UNIT","EXTERNAL_TOPIC_UNIT")) {
+            Long unit=role.endsWith("TOPIC_UNIT")?Long.valueOf(1):null;
+            call(put("/api/v1/topics/"+topic+"/indicator-targets").content("{\"nodeId\":\"1\",\"targets\":[],\"draftVersion\":1}"),role,unit)
+                    .andExpect(status().isForbidden());
+            call(post("/api/v1/topics/"+topic+"/indicator-targets:publish").header("Idempotency-Key","forbidden-key")
+                    .content("{\"nodeId\":\"1\",\"draftVersion\":1}"),role,unit).andExpect(status().isForbidden());
+        }
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1&view=draft"),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isForbidden());
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"INTERNAL_TOPIC_UNIT",4L).andExpect(status().isForbidden());
+        jdbc.update("UPDATE biz_topic_unit_membership SET enabled=0 WHERE topic_id=? AND unit_id=2",topic);
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isForbidden());
+        for(String state:List.of("PAUSED","CLOSED")) {
+            jdbc.update("UPDATE biz_topic SET status=? WHERE id=?",state,topic);
+            saveTarget(topic,1,1,target(3)).andExpect(status().isConflict());
+            publishTarget(topic,1,1,"blocked-publish-key").andExpect(status().isConflict());
+            call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"SYSTEM_ADMIN",null).andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void indicatorMalformedRequestsAndMissingAuthoritiesAreRejected() throws Exception {
+        String topic=indicatorTopic();
+        call(get("/api/v1/topics/"+topic+"/indicator-targets"),"RESEARCH_ASSISTANT",null).andExpect(status().isUnprocessableEntity());
+        call(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1&view=all"),"RESEARCH_ASSISTANT",null).andExpect(status().isUnprocessableEntity());
+        publishTarget(topic,1,1,"short").andExpect(status().isUnprocessableEntity());
+        call(post("/api/v1/topics/"+topic+"/indicator-targets:publish").content("{\"nodeId\":\"1\",\"draftVersion\":1}"),"RESEARCH_ASSISTANT",null)
+                .andExpect(status().isUnprocessableEntity());
+        var noAuthority=new CurrentUser(101,"synthetic",null,"RESEARCH_ASSISTANT",Set.of(),List.of(),0);
+        for(var request:List.of(put("/api/v1/topics/"+topic+"/indicator-targets"),post("/api/v1/topics/"+topic+"/indicator-targets:publish"))) {
+            mvc.perform(request.with(authentication(auth(noAuthority))).contentType("application/json")
+                    .content("{\"nodeId\":\"1\",\"targets\":[],\"draftVersion\":1}"))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void concurrentIndicatorPublicationsProduceOneHistoryAndOneAudit() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var start=new CountDownLatch(1);
+            Callable<Integer> publish=()->{start.await(); return publishTarget(topic,1,1,"concurrent-publish-key").andReturn().getResponse().getStatus();};
+            var first=executor.submit(publish); var second=executor.submit(publish); start.countDown();
+            assertThat(first.get(20,TimeUnit.SECONDS)).isEqualTo(204);
+            assertThat(second.get(20,TimeUnit.SECONDS)).isEqualTo(204);
+        }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT publish_version FROM topic_indicator",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action_code='indicator.publish'",Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void concurrentIndicatorDraftSavesRejectOneStaleEditor() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
+        try(var executor=Executors.newFixedThreadPool(2)) {
+            var start=new CountDownLatch(1);
+            Callable<Integer> save=()->{start.await(); return saveTarget(topic,1,1,target(3)).andReturn().getResponse().getStatus();};
+            var first=executor.submit(save); var second=executor.submit(save); start.countDown();
+            assertThat(List.of(first.get(20,TimeUnit.SECONDS),second.get(20,TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(200,409);
+        }
+    }
+
+    @Test
+    void failedPublicationRollsBackHistoryEffectiveRowsAndPublishedRevision() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,"[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":2},{\"indicatorDefinitionId\":\"2\",\"targetQuantity\":1}]").andExpect(status().isOk());
+        jdbc.execute("CREATE TRIGGER fail_indicator_test BEFORE INSERT ON topic_indicator FOR EACH ROW BEGIN IF NEW.indicator_definition_id=2 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic failure'; END IF; END");
+        try { publishTarget(topic,1,1,"rollback-publication").andExpect(status().isInternalServerError()); }
+        finally { jdbc.execute("DROP TRIGGER fail_indicator_test"); }
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator",Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT published_draft_version FROM topic_indicator_draft",Integer.class)).isZero();
+        publishTarget(topic,1,1,"rollback-publication").andExpect(status().isNoContent());
+    }
+
+    @Test
+    void publicationRevalidatesCatalogAndEffectiveCumulativeConstraints() throws Exception {
+        String topic=indicatorTopic();
+        saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
+        jdbc.update("UPDATE indicator_definition SET enabled=0 WHERE id=1");
+        publishTarget(topic,1,1,"revalidate-definition").andExpect(status().isUnprocessableEntity());
+        jdbc.update("UPDATE indicator_definition SET enabled=1 WHERE id=1");
+        jdbc.update("UPDATE time_node SET enabled=0 WHERE id=1");
+        publishTarget(topic,1,1,"revalidate-node-key").andExpect(status().isUnprocessableEntity());
+        jdbc.update("UPDATE time_node SET enabled=1 WHERE id=1");
+        jdbc.update("INSERT INTO topic_indicator(project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(1,?,2,1,1,'PUBLISHED',1)",topic);
+        publishTarget(topic,1,1,"revalidate-cumulative").andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isZero();
+    }
+
+    @Test
+    void exportsIndicatorResponsesForContractValidation() throws Exception {
+        String topic=indicatorTopic();
+        var samples=new LinkedHashMap<String,Object>();
+        var reader=new CurrentUser(101,"synthetic",null,"RESEARCH_ASSISTANT",Set.of("page:topic-indicator"),List.of(),0);
+        for(var operation:Map.of("listTimeNodes","/api/v1/time-nodes","listIndicatorDefinitions","/api/v1/indicator-definitions").entrySet()) {
+            var response=mvc.perform(get(operation.getValue()).with(authentication(auth(reader))))
+                    .andExpect(status().isOk()).andReturn().getResponse();
+            samples.put(operation.getKey(),Map.of("status","200","body",json.readTree(response.getContentAsString())));
+        }
+        capture(samples,"saveTopicIndicatorTargets",put("/api/v1/topics/"+topic+"/indicator-targets")
+                .content("{\"nodeId\":\"1\",\"targets\":"+target(2)+",\"draftVersion\":0}"),"RESEARCH_ASSISTANT",null,200);
+        var published=publishTarget(topic,1,1,"contract-publish-key").andExpect(status().isNoContent()).andReturn().getResponse();
+        assertThat(published.getContentAsString()).isEmpty();
+        samples.put("publishTopicIndicatorTargets",Map.of("status","204"));
+        capture(samples,"listTopicIndicatorTargets",get("/api/v1/topics/"+topic+"/indicator-targets?nodeId=1"),"INTERNAL_TOPIC_UNIT",2L,200);
+        java.nio.file.Files.createDirectories(java.nio.file.Path.of("target"));
+        json.writerWithDefaultPrettyPrinter().writeValue(java.nio.file.Path.of("target/indicator-contract-responses.json").toFile(),samples);
     }
 
     private TopicWriteRequest write(String code, String lead, List<String> participants, Integer version) {
@@ -449,7 +666,7 @@ class TopicIntegrationTest {
                 (rs, row) -> new CurrentUser.TopicMembership(rs.getLong("id"), rs.getLong("topic_id"), rs.getLong("unit_id"),
                         rs.getString("membership_type"), rs.getBoolean("enabled")), unit);
         return new CurrentUser(101, "synthetic-actor", unit, role,
-                Set.of("topic.manage", "topic-unit.manage", "ROLE_" + role), memberships, 0);
+                Set.of("topic.manage", "topic-unit.manage", "indicator.manage", "topic-indicator.publish", "ROLE_" + role), memberships, 0);
     }
 
     private UsernamePasswordAuthenticationToken auth(CurrentUser user) {

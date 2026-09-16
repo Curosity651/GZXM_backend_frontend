@@ -488,3 +488,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- 初始化时至少写入以下固定角色：
 -- SYSTEM_ADMIN、PROJECT_TECH_LEADER、RESEARCH_ASSISTANT、INTERNAL_TOPIC_UNIT、EXTERNAL_TOPIC_UNIT。
 -- 外部课题单位的 self-funded 页面/动作权限必须在服务端硬限制，不能通过角色配置开启。
+
+-- 本文件保持27张表的基线定义。课题指标草稿/发布历史增量见：
+-- backend/src/main/resources/db/migration/V202609160100__add_indicator_drafts_and_publications.sql
+-- 部署由Flyway顺序执行迁移，不应在已迁移数据库重复运行基线或手动重复增量。

@@ -204,23 +204,27 @@ paths:
     get:
       tags: [Indicators]
       operationId: listTopicIndicatorTargets
+      description: 默认读取已发布的生效目标，课题有效成员及管理角色可读历史。view=draft仅限具有indicator.manage权限的科研助理，响应X-Draft-Version给出节点草稿版本，未创建为0。草稿不影响生效目标。
       parameters:
         - { $ref: '#/components/parameters/TopicId' }
         - { name: nodeId, in: query, required: true, schema: { type: string } }
-      responses: { '200': { description: 当前节点课题累计目标, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } } }
+        - { name: view, in: query, schema: { type: string, enum: [effective, draft], default: effective } }
+      responses: { '200': { description: 当前节点课题累计目标, headers: { X-Draft-Version: { description: 草稿查询时返回，保存时作为draftVersion提交, schema: { type: integer, minimum: 0 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
     put:
       tags: [Indicators]
       operationId: saveTopicIndicatorTargets
+      description: 仅科研助理且具有indicator.manage权限。按节点完整替换草稿，空数组清空未发布草稿；首次draftVersion省略或为0，后续必须匹配X-Draft-Version，冲突409。保存后版本增加；检查前后节点累计不递减、重复维度、节点归属、启用定义及专项不超过同类基础总量。已发布目标本阶段不得删除或降额，修改草稿不会改变生效目标。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorTargetBatch' } } } }
-      responses: { '200': { description: 已保存草稿, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '200': { description: 已保存草稿, headers: { X-Draft-Version: { description: 保存后的节点草稿版本, schema: { type: integer, minimum: 1 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
   '/topics/{topicId}/indicator-targets:publish':
     post:
       tags: [Indicators]
       operationId: publishTopicIndicatorTargets
+      description: 仅科研助理且具有topic-indicator.publish权限；必须提交所发布draftVersion及8到100位可见ASCII的Idempotency-Key。发布非空草稿，原子更新生效值并保留历史。同一用户同键同课题/节点/草稿版本重放204且不重复发布；同键不同请求409。重试旧成功发布不会发布新草稿。暂停、关闭、停用课题拒绝新发布。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId], properties: { nodeId: { type: string } } } } } }
-      responses: { '204': { description: 已下发 }, '422': { $ref: '#/components/responses/ValidationError' } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId, draftVersion], properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 1, maximum: 2147483647 } } } } } }
+      responses: { '204': { description: 已下发或原成功请求重放 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
   /topics/{topicId}/unit-allocations:
     get:
       tags: [Indicators]
@@ -606,7 +610,7 @@ components:
     IndicatorTargetBatch:
       type: object
       required: [nodeId, targets]
-      properties: { nodeId: { type: string }, targets: { type: array, items: { type: object, required: [indicatorDefinitionId, targetQuantity], properties: { indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 } } } } }
+      properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 0, maximum: 2147483647 }, targets: { type: array, maxItems: 500, items: { type: object, required: [indicatorDefinitionId, targetQuantity], properties: { indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0, maximum: 2147483647 } } } } }
     UnitIndicatorAllocation:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, targetQuantity, status, version]

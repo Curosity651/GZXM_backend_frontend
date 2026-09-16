@@ -139,3 +139,15 @@
 | 课题＋单位 | 国家材料文件夹 | 每个参与单位都有独立国家材料清单 |
 | 课题＋内部单位 | 配套自筹项目 | 一个内部单位在一个课题下可以创建多个自筹项目 |
 | 自筹项目 | 归档文件夹 | 一个自筹项目按照模板生成多个材料目录 |
+
+## 增量：课题指标草稿及发布历史（2026-09-16）
+
+27 张表仍指基线；应用新增迁移后业务表共 30 张（不含 Flyway 管理表）。建表及旧数据导入见 [新增迁移](../../backend/src/main/resources/db/migration/V202609160100__add_indicator_drafts_and_publications.sql)。部署通过 Flyway 运行，不能修改已合并基线。
+
+| 新表（B 所有） | 关键字段 | 约束与用途 |
+|---|---|---|
+| topic_indicator_draft | topic_id/node_id/draft_version/published_draft_version/publish_version/updated_by | 每课题节点唯一；草稿编辑版本与发布版本分开 |
+| topic_indicator_draft_target | draft_id/indicator_definition_id/target_quantity | 每草稿定义唯一；数量非负；完整替换仅影响草稿 |
+| topic_indicator_publication | topic_id/node_id/draft_version/publish_version/published_by/request_key/targets_json/published_at | 用户请求键唯一、节点发布版本唯一；不可变业务发布快照与重放记录 |
+
+topic_indicator 继续承载生效目标，发布时保留行 ID。新迁移导入旧草稿并为当前已发布目标建立基准快照；导入快照操作者 0 表示历史导入。详见 [第 4 步契约](../collaboration/b-contracts/topic-step4.md)。
