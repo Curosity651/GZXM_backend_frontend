@@ -388,8 +388,10 @@ export interface ProgressReport {
   taskId: string;
   topicId: string;
   reportType: ReportType;
+  basicInformation: string;
   milestoneProgress: string;
   overallProgress: string;
+  researchAchievements: string;
   demonstrationProgress: string;
   fundUsage: string;
   nextPlan: string;

@@ -8,4 +8,4 @@ Write-Host "npm:"
 npm --version
 Write-Host "Docker:"
 docker version --format '{{.Server.Version}}'
-Write-Host "环境检查完成。后端要求 Java 21。"
+Write-Host "Environment check complete. Java 21 is required for the backend."
