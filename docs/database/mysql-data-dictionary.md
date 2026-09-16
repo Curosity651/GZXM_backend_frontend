@@ -64,7 +64,9 @@
 | 中文名称 | 数据表 | 关键字段 | 关联关系 | 关键规则 |
 |---|---|---|---|---|
 | 成果 | `achievement` | `topic_id`、`membership_id`、`unit_id`、`node_id`、`achievement_type`、`title`、`detail_json`、`status`、版本号 | 归属一个课题和上传单位，关联成果材料、审批和版本快照 | 谁上传就计入谁的单位指标；成果不归属配套自筹项目；不同成果类型的差异字段保存在`detail_json` |
-| 成果材料 | `achievement_material` | `achievement_id`、`file_id`、`material_type`、`material_status`、`file_version` | 连接成果和文件对象 | 预审阶段不强制上传原文；取得正式材料后补充文件 |
+| 成果材料 | `achievement_material` | `achievement_id`、`file_id`、`material_type`、`material_status`、`file_version`、`active` | 连接成果和文件对象 | 第 6 步增量新增 active；同一材料版本可包含同类多个文件，替换退役旧关联并保留历史；文件接入等待 A |
+
+材料增量为 `V202609160300__version_achievement_material_sets.sql`，不修改基线迁移。唯一键从 `(achievement_id, material_type, file_version)` 扩展为 `(achievement_id, material_type, file_version, file_id)`。迁移把旧数据中每个成果、每个材料类别的最高版本标为当前；旧关联全部保留。新写入按成果材料集合递增版本，`active` 判断当前关联，不能仅按全表最大版本判断当前材料。清空只退役关联，不删除文件。此表不替代第 7 步提交快照。
 
 ### 成果版本字段
 

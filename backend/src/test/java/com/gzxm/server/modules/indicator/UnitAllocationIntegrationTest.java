@@ -54,7 +54,7 @@ class UnitAllocationIntegrationTest {
 
     @BeforeEach
     void fixtures() {
-        for(String table:List.of("unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
+        for(String table:List.of("achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
                 "topic_indicator_publication","topic_indicator_draft_target","topic_indicator_draft","topic_indicator",
                 "time_node","indicator_definition","biz_topic_unit_membership","biz_topic","biz_project","sys_unit","audit_log")) jdbc.update("DELETE FROM "+table);
         jdbc.update("INSERT INTO biz_project(id,code,name) VALUES(1,'P','Synthetic project')");

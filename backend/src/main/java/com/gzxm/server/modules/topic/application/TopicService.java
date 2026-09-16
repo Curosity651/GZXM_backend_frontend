@@ -209,6 +209,17 @@ public class TopicService {
         return user;
     }
 
+    @Transactional(readOnly = true)
+    public boolean canRead(long topicId) {
+        positive(topicId);
+        CurrentUser user = reader();
+        if (topics.find(topicId) == null) return false;
+        if (user.isGlobalRole()) return true;
+        if (user.memberships().stream().noneMatch(member -> member.topicId() == topicId && member.enabled())) return false;
+        var member = members.findUnit(topicId, user.unitId());
+        return member != null && member.isEnabled();
+    }
+
     private void requireReadable(long topicId) {
         positive(topicId);
         CurrentUser user = reader();

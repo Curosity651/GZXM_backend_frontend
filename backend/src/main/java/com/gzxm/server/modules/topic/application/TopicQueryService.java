@@ -4,6 +4,8 @@ import java.util.List;
 
 /** Read-only contract for request-bound consumers such as report/archive. */
 public interface TopicQueryService {
+    /** Non-throwing scope probe for filtering; checks both identity and current membership. */
+    boolean canReadTopic(long topicId);
     /** Configured single project for authenticated catalogue consumers. */
     long currentProjectId();
     /** Must be called inside a business write transaction; locks status against concurrent changes. */

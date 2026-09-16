@@ -20,6 +20,11 @@ public class DefaultTopicQueryService implements TopicQueryService {
     }
 
     @Override
+    public boolean canReadTopic(long topicId) {
+        return topics.canRead(topicId);
+    }
+
+    @Override
     public long currentProjectId() {
         security.requireCurrentUser();
         var projects = mapper.configuredProjects();

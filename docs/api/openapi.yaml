@@ -252,6 +252,7 @@ paths:
     get:
       tags: [Achievements]
       operationId: listAchievements
+      description: 按当前有效成员关系过滤：管理角色全局、牵头本课题全单位、承担单位仅自身。第六步仅草稿，pendingForMe=true返回空列表；审批待办在第七步接入。
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/Size' }
@@ -261,23 +262,26 @@ paths:
         - { name: indicatorDefinitionId, in: query, schema: { type: string } }
         - { name: status, in: query, schema: { type: string } }
         - { name: pendingForMe, in: query, schema: { type: boolean } }
-      responses: { '200': { description: 按数据范围过滤的成果分页, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementPage' } } } } }
+      responses: { '200': { description: 按数据范围过滤的成果分页, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementPage' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     post:
       tags: [Achievements]
       operationId: createAchievement
+      description: 仅具有achievement.submit权限的有效启用成员单位；必须绑定本单位已下发的基础指标，零目标允许。归属由服务端解析；初始DRAFT、不计完成量。detail字段按现有五类表单校验，草稿允许缺项。A的文件关联能力尚未接入，非空materialAttachments返回503并回滚。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
-      responses: { '201': { description: 已创建草稿, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '201': { description: 已创建草稿, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '422': { $ref: '#/components/responses/ValidationError' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}:
     parameters: [{ $ref: '#/components/parameters/AchievementId' }]
     get:
       tags: [Achievements]
       operationId: getAchievement
-      responses: { '200': { description: 成果详情, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } } }
+      description: 按有效课题关系、单位归属和当前牵头范围读取。materials仅当前文件，materialLinks保留材料关联历史。文件公开能力未接入时，包含材料的记录暂无法返回完整详情。
+      responses: { '200': { description: 成果详情, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     put:
       tags: [Achievements]
       operationId: updateAchievement
+      description: 仅所属单位可编辑DRAFT，必须匹配recordVersion，否则409。课题、单位、节点、指标归属不可更换。detail为完整替换；materialAttachments省略保留、空数组移除当前关联但留历史，同类可多文件。非空附件在文件能力接入前返回503并回滚。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
-      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/actions:
     post:
       tags: [Achievements]
@@ -625,11 +629,11 @@ components:
     Achievement:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, title, status, recordVersion, submittedVersion, materials]
-      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { type: string }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { type: object, additionalProperties: true }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { type: string }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialLinks: { type: array, items: { $ref: '#/components/schemas/AchievementMaterialLink' } }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
     AchievementWriteRequest:
       type: object
       required: [topicId, nodeId, indicatorDefinitionId, title, responsiblePerson]
-      properties: { topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, title: { type: string }, responsiblePerson: { type: string }, detail: { type: object, additionalProperties: true }, materialFileIds: { type: array, items: { type: string } }, recordVersion: { type: integer } }
+      properties: { topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, title: { type: string, minLength: 1, maxLength: 500 }, responsiblePerson: { type: string, minLength: 1, maxLength: 100 }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialAttachments: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AchievementMaterialInput' } }, materialFileIds: { type: array, maxItems: 0, deprecated: true, items: { type: string }, description: 非空旧式文件ID列表会返回422，请改用结构化材料 }, recordVersion: { type: integer, minimum: 1, maximum: 2147483647 } }
     AchievementActionRequest:
       type: object
       required: [action]
@@ -715,3 +719,131 @@ components:
       type: object
       required: [url, expiresAt]
       properties: { url: { type: string, format: uri }, expiresAt: { type: string, format: date-time } }
+    AchievementMaterialInput:
+      type: object
+      required: [fileId, materialType]
+      properties:
+        fileId: { type: string, pattern: '^[1-9][0-9]*$' }
+        materialType: { type: string, minLength: 1, maxLength: 100 }
+    AchievementMaterialLink:
+      type: object
+      required: [id, fileId, materialType, version, active, status]
+      properties:
+        id: { type: string }
+        fileId: { type: string }
+        materialType: { type: string }
+        version: { type: integer, minimum: 1 }
+        active: { type: boolean }
+        status: { type: string }
+    AchievementDetail:
+      description: 根据绑定基础指标类型选择对应字段；跨类型字段由服务端拒绝。草稿无条件必填详情，正式提交规则留到第七步。
+      anyOf:
+        - { $ref: '#/components/schemas/PaperAchievementDetail' }
+        - { $ref: '#/components/schemas/PatentAchievementDetail' }
+        - { $ref: '#/components/schemas/CopyrightAchievementDetail' }
+        - { $ref: '#/components/schemas/StandardAchievementDetail' }
+        - { $ref: '#/components/schemas/TalentAchievementDetail' }
+    PaperAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        abstract: {"type": ["string", "null"], "maxLength": 10000}
+        acceptanceDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        allAuthors: {"type": ["string", "null"], "maxLength": 500}
+        cnNumber: {"type": ["string", "null"], "maxLength": 500}
+        correspondingAuthor: {"type": ["string", "null"], "maxLength": 500}
+        doi: {"type": ["string", "null"], "maxLength": 500}
+        englishTitle: {"type": ["string", "null"], "maxLength": 500}
+        externalSubmissionNumber: {"type": ["string", "null"], "maxLength": 500}
+        firstAuthor: {"type": ["string", "null"], "maxLength": 500}
+        firstSigningUnit: {"type": ["string", "null"], "maxLength": 500}
+        intendedJournal: {"type": ["string", "null"], "maxLength": 500}
+        isChineseCoreJournal: {"type": ["boolean", "null"]}
+        isPowerGridFirstAuthor: {"type": ["boolean", "null"]}
+        issn: {"type": ["string", "null"], "maxLength": 500}
+        journalLevel: {"type": ["string", "null"], "maxLength": 500}
+        journalName: {"type": ["string", "null"], "maxLength": 500}
+        keywords: {"type": ["string", "null"], "maxLength": 500}
+        paperFormType: {"enum": ["期刊论文", "会议论文", "", null]}
+        paperStatus: {"enum": ["撰写中", "已投稿", "已录用", "已正式刊出", "", null]}
+        paperType: {"enum": ["SCI", "EI", "CSCD", "其他", "无", "", null]}
+        projectLabeling: {"type": ["string", "null"], "maxLength": 500}
+        publicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        researchDirection: {"type": ["string", "null"], "maxLength": 500}
+        signingUnitList: {"type": ["string", "null"], "maxLength": 10000}
+        submissionDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+    PatentAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        abstract: {"type": ["string", "null"], "maxLength": 10000}
+        applicantList: {"type": ["string", "null"], "maxLength": 500}
+        applicationCountry: {"type": ["string", "null"], "maxLength": 500}
+        applicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        applicationNumber: {"type": ["string", "null"], "maxLength": 500}
+        firstApplicant: {"type": ["string", "null"], "maxLength": 500}
+        grantDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        grantPublicationNumber: {"type": ["string", "null"], "maxLength": 500}
+        inventorList: {"type": ["string", "null"], "maxLength": 500}
+        isPowerGridFirstApplicant: {"type": ["boolean", "null"]}
+        legalStatus: {"type": ["string", "null"], "maxLength": 500}
+        ownershipDescription: {"type": ["string", "null"], "maxLength": 10000}
+        patentScope: {"enum": ["国内", "国际", "", null]}
+        patentStatus: {"enum": ["申请材料准备中", "已申请", "已受理", "已授权", "", null]}
+        publicationNumber: {"type": ["string", "null"], "maxLength": 500}
+        receiptDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        receiptNumber: {"type": ["string", "null"], "maxLength": 500}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        technicalField: {"type": ["string", "null"], "maxLength": 500}
+    CopyrightAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        certificateDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        completionDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        copyrightOwnerList: {"type": ["string", "null"], "maxLength": 500}
+        developers: {"type": ["string", "null"], "maxLength": 500}
+        developmentLanguage: {"type": ["string", "null"], "maxLength": 500}
+        developmentMode: {"type": ["string", "null"], "maxLength": 500}
+        firstCompleter: {"type": ["string", "null"], "maxLength": 500}
+        firstCopyrightOwner: {"type": ["string", "null"], "maxLength": 500}
+        firstPublicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        isPowerGridFirstCompleter: {"type": ["boolean", "null"]}
+        operatingPlatform: {"type": ["string", "null"], "maxLength": 500}
+        registrationApplicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        registrationNumber: {"type": ["string", "null"], "maxLength": 500}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        rightsScope: {"type": ["string", "null"], "maxLength": 500}
+        shortName: {"type": ["string", "null"], "maxLength": 500}
+        softwareCategory: {"type": ["string", "null"], "maxLength": 500}
+        softwareMainFunctions: {"type": ["string", "null"], "maxLength": 10000}
+        technicalFeatures: {"type": ["string", "null"], "maxLength": 10000}
+        version: {"type": ["string", "null"], "maxLength": 500}
+    StandardAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        currentStage: {"type": ["string", "null"], "maxLength": 500}
+        draftCommitDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        draftSubmissionDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        drafters: {"type": ["string", "null"], "maxLength": 500}
+        leadingUnit: {"type": ["string", "null"], "maxLength": 500}
+        participatingUnits: {"type": ["string", "null"], "maxLength": 500}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        responsibleOrganization: {"type": ["string", "null"], "maxLength": 500}
+        standardLevel: {"type": ["string", "null"], "maxLength": 500}
+    TalentAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        actualGraduationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        educationLevel: {"enum": ["博士", "硕士", "", null]}
+        enrollmentDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        expectedGraduationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        studentName: {"type": ["string", "null"], "maxLength": 500}
+        supervisorName: {"type": ["string", "null"], "maxLength": 500}
+        thesisTitle: {"type": ["string", "null"], "maxLength": 500}
+        trainingStatus: {"type": ["string", "null"], "maxLength": 500}
+        trainingUnit: {"type": ["string", "null"], "maxLength": 500}

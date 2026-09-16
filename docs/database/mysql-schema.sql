@@ -492,4 +492,5 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- 本文件保持27张表的基线定义。课题指标草稿/发布历史增量见：
 -- backend/src/main/resources/db/migration/V202609160100__add_indicator_drafts_and_publications.sql
 -- 单位分配草稿/发布历史增量：backend/src/main/resources/db/migration/V202609160200__add_allocation_drafts_and_publications.sql
+-- 成果材料当前标志/同类多文件增量：backend/src/main/resources/db/migration/V202609160300__version_achievement_material_sets.sql
 -- 部署由Flyway顺序执行迁移，不应在已迁移数据库重复运行基线或手动重复增量。
