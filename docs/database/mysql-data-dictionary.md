@@ -151,3 +151,15 @@
 | topic_indicator_publication | topic_id/node_id/draft_version/publish_version/published_by/request_key/targets_json/published_at | 用户请求键唯一、节点发布版本唯一；不可变业务发布快照与重放记录 |
 
 topic_indicator 继续承载生效目标，发布时保留行 ID。新迁移导入旧草稿并为当前已发布目标建立基准快照；导入快照操作者 0 表示历史导入。详见 [第 4 步契约](../collaboration/b-contracts/topic-step4.md)。
+
+## 增量：单位分配草稿及发布历史（2026-09-16）
+
+在第 4 步 30 张业务表基础上再增加 3 张，合计 33 张（不含 Flyway 管理表）。使用 [新增迁移](../../backend/src/main/resources/db/migration/V202609160200__add_allocation_drafts_and_publications.sql) 顺序升级，保留既有基线。
+
+| 新表（B 所有） | 关键字段 | 约束与用途 |
+|---|---|---|
+| unit_allocation_draft | topic_id/node_id/draft_version/published_draft_version/publish_version/topic_indicator_version | 课题节点唯一；绑定保存时的课题指标版本 |
+| unit_allocation_draft_item | draft_id/unit_id/indicator_definition_id/target_quantity | 草稿单位指标组合唯一，非负整数 |
+| unit_allocation_publication | topic_id/node_id/draft_version/publish_version/topic_indicator_version/published_by/request_key/allocations_json | 用户请求键唯一、课题节点发布版本唯一；不可变历史及成功重放 |
+
+unit_indicator_allocation 继续保存生效分配，发布保留既有 ID。成员及课题指标关联 ID 由服务端解析；失效成员旧行保留历史但不参与新发布合计。旧草稿、发布版本和基准快照由新增 SQL 导入，详情见 [第 5 步说明](../collaboration/b-contracts/topic-step5.md)。

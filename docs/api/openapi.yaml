@@ -229,21 +229,24 @@ paths:
     get:
       tags: [Indicators]
       operationId: listUnitAllocations
-      parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: nodeId, in: query, required: true, schema: { type: string } }]
-      responses: { '200': { description: 当前节点单位累计分配, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } } }
+      description: 默认view=effective读取生效分配；管理角色和当前牵头看全课题，承担单位只能看自身。view=draft仅当前牵头且有unit-allocation.manage权限可读，返回X-Draft-Version和X-Topic-Indicator-Version响应头。
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: nodeId, in: query, required: true, schema: { type: string } }, { name: view, in: query, schema: { type: string, enum: [effective, draft], default: effective } }]
+      responses: { '200': { description: 当前节点单位累计分配, headers: { X-Draft-Version: { description: 草稿版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
     put:
       tags: [Indicators]
       operationId: saveUnitAllocations
+      description: 当前有效牵头且有unit-allocation.manage权限。完整替换节点草稿，首次draftVersion省略或0，后续必须匹配响应X-Draft-Version；空数组清空草稿，不改变生效分配。每行单位/定义不能重复，单位须为有效且启用成员，目标须已由课题下发。草稿可暂不满足覆盖/合计，但须满足单位节点累计和专项子集约束。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitAllocationBatch' } } } }
-      responses: { '200': { description: 已保存, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '200': { description: 已保存, headers: { X-Draft-Version: { description: 保存后的草稿版本, schema: { type: integer, minimum: 1 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本, schema: { type: integer, minimum: 1 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
   '/topics/{topicId}/unit-allocations:publish':
     post:
       tags: [Indicators]
       operationId: publishUnitAllocations
+      description: 当前有效牵头且有unit-allocation.publish权限。必须覆盖所有有效且启用成员（含牵头）和该节点全部生效指标，零目标显式填0；每项单位合计不得低于课题要求，允许超额。课题目标版本变化后须重新保存草稿。请求绑定draftVersion；同一用户同键同请求重放204，不同请求409。本阶段不允许降低有效成员已生效分配，停用成员历史保留但不计发布合计。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId], properties: { nodeId: { type: string } } } } } }
-      responses: { '204': { description: 已下发 }, '422': { $ref: '#/components/responses/ValidationError' } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId, draftVersion], properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 1, maximum: 2147483647 } } } } } }
+      responses: { '204': { description: 已下发或成功重放 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
 
   /achievements:
     get:
@@ -618,7 +621,7 @@ components:
     UnitAllocationBatch:
       type: object
       required: [nodeId, allocations]
-      properties: { nodeId: { type: string }, allocations: { type: array, items: { type: object, required: [unitId, indicatorDefinitionId, targetQuantity], properties: { unitId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 } } } } }
+      properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 0, maximum: 2147483647 }, allocations: { type: array, maxItems: 5000, items: { type: object, required: [unitId, indicatorDefinitionId, targetQuantity], properties: { unitId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0, maximum: 2147483647 } } } } }
     Achievement:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, title, status, recordVersion, submittedVersion, materials]

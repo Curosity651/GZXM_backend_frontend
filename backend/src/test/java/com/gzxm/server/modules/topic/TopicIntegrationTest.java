@@ -122,6 +122,10 @@ class TopicIntegrationTest {
 
     @BeforeEach
     void fixtures() {
+        jdbc.update("DELETE FROM unit_allocation_publication");
+        jdbc.update("DELETE FROM unit_allocation_draft_item");
+        jdbc.update("DELETE FROM unit_allocation_draft");
+        jdbc.update("DELETE FROM unit_indicator_allocation");
         jdbc.update("DELETE FROM topic_indicator_publication");
         jdbc.update("DELETE FROM topic_indicator_draft_target");
         jdbc.update("DELETE FROM topic_indicator_draft");
@@ -423,7 +427,7 @@ class TopicIntegrationTest {
 
     @Test
     void flywayAndRuntimeOpenApiContainTopicModule() throws Exception {
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1 AND version IN ('202609150900','202609160100')", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1 AND version IN ('202609150900','202609160100','202609160200')", Integer.class)).isEqualTo(3);
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/topics'].get.operationId").value("listTopics"))
                 .andExpect(jsonPath("$.paths['/api/v1/topics/{topicId}/members'].post.operationId").value("addTopicParticipant"));

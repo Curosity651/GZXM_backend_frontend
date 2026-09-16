@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(assignableTypes={TopicIndicatorController.class,IndicatorCatalogController.class})
+@RestControllerAdvice(assignableTypes={TopicIndicatorController.class,IndicatorCatalogController.class,UnitAllocationController.class})
 public class IndicatorRequestExceptionHandler {
     @ExceptionHandler({HttpMessageNotReadableException.class,MethodArgumentTypeMismatchException.class,MissingServletRequestParameterException.class})
     public ProblemDetail malformed(Exception ex,HttpServletRequest request) {
