@@ -33,7 +33,7 @@ describe('F01-F12 专项回归', () => {
   it('F04 未到开放日期的月季报不能提交', () => {
     const store = createAppStore();
     const task: ReportTask = { id: 'future-task', topicId: 't1', reportType: 'MONTHLY', year: 2099, period: 1, openDate: '2099-01-01', deadline: '2099-01-31' };
-    const report: ProgressReport = { id: 'future-report', taskId: task.id, topicId: 't1', reportType: 'MONTHLY', milestoneProgress: '', overallProgress: '', demonstrationProgress: '', fundUsage: '', nextPlan: '', problemsAndMeasures: '', status: '草稿', overdue: false, recordVersion: 1, submittedVersion: 0, updatedAt: '2026-09-14' };
+    const report: ProgressReport = { id: 'future-report', taskId: task.id, topicId: 't1', reportType: 'MONTHLY', basicInformation: '', milestoneProgress: '', overallProgress: '', researchAchievements: '', demonstrationProgress: '', fundUsage: '', nextPlan: '', problemsAndMeasures: '', status: '草稿', overdue: false, recordVersion: 1, submittedVersion: 0, updatedAt: '2026-09-14' };
     store.setState((state) => ({ reportTasks: [...state.reportTasks, task], reports: [...state.reports, report] }));
     expect(() => store.getState().submitReport(report.id, 'user-tsinghua')).toThrow('开放提交');
   });

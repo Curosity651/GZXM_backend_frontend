@@ -27,7 +27,7 @@ describe('报告两级审批', () => {
     }, 'user-tsinghua');
     store.getState().saveReport({
       id: 'report-new', taskId: 'report-task-q-t1', topicId: 't1', reportType: 'QUARTERLY',
-      milestoneProgress: '完成里程碑', overallProgress: '总体正常', demonstrationProgress: '完成调研',
+      basicInformation: '项目基本信息', milestoneProgress: '完成里程碑', overallProgress: '总体正常', researchAchievements: '完成阶段成果', demonstrationProgress: '完成调研',
       fundUsage: '按计划执行', nextPlan: '继续联调', problemsAndMeasures: '无', status: '草稿',
       overdue: false, version: 1, updatedAt: '2026-09-09',
     }, 'user-tsinghua');

@@ -314,7 +314,9 @@ export const MOCK_REPORT_TASKS: ReportTask[] = [
 export const MOCK_REPORTS: ProgressReport[] = [
   {
     id: 'report-t1-sep', taskId: 'report-task-m-t1-2026-9', topicId: 't1', reportType: 'MONTHLY',
-    milestoneProgress: '完成总体架构评审，里程碑按计划推进。', overallProgress: '完成关键技术方案论证和原型验证。',
+    basicInformation: '项目编号：2026KJ001\n项目名称：总体架构与关键技术研究\n填报人：张三\n联系电话：13800000000',
+    milestoneProgress: '完成总体架构评审，里程碑按计划推进。', overallProgress: '完成项目组织协调和阶段工作会议。',
+    researchAchievements: '完成关键技术方案论证和原型验证。',
     demonstrationProgress: '完成示范场景调研。', fundUsage: '本期支出 18 万元，累计支出 126 万元。',
     nextPlan: '完成核心模块联调。', problemsAndMeasures: '跨单位数据口径不一致，计划组织专项协调。',
     status: '初审中', overdue: false, version: 1, submittedAt: '2026-09-08', updatedAt: '2026-09-08',
