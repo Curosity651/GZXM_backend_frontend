@@ -57,13 +57,13 @@ def check():
             operations[op_id] = (method.upper(), path)
             if set(operation["tags"]) & {"Topics", "Indicators", "Achievements"}:
                 owned[op_id] = (method.upper(), path)
-    require(len(operations) == 67, f"Baseline operation count changed: {len(operations)}")
+    require(len(operations) == 69, f"Integrated operation count changed: {len(operations)}")
     require(len(owned) == 24, f"B operation count changed: {len(owned)}")
     entries = re.findall(r"^\| (\w+) \| (GET|PUT|POST|DELETE|PATCH) \| (\S+) \|", package, re.M)
     require(len(entries) == len(owned), "Review table has missing or duplicate operations")
     require({op: (method, path) for op, method, path in entries} == owned,
             "Review table differs from OpenAPI paths/methods/operationIds")
-    print("PASS 67 unique operations; all 24 B operations mapped exactly")
+    print("PASS 69 unique operations; all 24 B operations mapped exactly")
 
     columns = {
         "biz_project": ["id", "code", "enabled"],

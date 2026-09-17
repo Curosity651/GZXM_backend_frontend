@@ -23,3 +23,7 @@ Thumbs.db
 infrastructure/data/
 storage/
 .tmp/
+
+# Local agent and runtime artifacts
+.workbuddy/
+*.log
