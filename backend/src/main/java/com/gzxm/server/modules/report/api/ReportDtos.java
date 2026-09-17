@@ -16,13 +16,15 @@ public final class ReportDtos {
                        Integer recordVersion) {}
     public record Create(@NotBlank String topicId, @NotBlank String reportType,
                          @Min(2000) @Max(2100) int year, @Min(1) @Max(12) int period) {}
-    public record Content(@NotNull String milestoneProgress, @NotNull String overallProgress,
+    public record Content(@NotNull String basicInformation, @NotNull String milestoneProgress,
+                          @NotNull String overallProgress, @NotNull String researchAchievements,
                           @NotNull String demonstrationProgress, @NotNull String fundUsage,
                           @NotNull String nextPlan, @NotNull String problemsAndMeasures,
                           @Positive int recordVersion) {}
     public record View(String id, String topicId, String reportType, int year, int period,
-                       LocalDate openDate, LocalDate deadline, String milestoneProgress,
-                       String overallProgress, String demonstrationProgress, String fundUsage,
+                       LocalDate openDate, LocalDate deadline, String basicInformation,
+                       String milestoneProgress, String overallProgress, String researchAchievements,
+                       String demonstrationProgress, String fundUsage,
                        String nextPlan, String problemsAndMeasures, String status, boolean overdue,
                        int recordVersion, int submittedVersion, LocalDateTime submittedAt) {}
     public record Review(@NotBlank String decision, String opinion, @Positive int submittedVersion) {}

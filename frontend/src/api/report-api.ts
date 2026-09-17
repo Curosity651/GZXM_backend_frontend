@@ -7,12 +7,13 @@ export interface ReportRule {
 }
 export interface ApiReport {
   id: string; topicId: string; reportType: 'MONTHLY' | 'QUARTERLY'; year: number; period: number;
-  openDate: string; deadline: string; milestoneProgress: string; overallProgress: string;
+  openDate: string; deadline: string; basicInformation: string; milestoneProgress: string; overallProgress: string;
+  researchAchievements: string;
   demonstrationProgress: string; fundUsage: string; nextPlan: string; problemsAndMeasures: string;
   status: 'DRAFT' | 'INITIAL_REVIEW' | 'FINAL_REVIEW' | 'APPROVED' | 'RETURNED';
   overdue: boolean; recordVersion: number; submittedVersion: number; submittedAt?: string;
 }
-export type ReportContent = Pick<ApiReport, 'milestoneProgress' | 'overallProgress' | 'demonstrationProgress' | 'fundUsage' | 'nextPlan' | 'problemsAndMeasures' | 'recordVersion'>;
+export type ReportContent = Pick<ApiReport, 'basicInformation' | 'milestoneProgress' | 'overallProgress' | 'researchAchievements' | 'demonstrationProgress' | 'fundUsage' | 'nextPlan' | 'problemsAndMeasures' | 'recordVersion'>;
 export interface ApiPage<T> { items: T[]; page: number; size: number; total: number }
 export interface ApiApproval { id: string; decision: string; level: string; opinion?: string; submittedVersion: number; operatedAt: string }
 export interface ApiSnapshot { id: string; submittedVersion: number; submittedAt: string; payload: Record<string, unknown> }

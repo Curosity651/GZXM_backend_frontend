@@ -27,7 +27,8 @@ import java.util.*;
 @Service
 public class ReportService {
     private static final String COLUMNS = "r.id,r.topic_id,r.report_type,t.report_year,t.period_no,t.open_date,t.deadline," +
-            "r.milestone_progress,r.overall_progress,r.demonstration_progress,r.fund_usage,r.next_plan," +
+            "r.basic_information,r.milestone_progress,r.overall_progress,r.research_achievements," +
+            "r.demonstration_progress,r.fund_usage,r.next_plan," +
             "r.problems_and_measures,r.status,r.overdue,r.record_version,r.submitted_version,r.submitted_at";
     private static final String FROM = " FROM progress_report r JOIN report_task t ON t.id=r.task_id ";
     private final JdbcTemplate db;
@@ -92,9 +93,9 @@ public class ReportService {
             throw BusinessException.conflict("REPORT_PERIOD_EXISTS", "该期报告已存在");
         }
         long taskId = lastId();
-        db.update("INSERT INTO progress_report(task_id,topic_id,report_type,milestone_progress,overall_progress," +
-                        "demonstration_progress,fund_usage,next_plan,problems_and_measures,created_by,updated_by) " +
-                        "VALUES(?,?,?,'','','','','','',?,?)", taskId, topicId, request.reportType(),
+        db.update("INSERT INTO progress_report(task_id,topic_id,report_type,basic_information,milestone_progress,overall_progress," +
+                        "research_achievements,demonstration_progress,fund_usage,next_plan,problems_and_measures,created_by,updated_by) " +
+                        "VALUES(?,?,?,'','','','','','','','',?,?)", taskId, topicId, request.reportType(),
                 security.requireCurrentUser().id(), security.requireCurrentUser().id());
         return load(lastId(), false);
     }
@@ -135,9 +136,10 @@ public class ReportService {
             throw BusinessException.conflict("REPORT_NOT_EDITABLE", "当前状态不能编辑");
         if (old.recordVersion() != content.recordVersion())
             throw BusinessException.conflict("REPORT_VERSION_CONFLICT", "报告已被修改，请刷新");
-        db.update("UPDATE progress_report SET milestone_progress=?,overall_progress=?,demonstration_progress=?,fund_usage=?," +
+        db.update("UPDATE progress_report SET basic_information=?,milestone_progress=?,overall_progress=?,research_achievements=?,demonstration_progress=?,fund_usage=?," +
                         "next_plan=?,problems_and_measures=?,record_version=record_version+1,updated_by=? WHERE id=?",
-                content.milestoneProgress(), content.overallProgress(), content.demonstrationProgress(), content.fundUsage(),
+                content.basicInformation(), content.milestoneProgress(), content.overallProgress(), content.researchAchievements(),
+                content.demonstrationProgress(), content.fundUsage(),
                 content.nextPlan(), content.problemsAndMeasures(), security.requireCurrentUser().id(), reportId);
         return load(reportId, false);
     }
@@ -155,7 +157,7 @@ public class ReportService {
             throw BusinessException.conflict("REPORT_NOT_SUBMITTABLE", "当前状态不能提交");
         if (LocalDate.now().isBefore(old.openDate()))
             throw BusinessException.validation("REPORT_NOT_OPEN", "报告尚未开放填报");
-        if (List.of(old.milestoneProgress(), old.overallProgress(), old.demonstrationProgress(),
+        if (List.of(old.basicInformation(), old.milestoneProgress(), old.overallProgress(), old.researchAchievements(), old.demonstrationProgress(),
                 old.fundUsage(), old.nextPlan(), old.problemsAndMeasures()).stream().anyMatch(String::isBlank))
             throw BusinessException.validation("REPORT_CONTENT_REQUIRED", "请填写完整报告内容");
         ReportSubmissionPolicy.requireDemonstrationProgress(old.demonstrationProgress());
@@ -288,8 +290,8 @@ public class ReportService {
         var submitted = rs.getTimestamp("submitted_at");
         return new View(String.valueOf(rs.getLong("id")), String.valueOf(rs.getLong("topic_id")), rs.getString("report_type"),
                 rs.getInt("report_year"), rs.getInt("period_no"), rs.getDate("open_date").toLocalDate(),
-                rs.getDate("deadline").toLocalDate(), rs.getString("milestone_progress"), rs.getString("overall_progress"),
-                rs.getString("demonstration_progress"), rs.getString("fund_usage"), rs.getString("next_plan"),
+                rs.getDate("deadline").toLocalDate(), rs.getString("basic_information"), rs.getString("milestone_progress"), rs.getString("overall_progress"),
+                rs.getString("research_achievements"), rs.getString("demonstration_progress"), rs.getString("fund_usage"), rs.getString("next_plan"),
                 rs.getString("problems_and_measures"), rs.getString("status"), rs.getBoolean("overdue"),
                 rs.getInt("record_version"), rs.getInt("submitted_version"), submitted == null ? null : submitted.toLocalDateTime());
     }

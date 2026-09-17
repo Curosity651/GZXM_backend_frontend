@@ -67,7 +67,7 @@ paths:
       operationId: createUser
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserCreateRequest' } } } }
       responses:
-        '201': { description: 已创建, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '201': { description: 已创建；临时密码仅在本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/UserCreateResponse' } } } }
         '409': { $ref: '#/components/responses/Conflict' }
   /users/{userId}:
     parameters: [{ $ref: '#/components/parameters/UserId' }]
@@ -560,14 +560,16 @@ components:
       required: [accessToken, expiresIn, user]
       properties: { accessToken: { type: string }, tokenType: { type: string, const: Bearer }, expiresIn: { type: integer }, user: { $ref: '#/components/schemas/CurrentUser' } }
     CurrentUser:
-      allOf:
-        - { $ref: '#/components/schemas/User' }
-        - type: object
-          required: [pagePermissions, actionPermissions, memberships]
-          properties:
-            pagePermissions: { type: array, items: { type: string } }
-            actionPermissions: { type: array, items: { type: string } }
-            memberships: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } }
+      type: object
+      required: [id, username, roleCode, pagePermissions, actionPermissions, memberships]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        unitId: { type: [string, 'null'] }
+        roleCode: { type: string, enum: [SYSTEM_ADMIN, PROJECT_TECH_LEADER, RESEARCH_ASSISTANT, INTERNAL_TOPIC_UNIT, EXTERNAL_TOPIC_UNIT] }
+        pagePermissions: { type: array, items: { type: string } }
+        actionPermissions: { type: array, items: { type: string } }
+        memberships: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } }
     User:
       type: object
       required: [id, username, name, roleId, roleName, enabled]
@@ -584,8 +586,13 @@ components:
         createdAt: { type: string, format: date-time }
     UserCreateRequest:
       type: object
-      required: [username, password, roleId, name]
-      properties: { username: { type: string }, password: { type: string, minLength: 8 }, roleId: { type: string }, unitId: { type: [string, 'null'] }, name: { type: string }, phone: { type: string }, email: { type: string, format: email }, enabled: { type: boolean, default: true } }
+      required: [username, roleId, name]
+      description: 课题单位账号的单位由后端按用户名自动创建，内外属性由角色确定。
+      properties: { username: { type: string }, roleId: { type: string }, name: { type: string }, phone: { type: string }, email: { type: string, format: email }, enabled: { type: boolean, default: true } }
+    UserCreateResponse:
+      type: object
+      required: [user, temporaryPassword]
+      properties: { user: { $ref: '#/components/schemas/User' }, temporaryPassword: { type: string, minLength: 8, description: 仅本次响应返回，由管理员安全告知用户 } }
     UserUpdateRequest:
       type: object
       properties: { username: { type: string }, name: { type: string }, phone: { type: string }, email: { type: string, format: email } }
@@ -755,8 +762,8 @@ components:
       properties: { topicId: { type: string }, reportType: { $ref: '#/components/schemas/ReportType' }, year: { type: integer }, period: { type: integer } }
     ReportContentRequest:
       type: object
-      required: [milestoneProgress, overallProgress, demonstrationProgress, fundUsage, nextPlan, problemsAndMeasures, recordVersion]
-      properties: { milestoneProgress: { type: string }, overallProgress: { type: string }, demonstrationProgress: { type: string }, fundUsage: { type: string }, nextPlan: { type: string }, problemsAndMeasures: { type: string }, recordVersion: { type: integer } }
+      required: [basicInformation, milestoneProgress, overallProgress, researchAchievements, demonstrationProgress, fundUsage, nextPlan, problemsAndMeasures, recordVersion]
+      properties: { basicInformation: { type: string }, milestoneProgress: { type: string }, overallProgress: { type: string }, researchAchievements: { type: string }, demonstrationProgress: { type: string }, fundUsage: { type: string }, nextPlan: { type: string }, problemsAndMeasures: { type: string }, recordVersion: { type: integer } }
     ProgressReport:
       allOf:
         - { $ref: '#/components/schemas/ReportContentRequest' }

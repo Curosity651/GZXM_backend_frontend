@@ -2,7 +2,10 @@ import { Alert, Form, Input } from 'antd';
 import type { FormInstance } from 'antd';
 import type { ProgressReport } from '../../types';
 
-export function ReportForm({ form, disabled = false }: { form: FormInstance<Partial<ProgressReport>>; disabled?: boolean }) {
+export type ReportFormValues = Partial<Pick<ProgressReport, 'basicInformation' | 'milestoneProgress' | 'overallProgress' |
+  'researchAchievements' | 'demonstrationProgress' | 'fundUsage' | 'nextPlan' | 'problemsAndMeasures'>>;
+
+export function ReportForm<T extends ReportFormValues>({ form, disabled = false }: { form: FormInstance<T>; disabled?: boolean }) {
   return <Form form={form} layout="vertical" disabled={disabled}>
     <Alert
       type="info"

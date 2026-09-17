@@ -32,8 +32,8 @@ public class SystemController {
     @PostMapping("/users")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('system.manage')")
-    UserView createUser(@Valid @RequestBody CreateUserRequest request) {
-        UserView result = service.createUser(request); audit.success("system.user.create", "USER", result.id()); return result;
+    CreateUserResponse createUser(@Valid @RequestBody CreateUserRequest request) {
+        CreateUserResponse result = service.createUser(request); audit.success("system.user.create", "USER", result.user().id()); return result;
     }
 
     @GetMapping("/users/{userId}")

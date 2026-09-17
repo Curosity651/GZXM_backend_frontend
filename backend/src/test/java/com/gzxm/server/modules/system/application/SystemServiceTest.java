@@ -4,20 +4,21 @@ import com.gzxm.server.common.exception.BusinessException;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.gzxm.server.modules.system.api.SystemDtos.RolePermissionRequest;
-import com.gzxm.server.modules.system.domain.PermissionEntity;
-import com.gzxm.server.modules.system.domain.RoleEntity;
+import com.gzxm.server.modules.system.api.SystemDtos.CreateUserRequest;
+import com.gzxm.server.modules.system.domain.*;
 import com.gzxm.server.modules.system.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class SystemServiceTest {
     private final UserMapper users = mock(UserMapper.class);
@@ -25,12 +26,13 @@ class SystemServiceTest {
     private final PermissionMapper permissions = mock(PermissionMapper.class);
     private final UnitMapper units = mock(UnitMapper.class);
     private final SystemRelationMapper relations = mock(SystemRelationMapper.class);
+    private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private SystemService service;
 
     @BeforeEach
     void setUp() {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), "test"), PermissionEntity.class);
-        service = new SystemService(users, roles, permissions, units, relations, mock(PasswordEncoder.class));
+        service = new SystemService(users, roles, permissions, units, relations, passwordEncoder);
     }
 
     @Test
@@ -53,6 +55,48 @@ class SystemServiceTest {
                 new RolePermissionRequest(List.of("home"), List.of(), true)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).code()).isEqualTo("SYSTEM_ADMIN_PERMISSION_REQUIRED");
+    }
+
+    @Test
+    void creatingExternalTopicAccountCreatesMatchingUnitAndReturnsOneTimePassword() {
+        RoleEntity external = role(5, "EXTERNAL_TOPIC_UNIT");
+        external.setName("外部课题单位");
+        when(roles.selectById(5L)).thenReturn(external);
+        when(passwordEncoder.encode(any())).thenReturn("hashed-password");
+        doAnswer(invocation -> {
+            UnitEntity unit = invocation.getArgument(0);
+            unit.setId(31L);
+            return 1;
+        }).when(units).insert(any(UnitEntity.class));
+        doAnswer(invocation -> {
+            UserEntity user = invocation.getArgument(0);
+            user.setId(41L);
+            return 1;
+        }).when(users).insert(any(UserEntity.class));
+        when(relations.findRoleId(41L)).thenReturn(5L);
+
+        var result = service.createUser(new CreateUserRequest(
+                "清华大学", "5", "张老师", "13800000000", "teacher@example.com", true));
+
+        assertThat(result.temporaryPassword()).hasSize(14);
+        assertThat(result.user().username()).isEqualTo("清华大学");
+        assertThat(result.user().unitId()).isEqualTo("31");
+        assertThat(result.user().roleName()).isEqualTo("外部课题单位");
+        ArgumentCaptor<UnitEntity> unitCaptor = ArgumentCaptor.forClass(UnitEntity.class);
+        verify(units).insert((UnitEntity) unitCaptor.capture());
+        assertThat(unitCaptor.getValue()).satisfies(unit -> {
+            assertThat(unit.getName()).isEqualTo("清华大学");
+            assertThat(unit.getInternalFlag()).isFalse();
+            assertThat(unit.getEnabled()).isTrue();
+        });
+        ArgumentCaptor<UserEntity> userCaptor = ArgumentCaptor.forClass(UserEntity.class);
+        verify(users).insert((UserEntity) userCaptor.capture());
+        assertThat(userCaptor.getValue()).satisfies(user -> {
+            assertThat(user.getUnitId()).isEqualTo(31L);
+            assertThat(user.getAccountType()).isEqualTo("TOPIC_UNIT");
+            assertThat(user.getPasswordHash()).isEqualTo("hashed-password");
+        });
+        verify(relations).assignRole(41L, 5L);
     }
 
     private RoleEntity role(long id, String code) {

@@ -63,13 +63,13 @@ public class SystemService {
     }
 
     @Transactional
-    public UserView createUser(CreateUserRequest request) {
+    public CreateUserResponse createUser(CreateUserRequest request) {
         RoleEntity role = requireRole(parseId(request.roleId(), "roleId"));
-        Long unitId = parseNullableId(request.unitId(), "unitId");
-        validateRoleUnit(role, unitId);
+        Long unitId = UNIT_ROLES.contains(role.getCode()) ? createAccountUnit(request.username().trim(), role) : null;
+        String temporaryPassword = randomPassword();
         UserEntity user = new UserEntity();
         user.setUsername(request.username().trim());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         user.setContactName(request.name().trim());
         user.setPhone(trimToNull(request.phone()));
         user.setEmail(trimToNull(request.email()));
@@ -85,21 +85,32 @@ public class SystemService {
         } catch (DuplicateKeyException ex) {
             throw BusinessException.conflict("USER_UNIQUE_CONFLICT", "用户名已存在，或该单位已经存在有效课题账号");
         }
-        return toUserView(user);
+        return new CreateUserResponse(toUserView(user), temporaryPassword);
     }
 
     @Transactional
     public UserView updateUser(long id, UpdateUserRequest request) {
         UserEntity user = requireUser(id);
-        if (StringUtils.hasText(request.username())) user.setUsername(request.username().trim());
-        if (StringUtils.hasText(request.name())) user.setContactName(request.name().trim());
-        user.setPhone(trimToNull(request.phone()));
-        user.setEmail(trimToNull(request.email()));
-        user.setUpdatedAt(LocalDateTime.now());
         try {
+            if (StringUtils.hasText(request.username())) {
+                String username = request.username().trim();
+                user.setUsername(username);
+                if ("TOPIC_UNIT".equals(user.getAccountType()) && user.getUnitId() != null) {
+                    UnitEntity unit = units.selectById(user.getUnitId());
+                    if (unit != null) {
+                        unit.setName(username);
+                        unit.setUpdatedAt(LocalDateTime.now());
+                        units.updateById(unit);
+                    }
+                }
+            }
+            if (StringUtils.hasText(request.name())) user.setContactName(request.name().trim());
+            user.setPhone(trimToNull(request.phone()));
+            user.setEmail(trimToNull(request.email()));
+            user.setUpdatedAt(LocalDateTime.now());
             users.updateById(user);
         } catch (DuplicateKeyException ex) {
-            throw BusinessException.conflict("USERNAME_EXISTS", "用户名已存在");
+            throw BusinessException.conflict("USERNAME_EXISTS", "用户名或单位名称已存在");
         }
         return toUserView(user);
     }
@@ -213,16 +224,20 @@ public class SystemService {
         return role;
     }
 
-    private void validateRoleUnit(RoleEntity role, Long unitId) {
-        boolean unitRole = UNIT_ROLES.contains(role.getCode());
-        if (unitRole && unitId == null) throw BusinessException.validation("UNIT_REQUIRED", "课题单位账号必须选择所属单位");
-        if (unitId != null) {
-            UnitEntity unit = units.selectById(unitId);
-            if (unit == null || !Boolean.TRUE.equals(unit.getEnabled())) throw BusinessException.validation("INVALID_UNIT", "所属单位不存在或已停用");
-            if (unitRole && ("INTERNAL_TOPIC_UNIT".equals(role.getCode()) != Boolean.TRUE.equals(unit.getInternalFlag()))) {
-                throw BusinessException.validation("UNIT_ROLE_MISMATCH", "单位内外属性与所选角色不一致");
-            }
+    private Long createAccountUnit(String name, RoleEntity role) {
+        UnitEntity unit = new UnitEntity();
+        unit.setCode("UNIT-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT));
+        unit.setName(name);
+        unit.setInternalFlag("INTERNAL_TOPIC_UNIT".equals(role.getCode()));
+        unit.setEnabled(true);
+        unit.setCreatedAt(LocalDateTime.now());
+        unit.setUpdatedAt(LocalDateTime.now());
+        try {
+            units.insert(unit);
+        } catch (DuplicateKeyException ex) {
+            throw BusinessException.conflict("UNIT_NAME_EXISTS", "该单位名称已经存在");
         }
+        return unit.getId();
     }
 
     private long parseId(String value, String field) {
@@ -230,7 +245,6 @@ public class SystemService {
         catch (NumberFormatException ex) { throw BusinessException.validation("INVALID_ID", field + "格式不正确"); }
     }
 
-    private Long parseNullableId(String value, String field) { return StringUtils.hasText(value) ? parseId(value, field) : null; }
     private String trimToNull(String value) { return StringUtils.hasText(value) ? value.trim() : null; }
     private String randomPassword() {
         StringBuilder value = new StringBuilder(14);

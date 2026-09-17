@@ -94,7 +94,7 @@ export function canViewPage(userOrRole: User | UserRole, rolesOrPage: RbacRole[]
   if (!userOrRole.enabled) return false;
   const role = getRole(userOrRole, rolesOrPage as RbacRole[]);
   if (userOrRole.role === '外部课题单位' && pageArg === 'self-funded-archive') return false;
-  return Boolean(role?.enabled && (role.builtIn || role.pagePermissions.includes(pageArg!)));
+  return Boolean(role?.enabled && role.pagePermissions.includes(pageArg!));
 }
 
 export function canPerform(user: User, roles: RbacRole[], action: ActionKey): boolean;

@@ -1,126 +1,109 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from 'antd';
 import { DownOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UpOutlined } from '@ant-design/icons';
-import type { User } from '../../types';
-import { useAppStore } from '../../store';
-import { getRole } from '../../domain/permissions';
+import { systemApi, type ApiRole, type ApiUser } from '../../api/system-api';
+import { useSessionStore } from '../../store/session';
 
-interface UserFilters {
-  username?: string;
-  roleId?: string;
-  contactName?: string;
-  enabled?: boolean;
-  phone?: string;
-  email?: string;
-}
+interface UserFilters { username?: string; roleId?: string; contactName?: string; enabled?: boolean; phone?: string; email?: string }
+interface UserForm { username: string; roleId: string; name: string; phone?: string; email?: string; enabled?: boolean }
 
 export function UserManagementPage() {
-  const state = useAppStore();
-  const [editForm] = Form.useForm<Partial<User>>();
+  const currentUser = useSessionStore((state) => state.user);
+  const [editForm] = Form.useForm<UserForm>();
   const [filterForm] = Form.useForm<UserFilters>();
   const [filters, setFilters] = useState<UserFilters>({});
+  const [users, setUsers] = useState<ApiUser[]>([]);
+  const [roles, setRoles] = useState<ApiRole[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<User | null>(null);
-  const activeRoles = state.roles.filter((role) => role.enabled || role.id === editing?.roleId);
+  const [editing, setEditing] = useState<ApiUser | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const filteredUsers = useMemo(() => state.users.filter((user) => {
-    const username = filters.username?.trim().toLowerCase();
+  const load = useCallback(async (next: UserFilters) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: '1', size: '200' });
+      if (next.username?.trim()) params.set('keyword', next.username.trim());
+      if (next.roleId) params.set('roleId', next.roleId);
+      if (next.enabled !== undefined) params.set('enabled', String(next.enabled));
+      const [page, roleRows] = await Promise.all([systemApi.users(params), systemApi.roles()]);
+      setUsers(page.items); setRoles(roleRows);
+    } catch (error) { message.error(error instanceof Error ? error.message : '用户列表加载失败'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load({}); }, [load]);
+
+  const visibleUsers = useMemo(() => users.filter((user) => {
+    const contact = filters.contactName?.trim().toLowerCase();
     const phone = filters.phone?.trim();
     const email = filters.email?.trim().toLowerCase();
-    return (!username || user.username.toLowerCase().includes(username) || user.name.toLowerCase().includes(username))
-      && (!filters.roleId || user.roleId === filters.roleId)
-      && (!filters.contactName || user.name.toLowerCase().includes(filters.contactName.trim().toLowerCase()))
-      && (filters.enabled === undefined || user.enabled === filters.enabled)
+    return (!contact || user.name.toLowerCase().includes(contact))
       && (!phone || user.phone?.includes(phone))
       && (!email || user.email?.toLowerCase().includes(email));
-  }), [filters, state.users]);
+  }), [filters, users]);
+  const activeRoles = roles.filter((role) => role.enabled || role.id === editing?.roleId);
 
-  const openForm = (user?: User) => {
+  const openForm = (user?: ApiUser) => {
     setEditing(user ?? null);
-    editForm.setFieldsValue(user ? { ...user } : { roleId: activeRoles.find((role) => !role.builtIn)?.id, enabled: true });
+    editForm.setFieldsValue(user ? { ...user, roleId: user.roleId! } : { enabled: true, roleId: activeRoles[0]?.id });
     setOpen(true);
   };
-
+  const showPassword = (title: string, password: string) => Modal.success({
+    title,
+    content: <><Typography.Paragraph>临时密码仅显示本次，请安全告知用户。</Typography.Paragraph><Typography.Text code copyable>{password}</Typography.Text></>,
+  });
   const save = async () => {
-    const values = await editForm.validateFields();
-    const selectedRole = state.roles.find((role) => role.id === values.roleId);
-    if (!selectedRole) return message.warning('请选择有效角色');
-    const unitRole = selectedRole.name === '内部课题单位' || selectedRole.name === '外部课题单位';
-    let unitId = editing?.unitId;
-    if (!editing && unitRole) {
-      const unitName = values.username!.trim();
-      const existingUnit = state.units.find((unit) => unit.name === unitName || unit.shortName === unitName);
-      unitId = existingUnit?.id ?? `unit-${Date.now()}`;
-      if (!existingUnit) state.addUnit({ id: unitId, projectId: state.project.id, name: unitName, shortName: unitName, unitCategory: selectedRole.name === '内部课题单位' ? '电网公司' : '其他', countsAsPowerGridUnit: selectedRole.name === '内部课题单位' });
-    }
-    if (unitRole && state.users.some((user) => user.id !== editing?.id && user.enabled && user.unitId === unitId && (user.role === '内部课题单位' || user.role === '外部课题单位'))) return message.warning('该单位已经存在课题单位账号，每家单位只能配置一个账号');
-    const topicIds = unitRole ? state.topicMemberships.filter((item) => item.unitId === unitId && item.enabled).map((item) => item.topicId) : [];
-    const scope = unitRole ? 'TOPICS' : 'ALL';
-    const payload = { ...values, role: selectedRole.name as User['role'], dataScope: scope as User['dataScope'], topicIds, topicId: topicIds[0], unitId };
-    if (editing) state.updateUser(editing.id, payload);
-    else state.addUser({ id: `user-${Date.now()}`, username: values.username!.trim(), password: '123456', name: values.name!, role: payload.role, roleId: values.roleId, dataScope: scope, topicIds, topicId: payload.topicId, unitId: payload.unitId, phone: values.phone, email: values.email, enabled: true, createdAt: new Date().toISOString().slice(0, 10) });
-    message.success(editing ? '账号信息已更新' : '账号已创建');
-    setOpen(false);
-    editForm.resetFields();
+    const values = await editForm.validateFields(); setSaving(true);
+    try {
+      if (editing) {
+        await systemApi.updateUser(editing.id, { username: values.username.trim(), name: values.name.trim(), phone: values.phone, email: values.email });
+        if (values.enabled !== undefined && values.enabled !== editing.enabled) await systemApi.setUserStatus(editing.id, values.enabled);
+        message.success('账号信息已更新');
+      } else {
+        const result = await systemApi.createUser({ username: values.username.trim(), roleId: values.roleId, name: values.name.trim(), phone: values.phone, email: values.email, enabled: true });
+        showPassword('账号已创建', result.temporaryPassword);
+      }
+      setOpen(false); editForm.resetFields(); await load(filters);
+    } catch (error) { message.error(error instanceof Error ? error.message : '保存失败'); }
+    finally { setSaving(false); }
   };
-
-  const resetFilters = () => {
-    filterForm.resetFields();
-    setFilters({});
+  const changeStatus = async (user: ApiUser, enabled: boolean) => {
+    try { await systemApi.setUserStatus(user.id, enabled); message.success(enabled ? '账号已启用' : '账号已停用'); await load(filters); }
+    catch (error) { message.error(error instanceof Error ? error.message : '状态修改失败'); }
   };
+  const resetPassword = async (user: ApiUser) => {
+    try { const result = await systemApi.resetPassword(user.id); showPassword(`已重置 ${user.username} 的密码`, result.temporaryPassword); }
+    catch (error) { message.error(error instanceof Error ? error.message : '密码重置失败'); }
+  };
+  const search = (values: UserFilters) => { setFilters(values); void load(values); };
+  const resetFilters = () => { filterForm.resetFields(); setFilters({}); void load({}); };
 
   return <div className="user-management-page">
-    <Card className="user-filter-card">
-      <Form form={filterForm} colon={false} onFinish={(values) => setFilters(values)}>
-        <div className="user-filter-grid">
-          <Form.Item label="用户名" name="username"><Input allowClear placeholder="请输入单位用户名" /></Form.Item>
-          <Form.Item label="角色" name="roleId"><Select allowClear placeholder="请选择角色" options={activeRoles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item>
-          <Form.Item label="联系人" name="contactName"><Input allowClear placeholder="请输入联系人姓名" /></Form.Item>
-          <Form.Item label="状态" name="enabled"><Select allowClear placeholder="请选择状态" options={[{ label: '启用', value: true }, { label: '停用', value: false }]} /></Form.Item>
-          {expanded && <>
-            <Form.Item label="手机号" name="phone"><Input allowClear placeholder="请输入手机号" /></Form.Item>
-            <Form.Item label="邮箱" name="email"><Input allowClear placeholder="请输入邮箱" /></Form.Item>
-          </>}
-          <div className="user-filter-actions">
-            <Space>
-              <Button type="primary" htmlType="submit" icon={<SearchOutlined />}>查询</Button>
-              <Button onClick={resetFilters}>重置</Button>
-              <Button type="link" onClick={() => setExpanded((value) => !value)} icon={expanded ? <UpOutlined /> : <DownOutlined />} iconPosition="end">{expanded ? '收起' : '展开'}</Button>
-            </Space>
-          </div>
-        </div>
-      </Form>
-    </Card>
-
-    <Card className="user-list-card">
-      <div className="user-list-toolbar">
-        <div>
-          <Typography.Title level={4}>用户列表</Typography.Title>
-          <Typography.Text type="secondary">共 {filteredUsers.length} 个用户</Typography.Text>
-        </div>
-        <Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建用户</Button>
-          <Tooltip title="刷新列表"><Button icon={<ReloadOutlined />} onClick={() => message.success('列表已刷新')} /></Tooltip>
-        </Space>
-      </div>
-      <Table rowKey="id" dataSource={filteredUsers} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }} scroll={{ x: 1020 }} columns={[
+    <Card className="user-filter-card"><Form form={filterForm} colon={false} onFinish={search}><div className="user-filter-grid">
+      <Form.Item label="用户名" name="username"><Input allowClear placeholder="请输入用户名或姓名" /></Form.Item>
+      <Form.Item label="角色" name="roleId"><Select allowClear placeholder="请选择角色" options={roles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item>
+      <Form.Item label="联系人" name="contactName"><Input allowClear placeholder="请输入联系人姓名" /></Form.Item>
+      <Form.Item label="状态" name="enabled"><Select allowClear placeholder="请选择状态" options={[{ label: '启用', value: true }, { label: '停用', value: false }]} /></Form.Item>
+      {expanded && <><Form.Item label="手机号" name="phone"><Input allowClear /></Form.Item><Form.Item label="邮箱" name="email"><Input allowClear /></Form.Item></>}
+      <div className="user-filter-actions"><Space><Button type="primary" htmlType="submit" icon={<SearchOutlined />}>查询</Button><Button onClick={resetFilters}>重置</Button><Button type="link" onClick={() => setExpanded((value) => !value)} icon={expanded ? <UpOutlined /> : <DownOutlined />} iconPosition="end">{expanded ? '收起' : '展开'}</Button></Space></div>
+    </div></Form></Card>
+    <Card className="user-list-card"><div className="user-list-toolbar"><div><Typography.Title level={4}>用户列表</Typography.Title><Typography.Text type="secondary">共 {visibleUsers.length} 个用户</Typography.Text></div><Space><Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建用户</Button><Tooltip title="刷新列表"><Button icon={<ReloadOutlined />} onClick={() => void load(filters)} /></Tooltip></Space></div>
+      <Table loading={loading} rowKey="id" dataSource={visibleUsers} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }} scroll={{ x: 1020 }} columns={[
         { title: '用户名', dataIndex: 'username', width: 180, fixed: 'left' },
-        { title: '角色', dataIndex: 'roleId', width: 160, render: (_, user) => { const role = getRole(user, state.roles); return <Tag color={role?.builtIn ? 'purple' : 'blue'}>{role?.name ?? '未分配'}</Tag>; } },
+        { title: '角色', dataIndex: 'roleName', width: 160, render: (value) => <Tag color="blue">{value ?? '未分配'}</Tag> },
         { title: '单位联系人姓名', dataIndex: 'name', width: 160 },
         { title: '手机号', dataIndex: 'phone', width: 130, render: (value) => value || '—' },
         { title: '邮箱', dataIndex: 'email', width: 210, render: (value) => value || '—' },
-        { title: '状态', dataIndex: 'enabled', width: 90, render: (value, user) => <Switch checked={value} disabled={user.id === state.currentUser?.id} onChange={(checked) => state.toggleUserEnabled(user.id, checked)} /> },
-        { title: '操作', width: 220, fixed: 'right', render: (_, user) => <Space><Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(user)}>编辑</Button><Popconfirm title="确认将密码重置为 123456？" onConfirm={() => { state.resetUserPassword(user.id); message.success('密码已重置'); }}><Button type="link" size="small" icon={<KeyOutlined />}>重置密码</Button></Popconfirm></Space> },
+        { title: '状态', dataIndex: 'enabled', width: 90, render: (value, user) => <Switch checked={value} disabled={user.id === currentUser?.id} onChange={(checked) => void changeStatus(user, checked)} /> },
+        { title: '操作', width: 220, fixed: 'right', render: (_, user) => <Space><Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(user)}>编辑</Button><Popconfirm title="确认重置该账号密码？" onConfirm={() => void resetPassword(user)}><Button type="link" size="small" icon={<KeyOutlined />}>重置密码</Button></Popconfirm></Space> },
       ]} />
     </Card>
-
-    <Modal title={editing ? '编辑用户' : '新增用户'} open={open} onCancel={() => { setOpen(false); editForm.resetFields(); }} onOk={save} width={720}>
-      <Form form={editForm} layout="vertical">
-        <Row gutter={16}><Col span={12}><Form.Item label="用户名（单位名称）" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input disabled={Boolean(editing)} placeholder="请输入单位名称" /></Form.Item></Col><Col span={12}><Form.Item label="角色" name="roleId" rules={[{ required: true, message: '请选择角色' }]}><Select disabled={Boolean(editing)} options={activeRoles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item></Col></Row>
+    <Modal title={editing ? '编辑用户' : '新增用户'} open={open} onCancel={() => { setOpen(false); editForm.resetFields(); }} onOk={() => void save()} confirmLoading={saving} width={720}>
+      <Form form={editForm} layout="vertical"><Row gutter={16}><Col span={12}><Form.Item label="用户名（课题单位账号同时作为单位名称）" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="角色" name="roleId" rules={[{ required: true, message: '请选择角色' }]}><Select disabled={Boolean(editing)} options={activeRoles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item></Col></Row>
         <Form.Item label="单位联系人姓名" name="name" rules={[{ required: true, message: '请输入单位联系人姓名' }]}><Input /></Form.Item>
         <Row gutter={16}><Col span={12}><Form.Item label="手机号" name="phone"><Input /></Form.Item></Col><Col span={12}><Form.Item label="邮箱" name="email" rules={[{ type: 'email', message: '请输入正确的邮箱地址' }]}><Input /></Form.Item></Col></Row>
-        {editing && <Form.Item label="账号状态" name="enabled" valuePropName="checked"><Switch checkedChildren="启用" unCheckedChildren="停用" disabled={editing.id === state.currentUser?.id} /></Form.Item>}
+        {editing && <Form.Item label="账号状态" name="enabled" valuePropName="checked"><Switch checkedChildren="启用" unCheckedChildren="停用" disabled={editing.id === currentUser?.id} /></Form.Item>}
       </Form>
     </Modal>
   </div>;

@@ -86,7 +86,7 @@
 |---|---|---|---|---|
 | 课题填报规则 | `topic_report_rule` | `topic_id`、`effective_year`、月报启用/开放日/截止日、季报启用/月份/开放日/截止日 | 每个课题独立配置 | 同一课题同一年度只有一套规则，不再存在项目统一规则 |
 | 填报期间 | `report_task` | `topic_id`、`report_type`、`report_year`、`period_no`、`open_date`、`deadline` | 对应某课题某月或某季度 | 同一课题、类型、年度、期次唯一；用于统计应填期间，但不自动生成空白月季报 |
-| 月季报 | `progress_report` | `task_id`、`topic_id`、六类填报正文、`status`、`overdue`、版本号 | 属于一个填报期间，关联审批和提交快照 | 每课题每期最多一份；仅课题牵头单位编辑和提交；承担单位只读 |
+| 月季报 | `progress_report` | `task_id`、`topic_id`、基本信息及七类填报正文、`status`、`overdue`、版本号 | 属于一个填报期间，关联审批和提交快照 | 每课题每期最多一份；仅课题牵头单位编辑和提交；承担单位只读 |
 
 ## 7. 审批与版本表
 

@@ -4,17 +4,13 @@ import { apiRequest } from '../../api/http-client';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
 import { reportApi, type ApiReport, type ReportContent, type ReportRule } from '../../api/report-api';
 import { validDemonstrationProgress } from './report-validation';
+import { ReportForm, type ReportFormValues } from '../../components/report/ReportForm';
 
 interface Topic { id: string; code: string; name: string; enabled: boolean; status: string; leadUnitId: string }
 interface TopicPage { items: Topic[] }
 const statusNames: Record<ApiReport['status'], string> = {
   DRAFT: '草稿', INITIAL_REVIEW: '初审中', FINAL_REVIEW: '终审中', APPROVED: '已通过', RETURNED: '退回修改',
 };
-const fields: Array<{ key: keyof ReportContent; label: string }> = [
-  { key: 'milestoneProgress', label: '里程碑进度' }, { key: 'overallProgress', label: '总体进展' },
-  { key: 'demonstrationProgress', label: '示范应用进展' }, { key: 'fundUsage', label: '经费使用情况' },
-  { key: 'nextPlan', label: '下一步计划' }, { key: 'problemsAndMeasures', label: '问题及措施' },
-];
 
 export function RealReportPage() {
   const [user, setUser] = useState<ApiCurrentUser>();
@@ -26,7 +22,7 @@ export function RealReportPage() {
   const [ruleTopic, setRuleTopic] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [createForm] = Form.useForm();
-  const [contentForm] = Form.useForm<ReportContent>();
+  const [contentForm] = Form.useForm<ReportFormValues>();
   const [ruleForm] = Form.useForm<ReportRule>();
 
   const refresh = useCallback(async () => {
@@ -60,7 +56,7 @@ export function RealReportPage() {
   const save = async () => {
     if (!selected) return;
     const values = await contentForm.validateFields();
-    await execute(() => reportApi.save(selected.id, { ...values, recordVersion: selected.recordVersion }), '草稿已保存');
+    await execute(() => reportApi.save(selected.id, { ...values, recordVersion: selected.recordVersion } as ReportContent), '草稿已保存');
   };
   const submit = async () => {
     if (!selected) return;
@@ -119,11 +115,7 @@ export function RealReportPage() {
       onClose={() => setSelected(undefined)} extra={<Space>{editable && <><Button loading={busy} onClick={() => void save()}>保存草稿</Button><Button type="primary" loading={busy} onClick={() => void submit()}>提交初审</Button></>}
         {reviewable && <><Button loading={busy} danger onClick={() => review('RETURN')}>退回</Button><Button type="primary" loading={busy} onClick={() => review('APPROVE')}>通过</Button></>}</Space>}>
       {selected && <><p>开放：{selected.openDate}　截止：{selected.deadline}</p>
-        <Form form={contentForm} layout="vertical" disabled={!editable}>{fields.map(field =>
-          <Form.Item key={field.key} name={field.key} label={field.key === 'demonstrationProgress'
-            ? '示范应用进展（正式提交至少 300 字；确无进展填“无”）' : field.label}>
-            <Input.TextArea rows={4} showCount={field.key === 'demonstrationProgress'} />
-          </Form.Item>)}</Form></>}
+        <ReportForm form={contentForm} disabled={!editable} /></>}
     </Drawer>
     <Modal title="课题填报规则" open={configuring} onCancel={() => setConfiguring(false)} onOk={() => void saveRule()} confirmLoading={busy}>
       <Select style={{ width: '100%', marginBottom: 16 }} value={ruleTopic} onChange={value => void openRule(value)} options={topics.map(t => ({ value: t.id, label: t.name }))} />

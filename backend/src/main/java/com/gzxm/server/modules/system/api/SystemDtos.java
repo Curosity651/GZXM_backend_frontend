@@ -16,10 +16,11 @@ public final class SystemDtos {
                            boolean enabled, LocalDateTime createdAt) {}
 
     public record CreateUserRequest(@NotBlank String username,
-                                    @NotBlank @Size(min = 8) String password,
-                                    @NotBlank String roleId, String unitId,
+                                    @NotBlank String roleId,
                                     @NotBlank String name, String phone,
                                     @Email String email, Boolean enabled) {}
+
+    public record CreateUserResponse(UserView user, String temporaryPassword) {}
 
     public record UpdateUserRequest(String username, String name, String phone, @Email String email) {}
     public record StatusRequest(boolean enabled) {}
