@@ -23,9 +23,9 @@ async function errorMessage(response: Response): Promise<string> {
 }
 
 export const fileApi = {
-  async upload(file: File): Promise<ApiFile> {
+  async upload(file: File, businessType = 'ARCHIVE'): Promise<ApiFile> {
     const ticket = await apiRequest<UploadTicket>('/files/upload-tickets', { method: 'POST', body: JSON.stringify({
-      fileName: file.name, size: file.size, contentType: file.type || 'application/octet-stream', businessType: 'ARCHIVE',
+      fileName: file.name, size: file.size, contentType: file.type || 'application/octet-stream', businessType,
     }) });
     const response = await fetch(ticket.uploadUrl, { method: ticket.method, headers: authorizedHeaders(ticket.headers), body: file });
     if (!response.ok) throw new Error(await errorMessage(response));

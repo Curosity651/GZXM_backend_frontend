@@ -56,7 +56,7 @@ async function parseProblem(response: Response): Promise<ApiProblem> {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+async function executeRequest(path: string, init: RequestInit = {}, retry = true): Promise<Response> {
   const headers = new Headers(init.headers);
   if (!headers.has('Content-Type') && init.body) headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
@@ -67,11 +67,22 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retry 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: 'include' });
   if (response.status === 401 && retry && path !== '/auth/refresh') {
     const refreshed = await refreshAccessToken();
-    if (refreshed) return apiRequest<T>(path, init, false);
+    if (refreshed) return executeRequest(path, init, false);
     setAccessToken(null);
     window.dispatchEvent(new CustomEvent('gzxm:session-expired'));
   }
   if (!response.ok) throw new ApiError(await parseProblem(response));
+  return response;
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}, retry = true): Promise<T> {
+  const response = await executeRequest(path, init, retry);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function apiRequestDetailed<T>(path: string, init: RequestInit = {}): Promise<{ data: T; response: Response }> {
+  const response = await executeRequest(path, init);
+  const data = response.status === 204 ? undefined as T : await response.json() as T;
+  return { data, response };
 }

@@ -35,6 +35,7 @@ export interface ApiPermission {
 }
 
 export interface CreateUserResponse { user: ApiUser; temporaryPassword: string }
+export interface ApiUnit { id: string; code: string; name: string; internal: boolean; enabled: boolean }
 
 export const systemApi = {
   users: (params: URLSearchParams) => apiRequest<ApiPage<ApiUser>>(`/users?${params.toString()}`),
@@ -48,6 +49,7 @@ export const systemApi = {
     apiRequest<{ temporaryPassword: string }>(`/users/${id}/password:reset`, { method: 'POST' }),
   roles: () => apiRequest<ApiRole[]>('/roles'),
   permissions: () => apiRequest<ApiPermission[]>('/permissions'),
+  units: () => apiRequest<ApiUnit[]>('/units'),
   updateRole: (id: string, data: { pagePermissions: string[]; actionPermissions: string[]; enabled: boolean }) =>
     apiRequest<ApiRole>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 };

@@ -34,8 +34,8 @@ export function RealReportPage() {
     } catch (error) { message.error(error instanceof Error ? error.message : '报告加载失败'); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
-  const canSubmit = user?.actionPermissions.includes('report.submit') ?? false;
-  const canConfigure = user?.actionPermissions.includes('report.rule.manage') ?? false;
+  const canSubmit = Boolean(user && ['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT'].includes(user.roleCode) && user.actionPermissions.includes('report.submit'));
+  const canConfigure = user?.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('report.rule.manage');
   const leadTopics = topics.filter(t => t.enabled && t.status === 'ACTIVE' &&
     user?.unitId === t.leadUnitId && user.memberships.some(m => m.topicId === t.id && m.membershipType === 'LEAD' && m.enabled));
   const editable = Boolean(selected && canSubmit && leadTopics.some(t => t.id === selected.topicId) && ['DRAFT', 'RETURNED'].includes(selected.status));

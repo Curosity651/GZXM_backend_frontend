@@ -10,6 +10,8 @@ import { accessibleTopics, canViewAchievement, isTopicOperational, membershipFor
 import { StatusTag } from '../../components/common/StatusTag';
 import { AchievementForm } from '../../components/achievement/AchievementForm';
 import { AchievementDetail } from '../../components/achievement/AchievementDetail';
+import { isRealApi } from '../../api/api-mode';
+import { RealAchievementPage } from './RealAchievementPage';
 
 const { Text } = Typography;
 type FormValues = Partial<Achievement>;
@@ -17,7 +19,7 @@ type SupplementValues = Pick<Achievement, 'publicationDate' | 'journalYearVolume
 
 const isSupplementEditable = (status: string) => ['待见刊补充', '待授权补充', '补充退回'].includes(status);
 
-export function AchievementEntryPage() {
+function MockAchievementEntryPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
@@ -371,4 +373,8 @@ export function AchievementEntryPage() {
       <Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'return' ? '请填写明确的退回原因' : '审批意见（选填）'} />
     </Modal>
   </>;
+}
+
+export function AchievementEntryPage() {
+  return isRealApi() ? <RealAchievementPage /> : <MockAchievementEntryPage />;
 }

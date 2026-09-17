@@ -8,11 +8,13 @@ import { canPerform } from '../../domain/permissions';
 import { canAccessTopicByMembership, isGlobalUser, isTopicLead } from '../../domain/topic-access';
 import { indicatorTargetDraftKey, validateTopicIndicators, validateUnitAllocations } from '../../domain/indicator-allocation';
 import { createDefaultTopicReportConfig } from '../../domain/reporting';
+import { isRealApi } from '../../api/api-mode';
+import { RealTopicIndicatorConfigPage } from './RealIndicatorPages';
 
 const now = () => new Date().toISOString();
 const isUnitAccount = (account: User) => account.role === '内部课题单位' || account.role === '外部课题单位';
 
-export function TopicIndicatorConfigPage() {
+function MockTopicIndicatorConfigPage() {
   const { topicId } = useParams<{ topicId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -353,4 +355,8 @@ export function TopicIndicatorConfigPage() {
       </Row>
     </Modal>
   </div>;
+}
+
+export function TopicIndicatorConfigPage() {
+  return isRealApi() ? <RealTopicIndicatorConfigPage /> : <MockTopicIndicatorConfigPage />;
 }
