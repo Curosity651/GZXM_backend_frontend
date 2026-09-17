@@ -51,7 +51,7 @@ app:
     jwt-secret: ${JWT_SECRET}
     access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
     refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:7d}
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173}
   bootstrap:
     enabled: ${APP_BOOTSTRAP_ENABLED:true}
     admin-username: ${APP_BOOTSTRAP_ADMIN_USERNAME:admin}
