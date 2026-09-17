@@ -60,7 +60,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}, retry 
   const headers = new Headers(init.headers);
   if (!headers.has('Content-Type') && init.body) headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  // 登录接口必须保持匿名。浏览器里可能残留上一次运行签发的旧令牌，
+  // 若继续携带，JWT 过滤器会在校验账号密码前直接拒绝请求。
+  if (token && path !== '/auth/login') headers.set('Authorization', `Bearer ${token}`);
 
   const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers, credentials: 'include' });
   if (response.status === 401 && retry && path !== '/auth/refresh') {
