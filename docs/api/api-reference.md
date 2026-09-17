@@ -104,6 +104,8 @@
 | GET | `/achievements/{achievementId}/snapshots` | 查看历次提交版本快照 | 成果相关单位和审批角色 |
 | GET | `/achievement-progress` | 统计指标、发起、预审、投稿、正式成果及完成率 | 按当前用户课题数据范围返回 |
 
+第 8 步已实现 `/achievement-progress`：nodeId 必填，topicId/unitId 可选。按节点排序累计当前事实，阶段按历史证据去重；分母只取查询节点已下发目标。零/未下发目标完成率 null，可超过 100%。TOPIC/UNIT 为不同视角，不能相加；historical 行只向管理角色展示且不计当前总量。专项不加进 baseTotals，非法 match_rule 返回 422。字段与 C 的公开服务见[第 8 步说明](../collaboration/b-contracts/achievement-step8.md)。
+
 ## 7. 月报和季报
 
 | 方法 | 地址 | 接口用途 | 使用者/限制 |

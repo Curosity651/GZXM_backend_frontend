@@ -32,6 +32,8 @@ public interface TopicMapper {
 
     @Select("SELECT * FROM biz_topic WHERE id=#{id}")
     TopicEntity find(long id);
+    @Select("<script>SELECT t.* FROM biz_topic t WHERE t.project_id=#{project} <if test='unit != null'>AND EXISTS(SELECT 1 FROM biz_topic_unit_membership m WHERE m.topic_id=t.id AND m.unit_id=#{unit} AND m.enabled=1)</if> ORDER BY t.id</script>")
+    List<TopicEntity> projectTopics(@Param("project") long project,@Param("unit") Long unit);
     @Select("SELECT * FROM biz_topic WHERE id=#{id} FOR UPDATE")
     TopicEntity lock(long id);
     @Select("SELECT id FROM biz_project WHERE enabled=1 ORDER BY id LIMIT 2 FOR UPDATE")

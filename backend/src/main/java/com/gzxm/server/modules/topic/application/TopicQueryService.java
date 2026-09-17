@@ -11,6 +11,8 @@ public interface TopicQueryService {
     /** Must be called inside a business write transaction; locks status against concurrent changes. */
     TopicSummary lockTopic(long topicId);
     TopicSummary getTopic(long topicId);
+    /** Request-scoped project topics, including read-only topics but excluding revoked memberships. */
+    List<TopicSummary> listReadableTopics(long projectId);
     List<Member> listMembers(long topicId, boolean includeDisabled);
     /** Identity fact only; consumers must separately authorize their own write actions. */
     boolean isLeadUnit(long topicId, long unitId);

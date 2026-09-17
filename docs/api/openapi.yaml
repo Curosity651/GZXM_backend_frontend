@@ -309,11 +309,12 @@ paths:
     get:
       tags: [Achievements]
       operationId: getAchievementProgress
+      description: 按同项目节点sortOrder累计成果，读取当前事实而非历史时点；阶段按历史证据去重，生效须EFFECTIVE且countsToIndicator=true。只取查询节点已下发目标作分母。零目标或未下发完成率null，允许超过100%。停用成员/单位仅管理角色可见historical行，不计当前汇总。专项独立展示，不累加到基础总数；非法match_rule返回422。
       parameters:
         - { name: topicId, in: query, schema: { type: string } }
         - { name: nodeId, in: query, required: true, schema: { type: string } }
         - { name: unitId, in: query, schema: { type: string } }
-      responses: { '200': { description: 基础总量与专项子集进度, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementProgress' } } } } }
+      responses: { '200': { description: 基础总量与专项子集进度, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementProgress' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 统计节点或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
 
   /topics/{topicId}/report-rule:
     get:
@@ -662,8 +663,51 @@ components:
       properties: { items: { type: array, items: { $ref: '#/components/schemas/Achievement' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
     AchievementProgress:
       type: object
-      required: [baseTotals, specialIndicators, rows]
-      properties: { baseTotals: { type: object, additionalProperties: { type: integer } }, specialIndicators: { type: array, items: { type: object, additionalProperties: true } }, rows: { type: array, items: { type: object, additionalProperties: true } } }
+      required: [nodeId, countingBasis, baseTotals, baseStages, specialIndicators, rows]
+      properties:
+        nodeId: { type: string }
+        countingBasis: { type: string, enum: [CUMULATIVE_NODE_CURRENT_FACTS] }
+        baseTotals:
+          type: object
+          description: 当前可见有效成员的五类生效成果数，各成果只计一次，排除历史行与专项重复
+          required: [PAPER, PATENT, COPYRIGHT, STANDARD, TALENT]
+          properties:
+            PAPER: { type: integer, format: int64, minimum: 0 }
+            PATENT: { type: integer, format: int64, minimum: 0 }
+            COPYRIGHT: { type: integer, format: int64, minimum: 0 }
+            STANDARD: { type: integer, format: int64, minimum: 0 }
+            TALENT: { type: integer, format: int64, minimum: 0 }
+          additionalProperties: false
+        baseStages: { $ref: '#/components/schemas/AchievementStageCounts' }
+        specialIndicators: { type: array, description: 专项行独立于基础行，可能交叠，不能累加为基础总数, items: { $ref: '#/components/schemas/AchievementProgressRow' } }
+        rows: { type: array, description: 基础指标行；TOPIC与UNIT不能相加；historical=true仅管理角色可见且不计汇总, items: { $ref: '#/components/schemas/AchievementProgressRow' } }
+    AchievementStageCounts:
+      type: object
+      required: [initiated, preApproved, external, formal, supplement, effective]
+      properties:
+        initiated: { type: integer, format: int64, minimum: 0, description: 已创建的成果数 }
+        preApproved: { type: integer, format: int64, minimum: 0, description: 曾有预审终审通过记录的成果数 }
+        external: { type: integer, format: int64, minimum: 0, description: 曾成功登记投稿或申请的论文及专利数 }
+        formal: { type: integer, format: int64, minimum: 0, description: 曾有FORMAL提交快照的成果数 }
+        supplement: { type: integer, format: int64, minimum: 0, description: 曾有SUPPLEMENT提交快照的成果数 }
+        effective: { type: integer, format: int64, minimum: 0, description: 当前EFFECTIVE且countsToIndicator=true的成果数 }
+    AchievementProgressRow:
+      type: object
+      required: [scope, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, targetQuantity, targetVersion, targetPublished, hasTarget, completionRate, historical, stages]
+      properties:
+        scope: { type: string, enum: [TOPIC, UNIT] }
+        topicId: { type: string }
+        unitId: { type: [string, 'null'], description: TOPIC行固定null }
+        nodeId: { type: string }
+        indicatorDefinitionId: { type: string }
+        achievementType: { type: string, enum: [PAPER, PATENT, COPYRIGHT, STANDARD, TALENT] }
+        targetQuantity: { type: [integer, 'null'], format: int64, minimum: 0, description: 查询节点已下发目标；未下发为null }
+        targetVersion: { type: [integer, 'null'], minimum: 0 }
+        targetPublished: { type: boolean, description: 是否存在该查询节点的已下发目标 }
+        hasTarget: { type: boolean, description: 是否有正数目标；零目标和未下发均为false }
+        completionRate: { type: [number, 'null'], minimum: 0, description: 生效数乘100除以目标，两位小数四舍五入；无正目标为null，不限制100上限 }
+        historical: { type: boolean, description: 停用成员或停用单位，管理角色单独展示，不计当前汇总 }
+        stages: { $ref: '#/components/schemas/AchievementStageCounts' }
     ReviewRequest:
       type: object
       required: [decision]

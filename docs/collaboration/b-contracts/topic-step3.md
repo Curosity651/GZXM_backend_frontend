@@ -2,6 +2,8 @@
 
 ## 已提供的接口
 
+后续补充：第 8 步增加 `listReadableTopics(projectId)`，并提供指标目标及成果统计契约，见[第 8 步说明](achievement-step8.md)。
+
 接口位于 `com.gzxm.server.modules.topic.application`，可直接按接口类型构造器注入。实现是 Spring Bean，返回不可变 record 和不可修改的列表，不暴露数据库实体或 Mapper。
 
 | 接口方法 | 输入 | 输出及规则 |

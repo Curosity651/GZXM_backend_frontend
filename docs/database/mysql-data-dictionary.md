@@ -61,6 +61,8 @@
 
 ## 5. 成果管理表
 
+第 8 步统计不改表结构：按 time_node.sort_order 累计当前成果事实，读取查询节点的已下发目标；不按截止日期回溯审批历史。SPECIAL 的 match_rule 使用严格 field/equals 布尔白名单，缺失或非法配置返回 422。规则及历史范围见[第 8 步说明](../collaboration/b-contracts/achievement-step8.md)。
+
 | 中文名称 | 数据表 | 关键字段 | 关联关系 | 关键规则 |
 |---|---|---|---|---|
 | 成果 | `achievement` | `topic_id`、`membership_id`、`unit_id`、`node_id`、`achievement_type`、`title`、`detail_json`、`status`、版本号 | 归属一个课题和上传单位，关联成果材料、审批和版本快照 | 谁上传就计入谁的单位指标；成果不归属配套自筹项目；不同成果类型的差异字段保存在`detail_json` |

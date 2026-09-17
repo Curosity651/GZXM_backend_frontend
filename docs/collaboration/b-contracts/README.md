@@ -115,7 +115,7 @@
 | ReviewRequest | decision 必填；opinion/submittedVersion 可选 | approval_record.opinion 1000；角色和记录决定 stage/level，不能让请求自行指定审批级别 | 退回意见必填、submittedVersion 必填策略见 D03/D06 |
 | Achievement 响应 | id/topicId/unitId/nodeId/indicatorDefinitionId/achievementType/title/status/recordVersion/submittedVersion/materials 必填 | countsToIndicator 对应 counts_to_indicator；materials 为 FileObject 数组 | status 无枚举；没有审批记录字段和材料类别见 D03/D05/D07 |
 | SubmissionSnapshot | businessType/businessId/stage/submittedVersion/submitterId/payload 等 | payload_json 应含提交时业务和文件元数据；business_type+business_id+submitted_version 唯一 | 版本不可覆盖；共享访问契约见 D11 |
-| AchievementProgress | baseTotals/specialIndicators/rows | baseTotals 值类型为 integer；专项和行是开放对象 | 完成率放 rows，字段语义待 D08，不擅自向整数集合放百分比 |
+| AchievementProgress | nodeId/countingBasis/baseTotals/baseStages/specialIndicators/rows | 第 8 步使用具名行及阶段 schema；baseTotals 保留五类生效整数，完成率放行字段 | TOPIC/UNIT 不相加，专项不重复计基础，historical 不计当前汇总 |
 
 ### 5.1 五类详情的评审范围（提案，不是当前已冻结字段）
 
@@ -175,7 +175,7 @@
 
 ### 7.1 B 向 C 提供的查询契约提案（第 3/8 步实现）
 
-第 3 步已提供基本信息、成员和牵头事实查询接口，签名及行为见 [公开课题查询契约](topic-step3.md)；以下指标和进度查询仍待第 8 步。A/C 的接入评审状态不因 B 完成实现而自动变更。
+第 3 步提供基本信息、成员和牵头查询，见 [公开课题查询契约](topic-step3.md)；第 8 步已提供 IndicatorProgressQuery 和 AchievementProgressQuery，签名、范围及累计口径见[统计服务](achievement-step8.md)。A/C 接入评审状态不因 B 完成实现而自动变更。
 | 服务意图 | 输入 | 最小输出 | 行为约束 |
 |---|---|---|---|
 | 课题基本信息 | topicId | id/projectId/code/name/leadUnitId/status/enabled | 不返回 Mapper 实体；不存在与无权访问按公共错误规则 |
@@ -197,8 +197,8 @@
 | D05 | 用户确认结构化材料、同类多文件、保留版本；同时明确保持 B 边界等待 A | B 预留材料集合及历史结构；非空附件暂返回 503；A 按文件基础提案提供公开能力，再做真实联调 | A/B，共享文件 C 审；当前未接通 | 6、7 |
 | D06 | 用户确认版本必填及同键同请求返回原结果；仍无公共幂等服务 | 第 7 步用 B 专用成功操作表持久化请求和响应，与状态/快照/审批同事务；未访问 A 公共幂等表 | B 实现，A/C 合并前审；统一公共接入仍待 A | 4、5、7 |
 | D07 | 第 7 步在成果详情增加 approvals，快照接口仅返回不可变提交内容 | 只扩展 B 成果响应，未修改共享 ApprovalRecord / SubmissionSnapshot 模型 | B 实现，A/C 审 | 7 |
-| D08 | 进度 rows/专项开放，阶段统计和零目标规则不明确 | 明确当前状态数与历史到达数、节点归属或认定日期口径、分母、超额及零目标、专项交叠 | B/C 与业务 | 8、9 |
-| D09 | 节点/指标只有 GET，缺固定项目/节点/专项规则的初始化清单 | B 提出非敏感初始化数据，A 审核新迁移；不擅增配置端点或第六类成果 | A/B 与业务 | 2、4、5 |
+| D08 | 用户确认节点排序累计当前事实、阶段历史到达去重、当前节点目标、两位比例及零目标 null、历史单位隔离 | 第 8 步已实现 HTTP 与公开查询；TOPIC/UNIT/历史行分开消费，专项不累加基础 | 用户业务确认已收到；C 接入及 A/C 评审待完成 | 8、9 |
+| D09 | 节点/指标实际初始化仍由 A 协调；用户确认四个布尔专项字段白名单 | 第 8 步支持严格 field/equals 配置与错误提示，不执行表达式，不擅增配置端点/种子或第六类成果 | A/B 与业务；实际初始化仍待协调 | 2、4、5、8 |
 | D10 | 初始化技术负责人有 topic.manage/indicator.manage/topic-indicator.publish；查询权限不细化 | API 清单限定科研助理写；B 必须同时做角色约束；A 协调种子权限修正，确认查询页面与管理角色分配可读范围 | A/B，页面公共变更 C 审 | 2—9 |
 | D11 | 两张表按主计划由 B/C 共用；第 7 步 B Mapper 固定 ACHIEVEMENT，独立 DTO 对齐既有公共模型 | 不修改共享表结构及 REPORT 数据；隔离和事务测试已通过；统一持久层协调仍待 A/C 评审 | A/B/C | 7 |
 | D12 | MapperScan 未含 B；审计成功独立事务存在时序风险 | 分别建立精准注册、提交后审计基础任务；不通过扫描全模块或复制审计解决 | A 主责，B/C 审 | 2 及所有写入 |
