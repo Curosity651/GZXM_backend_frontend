@@ -1,10 +1,12 @@
 import { Card, Col, Progress, Row, Space, Table, Tag } from 'antd';
 import { PageHeader } from '../../components/common/PageHeader';
 import { useAppStore } from '../../store';
+import { isRealApi } from '../../api/api-mode';
+import { RealArchiveMonitoringPage } from './RealArchivePages';
 import { archiveCompletion, topicArchiveRequirements } from '../../domain/archive';
 import { accessibleTopics, canViewAllTopicUnitData, isGlobalUser, isInternalTopicUnit, isTopicLead } from '../../domain/topic-access';
 
-export function ArchiveMonitoringPage() {
+function MockArchiveMonitoringPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const visibleTopics = accessibleTopics(user, state.topics, state.topicMemberships);
@@ -17,4 +19,8 @@ export function ArchiveMonitoringPage() {
     <Card title="课题国家材料" style={{ marginBottom: 16 }}><Table rowKey="rowId" pagination={false} dataSource={topicRows} columns={[{ title: '课题', render: (_, row) => <Space><Tag>{row.code}</Tag>{row.name}</Space> }, { title: '提交单位', dataIndex: 'unitId', render: (value) => state.units.find((item) => item.id === value)?.name ?? value }, { title: '必存材料', render: (_, row) => `${row.stats.completed}/${row.stats.required}` }, { title: '完成率', render: (_, row) => <Progress percent={row.stats.rate} /> }]} /></Card>
     {showSelfFunded && <Card title="配套自筹项目归档"><Table rowKey="id" pagination={false} dataSource={projectRows} columns={[{ title: '所属课题', dataIndex: 'topicId', render: (value) => state.topics.find((item) => item.id === value)?.name }, { title: '归属单位', dataIndex: 'ownerUnitId', render: (value) => state.units.find((item) => item.id === value)?.name ?? value }, { title: '项目名称', dataIndex: 'name' }, { title: '类型', dataIndex: 'projectType', render: (value) => <Tag color="purple">{value}</Tag> }, { title: '必存材料', render: (_, row) => `${row.stats.completed}/${row.stats.required}` }, { title: '完成率', render: (_, row) => <Progress percent={row.stats.rate} /> }]} /></Card>}
   </>;
+}
+
+export function ArchiveMonitoringPage() {
+  return isRealApi() ? <RealArchiveMonitoringPage /> : <MockArchiveMonitoringPage />;
 }

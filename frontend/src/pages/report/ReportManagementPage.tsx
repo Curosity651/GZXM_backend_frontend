@@ -11,12 +11,15 @@ import { accessibleTopics, isTopicLead, isTopicOperational } from '../../domain/
 import { StatusTag } from '../../components/common/StatusTag';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
 import { ReportForm } from '../../components/report/ReportForm';
+import { isRealApi } from '../../api/api-mode';
+import { RealReportPage } from './RealReportPage';
+import { validDemonstrationProgress } from './report-validation';
 
 const { Text } = Typography;
 const today = () => new Date().toISOString().slice(0, 10);
 interface NewReportValues { topicId: string; reportType: ReportType; year: number; period: number }
 
-export function ReportManagementPage() {
+function MockReportManagementPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
@@ -108,7 +111,11 @@ export function ReportManagementPage() {
     const report: ProgressReport = { id: editingReport?.id ?? `report-${Date.now()}`, taskId: task.id, topicId: task.topicId, reportType: task.reportType, basicInformation: values.basicInformation!, milestoneProgress: values.milestoneProgress!, overallProgress: values.overallProgress!, researchAchievements: values.researchAchievements!, demonstrationProgress: values.demonstrationProgress!, fundUsage: values.fundUsage!, nextPlan: values.nextPlan!, problemsAndMeasures: values.problemsAndMeasures!, status: editingReport?.status === '退回修改' ? '退回修改' : '草稿', overdue: isReportOverdue(task.deadline, editingReport?.submittedAt), recordVersion: editingReport?.recordVersion ?? 0, submittedVersion: editingReport?.submittedVersion ?? 0, submittedAt: editingReport?.submittedAt, updatedAt: today() };
     state.saveReport(report, user.id); setEditingReport(useAppStore.getState().reports.find((item) => item.id === report.id) ?? report); message.success('报告草稿已保存'); return report.id;
   };
-  const submit = async () => { const id = await save(); state.submitReport(id, user.id); message.success('报告已提交科研助理初审'); setDrawer(false); };
+  const submit = async () => {
+    if (!validDemonstrationProgress(form.getFieldValue('demonstrationProgress')))
+      return message.warning('示范工程进展至少填写 300 字；确无进展时填写“无”');
+    const id = await save(); state.submitReport(id, user.id); message.success('报告已提交科研助理初审'); setDrawer(false);
+  };
   const confirmReview = () => {
     const action = reviewAction(editingReport); if (!editingReport || !action || !decision) return;
     if (decision === 'return' && !opinion.trim()) return message.warning('退回时必须填写审批意见');
@@ -140,10 +147,14 @@ export function ReportManagementPage() {
     ]} /></Card>
     <Modal title="新建月季报" open={newOpen} onCancel={() => setNewOpen(false)} onOk={createReport} okText="开始填报"><Form form={newForm} layout="vertical"><Form.Item label="所属课题" name="topicId" rules={[{ required: true }]}><Select options={leadTopics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Form.Item><Row gutter={12}><Col span={8}><Form.Item label="报告类型" name="reportType" rules={[{ required: true }]}><Select options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Form.Item></Col><Col span={8}><Form.Item label="年度" name="year" rules={[{ required: true }]}><InputNumber min={2020} max={2100} style={{ width: '100%' }} /></Form.Item></Col><Col span={8}><Form.Item label="期次" name="period" rules={[{ required: true }]}><InputNumber min={1} max={watchedNewValues?.reportType === 'QUARTERLY' ? selectedTopic?.reportConfig?.quarterlyMonths.length ?? 4 : 12} style={{ width: '100%' }} /></Form.Item></Col></Row><Row gutter={12}><Col span={12}><Form.Item label="开放日期"><Input value={selectedWindow?.openDate} placeholder="选择完整信息后自动计算" readOnly /></Form.Item></Col><Col span={12}><Form.Item label="截止日期"><Input value={selectedWindow?.deadline} placeholder="选择完整信息后自动计算" readOnly /></Form.Item></Col></Row></Form></Modal>
     <Drawer width={780} title={editingTask?.reportType === 'MONTHLY' ? '课题月报' : '课题季报'} open={drawer} onClose={() => setDrawer(false)} extra={editable ? <Space><Button onClick={save}>保存草稿</Button><Button type="primary" icon={<SendOutlined />} onClick={submit}>提交初审</Button></Space> : reviewAction(editingReport) ? <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('return')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('approve')}>审批通过</Button></Space> : undefined}>
-      {editingTask && <Space style={{ marginBottom: 16 }}><Text strong>{state.topics.find((topic) => topic.id === editingTask.topicId)?.name}</Text><Tag>{editingTask.deadline} 截止</Tag>{editingReport && <><StatusTag status={editingReport.status} /><Tag>记录 V{editingReport.recordVersion ?? 1}</Tag><Tag color="blue">提交 V{editingReport.submittedVersion ?? 0}</Tag></>}</Space>}
+      {editingTask && <Space style={{ marginBottom: 16 }}><Text strong>{state.topics.find((topic) => topic.id === editingTask.topicId)?.name}</Text><Tag>{editingTask.deadline} 截止</Tag>{editingReport && <StatusTag status={editingReport.status} />}</Space>}
       <ReportForm form={form} disabled={!editable} />
       {editingReport && <Card title="审批记录" size="small" style={{ marginTop: 16 }}><ApprovalTimeline records={state.approvalRecords.filter((item) => item.businessId === editingReport.id)} users={state.users} /></Card>}
     </Drawer>
     <Modal title={decision === 'approve' ? '确认审批通过' : '退回修改'} open={Boolean(decision)} onCancel={() => setDecision(null)} onOk={confirmReview}><Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'return' ? '请填写明确的退回原因' : '审批意见（选填）'} /></Modal>
   </>;
+}
+
+export function ReportManagementPage() {
+  return isRealApi() ? <RealReportPage /> : <MockReportManagementPage />;
 }

@@ -252,6 +252,7 @@ export interface ArchiveRequirement {
   sourceCode?: string;
   sourceRow?: number;
   templateId?: string;
+  createdById?: string;
 }
 
 export type ArchiveApplicability = 'PENDING' | 'APPLICABLE' | 'NOT_APPLICABLE';

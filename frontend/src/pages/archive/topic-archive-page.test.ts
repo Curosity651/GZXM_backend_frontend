@@ -52,7 +52,7 @@ describe('课题国家材料单位目录与权限', () => {
     useAppStore.setState(createInitialState());
   });
 
-  it('科研助理可查看课题下所有单位目录，但不能编辑单位材料', () => {
+  it('科研助理可管理文件夹，但不能上传单位材料', () => {
     renderAs('assistant');
     openTopic('K1');
 
@@ -62,8 +62,8 @@ describe('课题国家材料单位目录与权限', () => {
     expect(screen.getAllByRole('button', { name: '进入单位材料' })).toHaveLength(3);
 
     openUnit('清华大学');
-    expect(screen.getByText('当前为查看权限，不可修改该单位材料。')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: '新增文件夹' })).toBeNull();
+    expect(screen.getByText('您可管理文件夹；文件上传由该单位办理。')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /新增文件夹/ })).toBeEnabled();
   });
 
   it('课题牵头单位可查看下属单位，且只能编辑自己的目录', () => {

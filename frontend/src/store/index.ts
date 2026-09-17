@@ -19,7 +19,7 @@ import { nextAchievementStatus, type AchievementAction } from '../domain/workflo
 import { isReportEditable, nextReportStatus, type ReportAction } from '../domain/report-flow';
 import { canPerform, filterByTopicScope, getRole } from '../domain/permissions';
 import { createDefaultTopicReportConfig, isReportOpen, isReportOverdue, topicReportWindow } from '../domain/reporting';
-import { canAccessTopicByMembership, isInternalTopicUnit, isTopicLead, isTopicOperational } from '../domain/topic-access';
+import { canAccessTopicByMembership, isGlobalUser, isInternalTopicUnit, isTopicLead, isTopicOperational } from '../domain/topic-access';
 
 export interface AppData {
   project: Project;
@@ -81,6 +81,7 @@ export interface AppState extends AppData {
   submitReport: (id: string, operatorId: string) => void;
   reviewReport: (id: string, action: ReportAction, operatorId: string, opinion: string) => void;
   addSelfFundedProject: (project: SelfFundedProject, operatorId: string) => void;
+  updateSelfFundedProject: (id: string, updates: Partial<SelfFundedProject>, operatorId: string) => void;
   saveArchiveSubmission: (submission: ArchiveSubmission, operatorId: string) => void;
   submitArchive: (id: string, operatorId: string) => void;
   addArchiveCategory: (category: ArchiveCategory) => void;
@@ -425,7 +426,23 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   addSelfFundedProject: (project, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
     if (!operator || !isTopicOperational(get().topics.find((item) => item.id === project.topicId)) || !isInternalTopicUnit(operator) || !canPerform(operator, get().roles, 'self-funded.manage') || !canAccessTopicByMembership(operator, project.topicId, get().topicMemberships) || project.ownerUnitId !== operator.unitId) throw new Error('没有该课题配套自筹项目的维护权限');
+    if (!project.startDate || !project.endDate || project.endDate < project.startDate) throw new Error('请填写有效的项目开始和结束日期');
     set((state) => ({ selfFundedProjects: [...state.selfFundedProjects, project] }));
+  },
+  updateSelfFundedProject: (id, updates, operatorId) => {
+    const operator = get().users.find((item) => item.id === operatorId);
+    const old = get().selfFundedProjects.find((item) => item.id === id);
+    if (!operator || !old || !isTopicOperational(get().topics.find((item) => item.id === old.topicId)) ||
+      !isInternalTopicUnit(operator) || !canPerform(operator, get().roles, 'self-funded.manage') ||
+      !canAccessTopicByMembership(operator, old.topicId, get().topicMemberships) || old.ownerUnitId !== operator.unitId)
+      throw new Error('没有该课题配套自筹项目的维护权限');
+    if (updates.topicId && updates.topicId !== old.topicId || updates.projectType && updates.projectType !== old.projectType)
+      throw new Error('所属课题与项目类型不能修改');
+    const updated = { ...old, ...updates, topicId: old.topicId, ownerUnitId: old.ownerUnitId,
+      projectType: old.projectType, templateSnapshotId: old.templateSnapshotId };
+    if (!updated.startDate || !updated.endDate || updated.endDate < updated.startDate)
+      throw new Error('请填写有效的项目开始和结束日期');
+    set((state) => ({ selfFundedProjects: state.selfFundedProjects.map((item) => item.id === id ? updated : item) }));
   },
   saveArchiveSubmission: (submission, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
@@ -455,16 +472,24 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   addArchiveRequirement: (requirement, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
     const isPrivateTopicFolder = requirement.ownerType === 'TOPIC_NATIONAL' && !requirement.sourceCode && Boolean(requirement.topicId && requirement.unitId);
-    if (!operator || !isPrivateTopicFolder || !isTopicOperational(get().topics.find((item) => item.id === requirement.topicId)) || !canPerform(operator, get().roles, 'archive.topic.submit') || operator.unitId !== requirement.unitId || !canAccessTopicByMembership(operator, requirement.topicId, get().topicMemberships)) throw new Error('没有新建该单位材料文件夹的权限');
+    const canManage = Boolean(operator && (isGlobalUser(operator) || operator.unitId === requirement.unitId && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopicByMembership(operator, requirement.topicId, get().topicMemberships)));
+    const unitBelongsToTopic = get().topicMemberships.some((item) => item.topicId === requirement.topicId && item.unitId === requirement.unitId && item.enabled);
+    if (!operator || !isPrivateTopicFolder || !isTopicOperational(get().topics.find((item) => item.id === requirement.topicId)) || !canManage || !unitBelongsToTopic) throw new Error('没有新建该单位材料文件夹的权限');
     const duplicate = get().archiveRequirements.some((item) => item.ownerType === 'TOPIC_NATIONAL' && !item.sourceCode && item.topicId === requirement.topicId && item.unitId === requirement.unitId && item.name.trim() === requirement.name.trim());
     if (duplicate) throw new Error('本单位材料中已存在同名文件夹');
-    set((state) => ({ archiveRequirements: [...state.archiveRequirements, requirement] }));
+    set((state) => ({ archiveRequirements: [...state.archiveRequirements, {
+      ...requirement, requirementKind: requirement.required ? 'REQUIRED' : 'CONDITIONAL', createdById: operator.id,
+    }] }));
   },
   updateArchiveRequirement: (id, updates) => set((state) => ({ archiveRequirements: state.archiveRequirements.map((requirement) => requirement.id === id ? { ...requirement, ...updates } : requirement) })),
   removeArchiveRequirement: (id, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
     const requirement = get().archiveRequirements.find((item) => item.id === id);
-    if (!operator || !requirement || requirement.ownerType !== 'TOPIC_NATIONAL' || requirement.sourceCode || !requirement.topicId || !requirement.unitId || !isTopicOperational(get().topics.find((item) => item.id === requirement.topicId)) || operator.unitId !== requirement.unitId || !canPerform(operator, get().roles, 'archive.topic.submit') || !canAccessTopicByMembership(operator, requirement.topicId, get().topicMemberships)) throw new Error('没有删除该单位材料文件夹的权限');
+    const canManage = Boolean(operator && requirement && (isGlobalUser(operator) || operator.unitId === requirement.unitId && canPerform(operator, get().roles, 'archive.topic.submit') && canAccessTopicByMembership(operator, requirement.topicId, get().topicMemberships)));
+    if (!operator || !requirement || requirement.ownerType !== 'TOPIC_NATIONAL' || requirement.sourceCode || !requirement.topicId || !requirement.unitId || !isTopicOperational(get().topics.find((item) => item.id === requirement.topicId)) || !canManage) throw new Error('没有删除该单位材料文件夹的权限');
+    const creator = get().users.find((item) => item.id === requirement.createdById);
+    if (creator && ['项目技术负责人', '科研助理'].includes(creator.role) && creator.id !== operator.id)
+      throw new Error('技术负责人或科研助理创建的文件夹只能由创建者删除');
     const relatedSubmissions = get().archiveSubmissions.filter((item) => item.requirementId === id);
     if (relatedSubmissions.some((item) => (item.files?.length ?? 0) > 0 || item.fileIds.length > 0)) throw new Error('该文件夹中已有材料，请先删除文件后再删除文件夹');
     set((state) => ({

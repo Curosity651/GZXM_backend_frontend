@@ -6,10 +6,12 @@ import { StatusTag } from '../components/common/StatusTag';
 import { canPerform } from '../domain/permissions';
 import { accessibleTopics, canViewAchievement, isGlobalUser, isInternalTopicUnit, isTopicLead } from '../domain/topic-access';
 import { isArchiveRequirementComplete } from '../domain/archive';
+import { isRealApi } from '../api/api-mode';
+import { RealHomePage } from './RealHomePage';
 
 const { Text } = Typography;
 
-export function HomePage() {
+function MockHomePage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const summaries = buildTopicSummariesV2(state.topics, state.topicMemberships, state.topicIndicators, state.achievements, user, state.nodes, state.indicatorDefinitions);
@@ -60,4 +62,8 @@ export function HomePage() {
       </Card></Col>
     </Row>
   </>;
+}
+
+export function HomePage() {
+  return isRealApi() ? <RealHomePage /> : <MockHomePage />;
 }

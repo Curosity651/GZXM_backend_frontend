@@ -7,8 +7,10 @@ import { accessibleTopics, canViewAllTopicUnitData, isGlobalUser, isTopicOperati
 import { archiveCompletion, isArchiveRequirementComplete, topicArchiveRequirements } from '../../domain/archive';
 import { ArchiveFolderFileList } from '../../components/archive/ArchiveFolderFileList';
 import type { ArchiveRequirement, TopicUnitMembership } from '../../types';
+import { isRealApi } from '../../api/api-mode';
+import { RealNationalArchivePage } from './RealArchivePages';
 
-export function TopicArchivePage() {
+function MockTopicArchivePage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
@@ -18,7 +20,7 @@ export function TopicArchivePage() {
   const [selectedUnitId, setSelectedUnitId] = useState<string>();
   const [selectedFolder, setSelectedFolder] = useState<ArchiveRequirement | null>(null);
   const [addFolderOpen, setAddFolderOpen] = useState(false);
-  const [form] = Form.useForm<{ name: string }>();
+  const [form] = Form.useForm<{ name: string; required: boolean }>();
 
   const canManageFolders = canPerform(user, state.roles, 'archive.topic.submit') && Boolean(user.unitId);
   const getFolders = (topicId: string, unitId: string) => topicArchiveRequirements(state.archiveRequirements, topicId, unitId);
@@ -54,7 +56,14 @@ export function TopicArchivePage() {
     : selectedMembers;
   const selectedUnit = state.units.find((item) => item.id === selectedUnitId);
   const selectedMembership = selectedMembers.find((item) => item.unitId === selectedUnitId);
-  const canManageSelectedUnit = canManageFolders && isTopicOperational(selectedTopic) && selectedUnitId === user.unitId;
+  const canSubmitSelectedUnit = canManageFolders && isTopicOperational(selectedTopic) && selectedUnitId === user.unitId;
+  const canManageSelectedUnit = Boolean(selectedUnitId && isTopicOperational(selectedTopic) &&
+    (isGlobalUser(user) || canSubmitSelectedUnit));
+  const canDeleteFolder = (folder: ArchiveRequirement) => {
+    if (!canManageSelectedUnit || folder.sourceCode) return false;
+    const creator = state.users.find((item) => item.id === folder.createdById);
+    return !creator || !['项目技术负责人', '科研助理'].includes(creator.role) || creator.id === user.id;
+  };
 
   const resetDrillDown = () => {
     setSelectedTopicId(undefined);
@@ -63,8 +72,8 @@ export function TopicArchivePage() {
   };
 
   const submitFolder = async () => {
-    if (!selectedTopicId || !selectedUnitId || selectedUnitId !== user.unitId) return message.warning('只能在本单位材料中新增文件夹');
-    const { name } = await form.validateFields();
+    if (!selectedTopicId || !selectedUnitId || !canManageSelectedUnit) return message.warning('没有新建该目录文件夹的权限');
+    const { name, required } = await form.validateFields();
     try {
       state.addArchiveRequirement({
         id: `ar-topic-custom-${Date.now()}`,
@@ -73,10 +82,10 @@ export function TopicArchivePage() {
         topicId: selectedTopicId,
         unitId: selectedUnitId,
         name: name.trim(),
-        required: true,
+        required,
         requiredQuantity: 1,
         ownerType: 'TOPIC_NATIONAL',
-        requirementKind: 'REQUIRED',
+        requirementKind: required ? 'REQUIRED' : 'CONDITIONAL',
       }, user.id);
     } catch (error) {
       return message.warning(error instanceof Error ? error.message : '无法创建文件夹');
@@ -120,12 +129,13 @@ export function TopicArchivePage() {
           <FolderOpenOutlined className="archive-folder-icon" />
           <div>
             <div className="archive-folder-name">{folder.name}</div>
+            <Tag color={folder.required ? 'red' : 'gold'}>{folder.required ? '必存' : '有则必存'}</Tag>
             <div className="archive-folder-meta">{folder.sourceCode ? `清单材料 · ${folder.sourceCode}` : '自定义材料文件夹'}</div>
             <Progress percent={complete ? 100 : 0} size="small" showInfo={false} />
             <span className="archive-folder-count">{fileCount ? `${fileCount} 个文件 · 已提交` : '暂无文件'}</span>
           </div>
         </Space>
-        {!folder.sourceCode && canManageSelectedUnit && <Button
+        {canDeleteFolder(folder) && <Button
           type="text"
           danger
           size="small"
@@ -237,7 +247,8 @@ export function TopicArchivePage() {
       {selectedMembership && <div className="archive-directory-hint">
         <Space wrap>
           <Tag color={selectedMembership.membershipType === 'LEAD' ? 'blue' : 'default'}>{selectedMembership.membershipType === 'LEAD' ? '牵头单位' : '承担单位'}</Tag>
-          <span>{canManageSelectedUnit ? '您可上传、补充和删除本单位材料。' : '当前为查看权限，不可修改该单位材料。'}</span>
+          <span>{canSubmitSelectedUnit ? '您可上传、补充和删除本单位材料。' : canManageSelectedUnit
+            ? '您可管理文件夹；文件上传由该单位办理。' : '当前为查看权限，不可修改该单位材料。'}</span>
         </Space>
       </div>}
       <Row gutter={[16, 16]}>
@@ -257,7 +268,7 @@ export function TopicArchivePage() {
         ownerId={`${selectedTopic.id}:${selectedUnitId}`}
         topicId={selectedTopic.id}
         unitId={selectedUnitId}
-        editable={canManageSelectedUnit}
+        editable={canSubmitSelectedUnit}
       />}
     </Drawer>
 
@@ -273,7 +284,14 @@ export function TopicArchivePage() {
         <Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}>
           <Input placeholder="例如：补充说明材料" maxLength={40} />
         </Form.Item>
+        <Form.Item name="required" label="材料要求" initialValue={true} rules={[{ required: true, message: '请选择材料要求' }]}>
+          <Select options={[{ label: '必存', value: true }, { label: '有则必存', value: false }]} />
+        </Form.Item>
       </Form>
     </Modal>
   </>;
+}
+
+export function TopicArchivePage() {
+  return isRealApi() ? <RealNationalArchivePage /> : <MockTopicArchivePage />;
 }
