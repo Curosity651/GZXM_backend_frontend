@@ -6,8 +6,14 @@ import type { Topic } from '../../types';
 import { useAppStore } from '../../store';
 import { canPerform } from '../../domain/permissions';
 import { accessibleTopics, isTopicLead } from '../../domain/topic-access';
+import { isRealApi } from '../../api/api-mode';
+import { RealIndicatorConfigPage } from './RealIndicatorConfigPage';
 
 export function IndicatorConfigPage() {
+  return isRealApi() ? <RealIndicatorConfigPage /> : <MockIndicatorConfigPage />;
+}
+
+function MockIndicatorConfigPage() {
   const state = useAppStore(); const user = state.currentUser!; const navigate = useNavigate();
   const visibleTopics = accessibleTopics(user, state.topics, state.topicMemberships); const canManageTopics = canPerform(user, state.roles, 'topic.manage'); const canAllocateIndicators = canPerform(user, state.roles, 'unit-allocation.manage');
   const [query, setQuery] = useState({ name: '', status: '', leadingUnitId: '' }); const unitMap = Object.fromEntries(state.units.map((unit) => [unit.id, unit.name]));

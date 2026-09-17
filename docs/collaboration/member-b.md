@@ -2,6 +2,7 @@
 
 ## 开发准备与契约评审
 
+- [第 9 步前端接入与联调交付](b-contracts/achievement-step9.md)：B 页面和客户端、自动化验证；共享登录/响应头及文件能力等待 A，完整 E2E 待验收。
 - [第 8 步成果统计与公开查询](b-contracts/achievement-step8.md)：节点累计、阶段历史去重、专项子集、零目标、历史范围及 C 调用说明。
 - [第 7 步成果流转、审批与快照](b-contracts/achievement-step7.md)：状态矩阵、阶段必填、版本与重试、131 项测试及本地预审验证；正式材料闭环仍等待 A。
 - [第 6 步成果草稿实现与验收](b-contracts/achievement-step6.md)：五类详情、归属与版本；材料闭环等待 A 的文件能力，本步尚未全部完成。

@@ -10,6 +10,8 @@ import { accessibleTopics, canViewAchievement, isTopicOperational, membershipFor
 import { StatusTag } from '../../components/common/StatusTag';
 import { AchievementForm } from '../../components/achievement/AchievementForm';
 import { AchievementDetail } from '../../components/achievement/AchievementDetail';
+import { isRealApi } from '../../api/api-mode';
+import { RealAchievementEntryPage } from './RealAchievementEntryPage';
 
 const { Text } = Typography;
 type FormValues = Partial<Achievement>;
@@ -18,6 +20,10 @@ type SupplementValues = Pick<Achievement, 'publicationDate' | 'journalYearVolume
 const isSupplementEditable = (status: string) => ['待见刊补充', '待授权补充', '补充退回'].includes(status);
 
 export function AchievementEntryPage() {
+  return isRealApi() ? <RealAchievementEntryPage /> : <MockAchievementEntryPage />;
+}
+
+function MockAchievementEntryPage() {
   const state = useAppStore();
   const user = state.currentUser!;
   const topics = accessibleTopics(user, state.topics, state.topicMemberships);
