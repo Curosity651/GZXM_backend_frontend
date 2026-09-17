@@ -138,105 +138,121 @@ paths:
         - { name: keyword, in: query, schema: { type: string } }
         - { name: status, in: query, schema: { type: string } }
         - { name: enabled, in: query, schema: { type: boolean } }
-      responses: { '200': { description: 课题分页, content: { application/json: { schema: { $ref: '#/components/schemas/TopicPage' } } } } }
+      responses: { '200': { description: 课题分页, content: { application/json: { schema: { $ref: '#/components/schemas/TopicPage' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     post:
       tags: [Topics]
       operationId: createTopic
+      description: 仅具有topic.manage权限的科研助理创建。必须且仅有一个有效重点项目；默认ACTIVE且enabled=true。participantUnitIds在创建时一并添加，不得重复或包含牵头单位。课题与成员关系在同一事务保存。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TopicWriteRequest' } } } }
-      responses: { '201': { description: 已创建并建立唯一 LEAD 关系, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } } }
+      responses: { '201': { description: 已创建并建立唯一 LEAD 关系, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /topics/{topicId}:
     parameters: [{ $ref: '#/components/parameters/TopicId' }]
     get:
       tags: [Topics]
       operationId: getTopic
-      responses: { '200': { description: 课题详情, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
+      responses: { '200': { description: 课题详情, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } }, '403': { $ref: '#/components/responses/Forbidden' }, '401': { $ref: '#/components/responses/Unauthorized' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     put:
       tags: [Topics]
       operationId: updateTopic
+      description: 仅科研助理维护。recordVersion在编辑时必须携带最新值，否则409。participantUnitIds省略或空数组时保留原成员，传入时只补充新关系，已有关系包括停用关系不自动改变。更换牵头时原子更新，新牵头原有关系恢复有效，旧牵头保留为有效承担单位。暂停、关闭或停用时拒绝普通编辑。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/TopicWriteRequest' } } } }
-      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /topics/{topicId}/status:
     put:
       tags: [Topics]
       operationId: setTopicStatus
+      description: 仅科研助理维护。enabled必填，status省略则保持原状态。暂停、关闭、停用后历史只读，但科研助理可通过本接口恢复ACTIVE且enabled=true。本接口按课题行锁串行处理，递增recordVersion；当前请求不提供客户端版本，不能检测基于旧页面发起的状态覆盖。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean }, status: { $ref: '#/components/schemas/TopicStatus' } } } } } }
-      responses: { '200': { description: 已更新；停用后历史只读, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } } }
+      responses: { '200': { description: 已更新；停用后历史只读, content: { application/json: { schema: { $ref: '#/components/schemas/Topic' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /topics/{topicId}/members:
     get:
       tags: [Topics]
       operationId: listTopicMembers
+      description: 当前有效成员和管理角色可查看该课题所有成员关系（含停用关系）。已被停用的单位不能凭原成员身份读取，历史由管理角色查看。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
-      responses: { '200': { description: 可见成员列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } } } } } }
+      responses: { '200': { description: 可见成员列表, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicMembership' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     post:
       tags: [Topics]
       operationId: addTopicParticipant
+      description: 仅具有topic-unit.manage权限的本课题有效牵头单位可添加有效单位。已有关系（包括停用关系）返回409；恢复关系请调用成员状态接口。全局管理角色不能代为操作。成功递增课题recordVersion。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [unitId], properties: { unitId: { type: string } } } } } }
-      responses: { '201': { description: 已添加承担单位, content: { application/json: { schema: { $ref: '#/components/schemas/TopicMembership' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+      responses: { '201': { description: 已添加承担单位, content: { application/json: { schema: { $ref: '#/components/schemas/TopicMembership' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /topics/{topicId}/members/{membershipId}/status:
     put:
       tags: [Topics]
       operationId: setTopicMembershipStatus
+      description: 仅本课题有效牵头单位可启停承担关系，不能修改牵头关系。membershipId必须属于路径中的topicId。启用要求单位有效。无物理删除；成功递增课题recordVersion。请求无客户端版本，采用课题行锁串行化。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: membershipId, in: path, required: true, schema: { type: string } }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [enabled], properties: { enabled: { type: boolean } } } } } }
-      responses: { '200': { description: 已更新成员关系, content: { application/json: { schema: { $ref: '#/components/schemas/TopicMembership' } } } } }
+      responses: { '200': { description: 已更新成员关系, content: { application/json: { schema: { $ref: '#/components/schemas/TopicMembership' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: '课题或课题内成员不存在', content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
 
   /time-nodes:
     get:
       tags: [Indicators]
       operationId: listTimeNodes
+      description: 要求page:topic-indicator权限。查询唯一有效重点项目的启用节点，按sortOrder和id排序；没有节点时返回空数组，没有或存在多个有效项目时返回409。
       responses: { '200': { description: 考核节点, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TimeNode' } } } } } }
   /indicator-definitions:
     get:
       tags: [Indicators]
       operationId: listIndicatorDefinitions
+      description: 要求page:topic-indicator权限。仅返回启用指标定义，按id排序；尚未初始化定义时返回空数组。
       responses: { '200': { description: 五类基础成果和固定专项指标, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/IndicatorDefinition' } } } } } }
   /topics/{topicId}/indicator-targets:
     get:
       tags: [Indicators]
       operationId: listTopicIndicatorTargets
+      description: 默认读取已发布的生效目标，课题有效成员及管理角色可读历史。view=draft仅限具有indicator.manage权限的科研助理，响应X-Draft-Version给出节点草稿版本，未创建为0。草稿不影响生效目标。
       parameters:
         - { $ref: '#/components/parameters/TopicId' }
         - { name: nodeId, in: query, required: true, schema: { type: string } }
-      responses: { '200': { description: 当前节点课题累计目标, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } } }
+        - { name: view, in: query, schema: { type: string, enum: [effective, draft], default: effective } }
+      responses: { '200': { description: 当前节点课题累计目标, headers: { X-Draft-Version: { description: 草稿查询时返回，保存时作为draftVersion提交, schema: { type: integer, minimum: 0 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
     put:
       tags: [Indicators]
       operationId: saveTopicIndicatorTargets
+      description: 仅科研助理且具有indicator.manage权限。按节点完整替换草稿，空数组清空未发布草稿；首次draftVersion省略或为0，后续必须匹配X-Draft-Version，冲突409。保存后版本增加；检查前后节点累计不递减、重复维度、节点归属、启用定义及专项不超过同类基础总量。已发布目标本阶段不得删除或降额，修改草稿不会改变生效目标。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IndicatorTargetBatch' } } } }
-      responses: { '200': { description: 已保存草稿, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '200': { description: 已保存草稿, headers: { X-Draft-Version: { description: 保存后的节点草稿版本, schema: { type: integer, minimum: 1 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TopicIndicator' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
   '/topics/{topicId}/indicator-targets:publish':
     post:
       tags: [Indicators]
       operationId: publishTopicIndicatorTargets
+      description: 仅科研助理且具有topic-indicator.publish权限；必须提交所发布draftVersion及8到100位可见ASCII的Idempotency-Key。发布非空草稿，原子更新生效值并保留历史。同一用户同键同课题/节点/草稿版本重放204且不重复发布；同键不同请求409。重试旧成功发布不会发布新草稿。暂停、关闭、停用课题拒绝新发布。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId], properties: { nodeId: { type: string } } } } } }
-      responses: { '204': { description: 已下发 }, '422': { $ref: '#/components/responses/ValidationError' } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId, draftVersion], properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 1, maximum: 2147483647 } } } } } }
+      responses: { '204': { description: 已下发或原成功请求重放 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
   /topics/{topicId}/unit-allocations:
     get:
       tags: [Indicators]
       operationId: listUnitAllocations
-      parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: nodeId, in: query, required: true, schema: { type: string } }]
-      responses: { '200': { description: 当前节点单位累计分配, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } } }
+      description: 默认view=effective读取生效分配；管理角色和当前牵头看全课题，承担单位只能看自身。view=draft仅当前牵头且有unit-allocation.manage权限可读，返回X-Draft-Version和X-Topic-Indicator-Version响应头。
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: nodeId, in: query, required: true, schema: { type: string } }, { name: view, in: query, schema: { type: string, enum: [effective, draft], default: effective } }]
+      responses: { '200': { description: 当前节点单位累计分配, headers: { X-Draft-Version: { description: 草稿版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
     put:
       tags: [Indicators]
       operationId: saveUnitAllocations
+      description: 当前有效牵头且有unit-allocation.manage权限。完整替换节点草稿，首次draftVersion省略或0，后续必须匹配响应X-Draft-Version；空数组清空草稿，不改变生效分配。每行单位/定义不能重复，单位须为有效且启用成员，目标须已由课题下发。草稿可暂不满足覆盖/合计，但须满足单位节点累计和专项子集约束。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitAllocationBatch' } } } }
-      responses: { '200': { description: 已保存, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '200': { description: 已保存, headers: { X-Draft-Version: { description: 保存后的草稿版本, schema: { type: integer, minimum: 1 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本, schema: { type: integer, minimum: 1 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
   '/topics/{topicId}/unit-allocations:publish':
     post:
       tags: [Indicators]
       operationId: publishUnitAllocations
+      description: 当前有效牵头且有unit-allocation.publish权限。必须覆盖所有有效且启用成员（含牵头）和该节点全部生效指标，零目标显式填0；每项单位合计不得低于课题要求，允许超额。课题目标版本变化后须重新保存草稿。请求绑定draftVersion；同一用户同键同请求重放204，不同请求409。本阶段不允许降低有效成员已生效分配，停用成员历史保留但不计发布合计。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId], properties: { nodeId: { type: string } } } } } }
-      responses: { '204': { description: 已下发 }, '422': { $ref: '#/components/responses/ValidationError' } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId, draftVersion], properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 1, maximum: 2147483647 } } } } } }
+      responses: { '204': { description: 已下发或成功重放 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
 
   /achievements:
     get:
       tags: [Achievements]
       operationId: listAchievements
+      description: 按当前有效成员关系过滤：管理角色全局、牵头本课题全单位、承担单位仅自身。pendingForMe=true按科研助理初审权限或技术负责人终审权限过滤当前待办；其他用户返回空列表。
       parameters:
         - { $ref: '#/components/parameters/Page' }
         - { $ref: '#/components/parameters/Size' }
@@ -246,52 +262,59 @@ paths:
         - { name: indicatorDefinitionId, in: query, schema: { type: string } }
         - { name: status, in: query, schema: { type: string } }
         - { name: pendingForMe, in: query, schema: { type: boolean } }
-      responses: { '200': { description: 按数据范围过滤的成果分页, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementPage' } } } } }
+      responses: { '200': { description: 按数据范围过滤的成果分页, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementPage' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     post:
       tags: [Achievements]
       operationId: createAchievement
+      description: 仅具有achievement.submit权限的有效启用成员单位；必须绑定本单位已下发的基础指标，零目标允许。归属由服务端解析；初始DRAFT、不计完成量。detail字段按现有五类表单校验，草稿允许缺项。A的文件关联能力尚未接入，非空materialAttachments返回503并回滚。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
-      responses: { '201': { description: 已创建草稿, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '201': { description: 已创建草稿, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '422': { $ref: '#/components/responses/ValidationError' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}:
     parameters: [{ $ref: '#/components/parameters/AchievementId' }]
     get:
       tags: [Achievements]
       operationId: getAchievement
-      responses: { '200': { description: 成果详情, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } } }
+      description: 按有效课题关系、单位归属和当前牵头范围读取。materials仅当前文件，materialLinks保留材料关联历史。文件公开能力未接入时，包含材料的记录暂无法返回完整详情。
+      responses: { '200': { description: 成果详情, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
     put:
       tags: [Achievements]
       operationId: updateAchievement
+      description: 仅所属单位可编辑草稿、退回、待见刊或待授权补充状态，审批中及生效后锁定；必须匹配recordVersion，否则409。课题、单位、节点、指标归属不可更换。detail为完整替换；materialAttachments省略保留、空数组移除当前关联但留历史，同类可多文件。非空附件在文件能力接入前返回503并回滚。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementWriteRequest' } } } }
-      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+      responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公开关联能力尚未接入，FILE_REFERENCE_CAPABILITY_UNAVAILABLE, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/actions:
     post:
       tags: [Achievements]
       operationId: executeAchievementAction
+      description: 按成果类型和当前状态执行预审提交、投稿登记、进入正式草稿、正式或补充提交。必须携带recordVersion。每次提交生成新不可变快照；正式和补充必须满足材料及日期规则，文件能力未接入返回503。Idempotency-Key在当前用户的成果动作与审批中共享，同键同请求重放原响应，同键不同请求409。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementActionRequest' } } } }
-      responses: { '200': { description: 状态流转完成, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
+      responses: { '200': { description: 状态流转完成, content: { application/json: { schema: { $ref: '#/components/schemas/Achievement' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/reviews:
     post:
       tags: [Achievements]
       operationId: reviewAchievement
+      description: 仅科研助理初审、项目技术负责人终审，角色和动作权限同时检查；必须匹配recordVersion与submittedVersion，退回意见必填。退回重提回初审。论文/专利正式终审后等待补充，补充终审才计数；其他三类正式终审生效。成功重试返回原审批记录。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
-      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReviewRequest' } } } }
-      responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementReviewRequest' } } } }
+      responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievements/{achievementId}/snapshots:
     get:
       tags: [Achievements]
       operationId: listAchievementSnapshots
+      description: 按当前成果数据范围返回不可变提交快照，提交版本倒序，仅查询ACHIEVEMENT；与审批记录分开，审批历史见成果详情approvals。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }]
-      responses: { '200': { description: 不可变提交版本, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SubmissionSnapshot' } } } } } }
+      responses: { '200': { description: 不可变提交版本, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SubmissionSnapshot' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
   /achievement-progress:
     get:
       tags: [Achievements]
       operationId: getAchievementProgress
+      description: 按同项目节点sortOrder累计成果，读取当前事实而非历史时点；阶段按历史证据去重，生效须EFFECTIVE且countsToIndicator=true。只取查询节点已下发目标作分母。零目标或未下发完成率null，允许超过100%。停用成员/单位仅管理角色可见historical行，不计当前汇总。专项独立展示，不累加到基础总数；非法match_rule返回422。
       parameters:
         - { name: topicId, in: query, schema: { type: string } }
         - { name: nodeId, in: query, required: true, schema: { type: string } }
         - { name: unitId, in: query, schema: { type: string } }
-      responses: { '200': { description: 基础总量与专项子集进度, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementProgress' } } } } }
+      responses: { '200': { description: 基础总量与专项子集进度, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementProgress' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 统计节点或课题不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
 
   /topics/{topicId}/report-rule:
     get:
@@ -598,7 +621,7 @@ components:
     IndicatorTargetBatch:
       type: object
       required: [nodeId, targets]
-      properties: { nodeId: { type: string }, targets: { type: array, items: { type: object, required: [indicatorDefinitionId, targetQuantity], properties: { indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 } } } } }
+      properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 0, maximum: 2147483647 }, targets: { type: array, maxItems: 500, items: { type: object, required: [indicatorDefinitionId, targetQuantity], properties: { indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0, maximum: 2147483647 } } } } }
     UnitIndicatorAllocation:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, targetQuantity, status, version]
@@ -606,27 +629,85 @@ components:
     UnitAllocationBatch:
       type: object
       required: [nodeId, allocations]
-      properties: { nodeId: { type: string }, allocations: { type: array, items: { type: object, required: [unitId, indicatorDefinitionId, targetQuantity], properties: { unitId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0 } } } } }
+      properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 0, maximum: 2147483647 }, allocations: { type: array, maxItems: 5000, items: { type: object, required: [unitId, indicatorDefinitionId, targetQuantity], properties: { unitId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0, maximum: 2147483647 } } } } }
     Achievement:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, title, status, recordVersion, submittedVersion, materials]
-      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { type: string }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { type: object, additionalProperties: true }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+      properties: { id: { type: string }, topicId: { type: string }, unitId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, achievementType: { type: string }, title: { type: string }, responsiblePerson: { type: string }, status: { $ref: '#/components/schemas/AchievementStatus' }, countsToIndicator: { type: boolean }, recordVersion: { type: integer }, submittedVersion: { type: integer }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialLinks: { type: array, items: { $ref: '#/components/schemas/AchievementMaterialLink' } }, materials: { type: array, items: { $ref: '#/components/schemas/FileObject' } }, approvals: { type: array, items: { $ref: '#/components/schemas/ApprovalRecord' } }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
     AchievementWriteRequest:
       type: object
       required: [topicId, nodeId, indicatorDefinitionId, title, responsiblePerson]
-      properties: { topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, title: { type: string }, responsiblePerson: { type: string }, detail: { type: object, additionalProperties: true }, materialFileIds: { type: array, items: { type: string } }, recordVersion: { type: integer } }
+      properties: { topicId: { type: string }, nodeId: { type: string }, indicatorDefinitionId: { type: string }, title: { type: string, minLength: 1, maxLength: 500 }, responsiblePerson: { type: string, minLength: 1, maxLength: 100 }, detail: { $ref: '#/components/schemas/AchievementDetail' }, materialAttachments: { type: array, maxItems: 100, items: { $ref: '#/components/schemas/AchievementMaterialInput' } }, materialFileIds: { type: array, maxItems: 0, deprecated: true, items: { type: string }, description: 非空旧式文件ID列表会返回422，请改用结构化材料 }, recordVersion: { type: integer, minimum: 1, maximum: 2147483647 } }
     AchievementActionRequest:
       type: object
-      required: [action]
-      properties: { action: { type: string, enum: [SUBMIT_PRE_REVIEW, REGISTER_EXTERNAL_SUBMISSION, START_FORMAL, SUBMIT_FORMAL, SUBMIT_SUPPLEMENT] }, externalSubmissionDate: { type: string, format: date }, externalSubmissionNumber: { type: string } }
+      required: [action, recordVersion]
+      properties:
+        action: { type: string, enum: [SUBMIT_PRE_REVIEW, REGISTER_EXTERNAL_SUBMISSION, START_FORMAL, SUBMIT_FORMAL, SUBMIT_SUPPLEMENT] }
+        recordVersion: { type: integer, minimum: 1, maximum: 2147483647 }
+        externalSubmissionDate: { type: string, format: date, description: 仅登记动作使用且必填；论文映射submissionDate，专利映射applicationDate }
+        externalSubmissionNumber: { type: string, maxLength: 500, description: 仅登记动作使用，可选；论文映射externalSubmissionNumber，专利映射applicationNumber }
+    AchievementReviewRequest:
+      type: object
+      required: [decision, recordVersion, submittedVersion]
+      properties:
+        decision: { type: string, enum: [APPROVE, RETURN] }
+        opinion: { type: string, maxLength: 1000, description: RETURN时必填且不能是空白 }
+        recordVersion: { type: integer, minimum: 1, maximum: 2147483647 }
+        submittedVersion: { type: integer, minimum: 1, maximum: 2147483647 }
+    AchievementStatus:
+      type: string
+      enum: [DRAFT, PRE_INITIAL, PRE_FINAL, PRE_RETURNED, PRE_APPROVED, EXTERNAL_SUBMITTED, FORMAL_DRAFT, FORMAL_INITIAL, FORMAL_FINAL, FORMAL_RETURNED, WAIT_PUBLICATION, WAIT_GRANT, SUPPLEMENT_INITIAL, SUPPLEMENT_FINAL, SUPPLEMENT_RETURNED, EFFECTIVE]
     AchievementPage:
       type: object
       required: [items, page, size, total]
       properties: { items: { type: array, items: { $ref: '#/components/schemas/Achievement' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
     AchievementProgress:
       type: object
-      required: [baseTotals, specialIndicators, rows]
-      properties: { baseTotals: { type: object, additionalProperties: { type: integer } }, specialIndicators: { type: array, items: { type: object, additionalProperties: true } }, rows: { type: array, items: { type: object, additionalProperties: true } } }
+      required: [nodeId, countingBasis, baseTotals, baseStages, specialIndicators, rows]
+      properties:
+        nodeId: { type: string }
+        countingBasis: { type: string, enum: [CUMULATIVE_NODE_CURRENT_FACTS] }
+        baseTotals:
+          type: object
+          description: 当前可见有效成员的五类生效成果数，各成果只计一次，排除历史行与专项重复
+          required: [PAPER, PATENT, COPYRIGHT, STANDARD, TALENT]
+          properties:
+            PAPER: { type: integer, format: int64, minimum: 0 }
+            PATENT: { type: integer, format: int64, minimum: 0 }
+            COPYRIGHT: { type: integer, format: int64, minimum: 0 }
+            STANDARD: { type: integer, format: int64, minimum: 0 }
+            TALENT: { type: integer, format: int64, minimum: 0 }
+          additionalProperties: false
+        baseStages: { $ref: '#/components/schemas/AchievementStageCounts' }
+        specialIndicators: { type: array, description: 专项行独立于基础行，可能交叠，不能累加为基础总数, items: { $ref: '#/components/schemas/AchievementProgressRow' } }
+        rows: { type: array, description: 基础指标行；TOPIC与UNIT不能相加；historical=true仅管理角色可见且不计汇总, items: { $ref: '#/components/schemas/AchievementProgressRow' } }
+    AchievementStageCounts:
+      type: object
+      required: [initiated, preApproved, external, formal, supplement, effective]
+      properties:
+        initiated: { type: integer, format: int64, minimum: 0, description: 已创建的成果数 }
+        preApproved: { type: integer, format: int64, minimum: 0, description: 曾有预审终审通过记录的成果数 }
+        external: { type: integer, format: int64, minimum: 0, description: 曾成功登记投稿或申请的论文及专利数 }
+        formal: { type: integer, format: int64, minimum: 0, description: 曾有FORMAL提交快照的成果数 }
+        supplement: { type: integer, format: int64, minimum: 0, description: 曾有SUPPLEMENT提交快照的成果数 }
+        effective: { type: integer, format: int64, minimum: 0, description: 当前EFFECTIVE且countsToIndicator=true的成果数 }
+    AchievementProgressRow:
+      type: object
+      required: [scope, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, targetQuantity, targetVersion, targetPublished, hasTarget, completionRate, historical, stages]
+      properties:
+        scope: { type: string, enum: [TOPIC, UNIT] }
+        topicId: { type: string }
+        unitId: { type: [string, 'null'], description: TOPIC行固定null }
+        nodeId: { type: string }
+        indicatorDefinitionId: { type: string }
+        achievementType: { type: string, enum: [PAPER, PATENT, COPYRIGHT, STANDARD, TALENT] }
+        targetQuantity: { type: [integer, 'null'], format: int64, minimum: 0, description: 查询节点已下发目标；未下发为null }
+        targetVersion: { type: [integer, 'null'], minimum: 0 }
+        targetPublished: { type: boolean, description: 是否存在该查询节点的已下发目标 }
+        hasTarget: { type: boolean, description: 是否有正数目标；零目标和未下发均为false }
+        completionRate: { type: [number, 'null'], minimum: 0, description: 生效数乘100除以目标，两位小数四舍五入；无正目标为null，不限制100上限 }
+        historical: { type: boolean, description: 停用成员或停用单位，管理角色单独展示，不计当前汇总 }
+        stages: { $ref: '#/components/schemas/AchievementStageCounts' }
     ReviewRequest:
       type: object
       required: [decision]
@@ -700,3 +781,131 @@ components:
       type: object
       required: [url, expiresAt]
       properties: { url: { type: string, format: uri }, expiresAt: { type: string, format: date-time } }
+    AchievementMaterialInput:
+      type: object
+      required: [fileId, materialType]
+      properties:
+        fileId: { type: string, pattern: '^[1-9][0-9]*$' }
+        materialType: { type: string, minLength: 1, maxLength: 100 }
+    AchievementMaterialLink:
+      type: object
+      required: [id, fileId, materialType, version, active, status]
+      properties:
+        id: { type: string }
+        fileId: { type: string }
+        materialType: { type: string }
+        version: { type: integer, minimum: 1 }
+        active: { type: boolean }
+        status: { type: string }
+    AchievementDetail:
+      description: 根据绑定基础指标类型选择对应字段；跨类型字段由服务端拒绝。草稿无条件必填详情，正式提交规则留到第七步。
+      anyOf:
+        - { $ref: '#/components/schemas/PaperAchievementDetail' }
+        - { $ref: '#/components/schemas/PatentAchievementDetail' }
+        - { $ref: '#/components/schemas/CopyrightAchievementDetail' }
+        - { $ref: '#/components/schemas/StandardAchievementDetail' }
+        - { $ref: '#/components/schemas/TalentAchievementDetail' }
+    PaperAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        abstract: {"type": ["string", "null"], "maxLength": 10000}
+        acceptanceDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        allAuthors: {"type": ["string", "null"], "maxLength": 500}
+        cnNumber: {"type": ["string", "null"], "maxLength": 500}
+        correspondingAuthor: {"type": ["string", "null"], "maxLength": 500}
+        doi: {"type": ["string", "null"], "maxLength": 500}
+        englishTitle: {"type": ["string", "null"], "maxLength": 500}
+        externalSubmissionNumber: {"type": ["string", "null"], "maxLength": 500}
+        firstAuthor: {"type": ["string", "null"], "maxLength": 500}
+        firstSigningUnit: {"type": ["string", "null"], "maxLength": 500}
+        intendedJournal: {"type": ["string", "null"], "maxLength": 500}
+        isChineseCoreJournal: {"type": ["boolean", "null"]}
+        isPowerGridFirstAuthor: {"type": ["boolean", "null"]}
+        issn: {"type": ["string", "null"], "maxLength": 500}
+        journalLevel: {"type": ["string", "null"], "maxLength": 500}
+        journalName: {"type": ["string", "null"], "maxLength": 500}
+        keywords: {"type": ["string", "null"], "maxLength": 500}
+        paperFormType: {"enum": ["期刊论文", "会议论文", "", null]}
+        paperStatus: {"enum": ["撰写中", "已投稿", "已录用", "已正式刊出", "", null]}
+        paperType: {"enum": ["SCI", "EI", "CSCD", "其他", "无", "", null]}
+        projectLabeling: {"type": ["string", "null"], "maxLength": 500}
+        publicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        researchDirection: {"type": ["string", "null"], "maxLength": 500}
+        signingUnitList: {"type": ["string", "null"], "maxLength": 10000}
+        submissionDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+    PatentAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        abstract: {"type": ["string", "null"], "maxLength": 10000}
+        applicantList: {"type": ["string", "null"], "maxLength": 500}
+        applicationCountry: {"type": ["string", "null"], "maxLength": 500}
+        applicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        applicationNumber: {"type": ["string", "null"], "maxLength": 500}
+        firstApplicant: {"type": ["string", "null"], "maxLength": 500}
+        grantDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        grantPublicationNumber: {"type": ["string", "null"], "maxLength": 500}
+        inventorList: {"type": ["string", "null"], "maxLength": 500}
+        isPowerGridFirstApplicant: {"type": ["boolean", "null"]}
+        legalStatus: {"type": ["string", "null"], "maxLength": 500}
+        ownershipDescription: {"type": ["string", "null"], "maxLength": 10000}
+        patentScope: {"enum": ["国内", "国际", "", null]}
+        patentStatus: {"enum": ["申请材料准备中", "已申请", "已受理", "已授权", "", null]}
+        publicationNumber: {"type": ["string", "null"], "maxLength": 500}
+        receiptDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        receiptNumber: {"type": ["string", "null"], "maxLength": 500}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        technicalField: {"type": ["string", "null"], "maxLength": 500}
+    CopyrightAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        certificateDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        completionDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        copyrightOwnerList: {"type": ["string", "null"], "maxLength": 500}
+        developers: {"type": ["string", "null"], "maxLength": 500}
+        developmentLanguage: {"type": ["string", "null"], "maxLength": 500}
+        developmentMode: {"type": ["string", "null"], "maxLength": 500}
+        firstCompleter: {"type": ["string", "null"], "maxLength": 500}
+        firstCopyrightOwner: {"type": ["string", "null"], "maxLength": 500}
+        firstPublicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        isPowerGridFirstCompleter: {"type": ["boolean", "null"]}
+        operatingPlatform: {"type": ["string", "null"], "maxLength": 500}
+        registrationApplicationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        registrationNumber: {"type": ["string", "null"], "maxLength": 500}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        rightsScope: {"type": ["string", "null"], "maxLength": 500}
+        shortName: {"type": ["string", "null"], "maxLength": 500}
+        softwareCategory: {"type": ["string", "null"], "maxLength": 500}
+        softwareMainFunctions: {"type": ["string", "null"], "maxLength": 10000}
+        technicalFeatures: {"type": ["string", "null"], "maxLength": 10000}
+        version: {"type": ["string", "null"], "maxLength": 500}
+    StandardAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        currentStage: {"type": ["string", "null"], "maxLength": 500}
+        draftCommitDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        draftSubmissionDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        drafters: {"type": ["string", "null"], "maxLength": 500}
+        leadingUnit: {"type": ["string", "null"], "maxLength": 500}
+        participatingUnits: {"type": ["string", "null"], "maxLength": 500}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        responsibleOrganization: {"type": ["string", "null"], "maxLength": 500}
+        standardLevel: {"type": ["string", "null"], "maxLength": 500}
+    TalentAchievementDetail:
+      type: object
+      additionalProperties: false
+      properties:
+        actualGraduationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        educationLevel: {"enum": ["博士", "硕士", "", null]}
+        enrollmentDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        expectedGraduationDate: {"anyOf": [{"type": "string", "format": "date"}, {"enum": ["", null]}]}
+        remarks: {"type": ["string", "null"], "maxLength": 10000}
+        studentName: {"type": ["string", "null"], "maxLength": 500}
+        supervisorName: {"type": ["string", "null"], "maxLength": 500}
+        thesisTitle: {"type": ["string", "null"], "maxLength": 500}
+        trainingStatus: {"type": ["string", "null"], "maxLength": 500}
+        trainingUnit: {"type": ["string", "null"], "maxLength": 500}

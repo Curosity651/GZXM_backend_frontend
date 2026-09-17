@@ -56,7 +56,19 @@
 | POST | `/topics/{topicId}/members` | 为课题添加承担单位 | 当前课题牵头单位 |
 | PUT | `/topics/{topicId}/members/{membershipId}/status` | 启用或停用承担关系 | 当前课题牵头单位；牵头关系不可由此停用 |
 
+课题模块的第2步实现细则（用户于2026-09-15确认，字段及路径保持兼容）：
+
+- 创建默认进行中且启用；数据库必须且仅有一个有效重点项目，否则返回409 `PROJECT_CONFIGURATION_REQUIRED`，不会自动生成项目。
+- 编辑课题必须携带当前 `recordVersion`；不一致或缺失返回409。`participantUnitIds`只补充新关系，省略/空数组不移除任何成员，已有停用关系不会自动恢复。
+- 换牵头在同一事务内完成；旧牵头保留为承担单位，新牵头已有停用关系会恢复有效。承担列表不得重复或包含新牵头。
+- 暂停、关闭、停用后禁止普通编辑、成员新增和成员启停；科研助理仍可用课题状态接口恢复。状态的enabled与status是独立字段，省略status保持原值。
+- 成员新增重复返回409，停用成员通过状态接口恢复。普通成员停用后不再拥有该课题读取范围；管理角色可查看历史。
+- 所有写入会更新课题版本。状态和成员接口当前没有客户端版本参数，仅按课题行锁串行执行，不宣称能拒绝所有旧页面覆盖。
+- 格式/日期/分页错误返回422，范围或角色拒绝403，课题或课题内成员不存在404，重复、不可写状态、版本冲突409；错误体沿用公共Problem结构。
+- 查询允许五类已登录角色，按数据范围限制；写动作同时校验动作权限和业务角色，技术负责人或管理员即使被误配topic.manage也不能代科研助理写课题。
+
 ## 5. 科研指标
+
 
 | 方法 | 地址 | 接口用途 | 使用者/限制 |
 |---|---|---|---|
@@ -69,7 +81,17 @@
 | PUT | `/topics/{topicId}/unit-allocations` | 保存各单位累计指标分配 | 当前课题牵头单位 |
 | POST | `/topics/{topicId}/unit-allocations:publish` | 正式下发单位指标 | 当前课题牵头单位；单位合计不得低于课题要求 |
 
+指标目录补充：`/time-nodes` 与 `/indicator-definitions` 检查 `page:topic-indicator` 权限，只返回启用目录项。节点取唯一有效项目并按 `sortOrder/id` 排序；项目配置不唯一返回 409。目录尚未初始化返回空数组，不自动创建业务配置。
+
+课题指标第 4 步：GET 默认读取生效目标；`view=draft` 仅限有 `indicator.manage` 的科研助理，并返回 `X-Draft-Version`。PUT 完整替换草稿，首次版本 0，后续 `draftVersion` 必须匹配；空数组清空草稿，不影响生效数据。发布必须携带 `draftVersion` 与 `Idempotency-Key`，保留历史；同键同请求重放 204，不同请求 409。数量非负、节点累计不递减、专项不超过同类基础。已发布目标的删除或降额草稿暂不能下发，须后续接入完成量与分配调整约束。见 [验收说明](../collaboration/b-contracts/topic-step4.md)。
+
+单位分配第 5 步：GET 默认读生效值，管理角色/当前牵头看全课题，承担单位只看本单位；`view=draft` 仅具有维护权限的当前牵头可读。PUT 按节点完整替换草稿，`draftVersion` 做编辑版本校验；发布须提交版本与幂等键。发布要求覆盖全部有效启用成员（含牵头）及全部生效指标，每项合计不得低于课题要求，允许超额，零分配显式填 0。课题指标版本变化后须重新核对保存；当前不能下发降低有效成员既有分配的草稿。详见 [第 5 步验收](../collaboration/b-contracts/topic-step5.md)。
+
 ## 6. 成果管理
+
+第 7 步已实现列表、创建、详情、编辑、动作、审批、快照七个接口。五类均先两级预审，论文/专利再经正式及补充两级审批后计数；其他三类正式终审生效。编辑仅限草稿、退回和待补充；动作携带 recordVersion，审批携带 recordVersion + submittedVersion，并使用 Idempotency-Key。详情含 approvals，pendingForMe 按当前审批级别过滤。正式/补充提交及非空附件仍等待 A 的文件公开能力，未接入返回 503 并回滚；已有当前材料的记录查询也受限。详见[第 7 步验收说明](../collaboration/b-contracts/achievement-step7.md)。
+
+
 
 | 方法 | 地址 | 接口用途 | 使用者/限制 |
 |---|---|---|---|
@@ -81,6 +103,8 @@
 | POST | `/achievements/{achievementId}/reviews` | 初审或终审成果，可通过或退回 | 科研助理初审；项目技术负责人终审 |
 | GET | `/achievements/{achievementId}/snapshots` | 查看历次提交版本快照 | 成果相关单位和审批角色 |
 | GET | `/achievement-progress` | 统计指标、发起、预审、投稿、正式成果及完成率 | 按当前用户课题数据范围返回 |
+
+第 8 步已实现 `/achievement-progress`：nodeId 必填，topicId/unitId 可选。按节点排序累计当前事实，阶段按历史证据去重；分母只取查询节点已下发目标。零/未下发目标完成率 null，可超过 100%。TOPIC/UNIT 为不同视角，不能相加；historical 行只向管理角色展示且不计当前总量。专项不加进 baseTotals，非法 match_rule 返回 422。字段与 C 的公开服务见[第 8 步说明](../collaboration/b-contracts/achievement-step8.md)。
 
 ## 7. 月报和季报
 

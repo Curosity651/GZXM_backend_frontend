@@ -61,18 +61,24 @@
 
 ## 5. 成果管理表
 
+第 8 步统计不改表结构：按 time_node.sort_order 累计当前成果事实，读取查询节点的已下发目标；不按截止日期回溯审批历史。SPECIAL 的 match_rule 使用严格 field/equals 布尔白名单，缺失或非法配置返回 422。规则及历史范围见[第 8 步说明](../collaboration/b-contracts/achievement-step8.md)。
+
 | 中文名称 | 数据表 | 关键字段 | 关联关系 | 关键规则 |
 |---|---|---|---|---|
 | 成果 | `achievement` | `topic_id`、`membership_id`、`unit_id`、`node_id`、`achievement_type`、`title`、`detail_json`、`status`、版本号 | 归属一个课题和上传单位，关联成果材料、审批和版本快照 | 谁上传就计入谁的单位指标；成果不归属配套自筹项目；不同成果类型的差异字段保存在`detail_json` |
-| 成果材料 | `achievement_material` | `achievement_id`、`file_id`、`material_type`、`material_status`、`file_version` | 连接成果和文件对象 | 预审阶段不强制上传原文；取得正式材料后补充文件 |
+| 成果材料 | `achievement_material` | `achievement_id`、`file_id`、`material_type`、`material_status`、`file_version`、`active` | 连接成果和文件对象 | 第 6 步增量新增 active；同一材料版本可包含同类多个文件，替换退役旧关联并保留历史；文件接入等待 A |
+
+材料增量为 `V202609160300__version_achievement_material_sets.sql`，不修改基线迁移。唯一键从 `(achievement_id, material_type, file_version)` 扩展为 `(achievement_id, material_type, file_version, file_id)`。迁移把旧数据中每个成果、每个材料类别的最高版本标为当前；旧关联全部保留。新写入按成果材料集合递增版本，`active` 判断当前关联，不能仅按全表最大版本判断当前材料。清空只退役关联，不删除文件。此表不替代第 7 步提交快照。
 
 ### 成果版本字段
 
 | 字段 | 含义 |
 |---|---|
-| `record_version` | 当前记录被编辑了多少版，用于避免两个人互相覆盖修改 |
-| `submitted_version` | 每次正式提交审核时递增，对应一份不可变提交快照 |
+| `record_version` | 成果每次成功编辑、动作或审批递增，用于避免并发覆盖；幂等重放不递增 |
+| `submitted_version` | 成果每次预审、正式或补充提交审核时递增，对应一份不可变提交快照 |
 | `counts_to_indicator` | 终审通过且满足统计条件后，是否已经计入指标完成数 |
+
+第 7 步新增 B 表 `achievement_workflow_operation`：achievement_id、actor_id、request_key、operation_kind、request_json、response_json、created_at。唯一键 `(actor_id, request_key)` 使用 ASCII 大小写敏感比较；只保存成功操作，事务失败不留键。该表只服务成果动作/审批，不是 A 的公共 api_idempotency 替代实现。成果审批/快照继续使用既有共享表，所有 B SQL 固定 business_type='ACHIEVEMENT'，不改 REPORT 数据。详见[第 7 步说明](../collaboration/b-contracts/achievement-step7.md)。
 
 ## 6. 月报和季报表
 
@@ -139,3 +145,27 @@
 | 课题＋单位 | 国家材料文件夹 | 每个参与单位都有独立国家材料清单 |
 | 课题＋内部单位 | 配套自筹项目 | 一个内部单位在一个课题下可以创建多个自筹项目 |
 | 自筹项目 | 归档文件夹 | 一个自筹项目按照模板生成多个材料目录 |
+
+## 增量：课题指标草稿及发布历史（2026-09-16）
+
+27 张表仍指基线；应用新增迁移后业务表共 30 张（不含 Flyway 管理表）。建表及旧数据导入见 [新增迁移](../../backend/src/main/resources/db/migration/V202609160100__add_indicator_drafts_and_publications.sql)。部署通过 Flyway 运行，不能修改已合并基线。
+
+| 新表（B 所有） | 关键字段 | 约束与用途 |
+|---|---|---|
+| topic_indicator_draft | topic_id/node_id/draft_version/published_draft_version/publish_version/updated_by | 每课题节点唯一；草稿编辑版本与发布版本分开 |
+| topic_indicator_draft_target | draft_id/indicator_definition_id/target_quantity | 每草稿定义唯一；数量非负；完整替换仅影响草稿 |
+| topic_indicator_publication | topic_id/node_id/draft_version/publish_version/published_by/request_key/targets_json/published_at | 用户请求键唯一、节点发布版本唯一；不可变业务发布快照与重放记录 |
+
+topic_indicator 继续承载生效目标，发布时保留行 ID。新迁移导入旧草稿并为当前已发布目标建立基准快照；导入快照操作者 0 表示历史导入。详见 [第 4 步契约](../collaboration/b-contracts/topic-step4.md)。
+
+## 增量：单位分配草稿及发布历史（2026-09-16）
+
+在第 4 步 30 张业务表基础上再增加 3 张，合计 33 张（不含 Flyway 管理表）。使用 [新增迁移](../../backend/src/main/resources/db/migration/V202609160200__add_allocation_drafts_and_publications.sql) 顺序升级，保留既有基线。
+
+| 新表（B 所有） | 关键字段 | 约束与用途 |
+|---|---|---|
+| unit_allocation_draft | topic_id/node_id/draft_version/published_draft_version/publish_version/topic_indicator_version | 课题节点唯一；绑定保存时的课题指标版本 |
+| unit_allocation_draft_item | draft_id/unit_id/indicator_definition_id/target_quantity | 草稿单位指标组合唯一，非负整数 |
+| unit_allocation_publication | topic_id/node_id/draft_version/publish_version/topic_indicator_version/published_by/request_key/allocations_json | 用户请求键唯一、课题节点发布版本唯一；不可变历史及成功重放 |
+
+unit_indicator_allocation 继续保存生效分配，发布保留既有 ID。成员及课题指标关联 ID 由服务端解析；失效成员旧行保留历史但不参与新发布合计。旧草稿、发布版本和基准快照由新增 SQL 导入，详情见 [第 5 步说明](../collaboration/b-contracts/topic-step5.md)。
