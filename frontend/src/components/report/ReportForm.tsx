@@ -61,15 +61,13 @@ export function ReportForm({ form, disabled = false }: { form: FormInstance<Part
       />
     </Form.Item>
     <Form.Item
-      label="4. 示范工程进展"
+      label="4. 示范工程进展（正式提交至少 300 字；确无进展填“无”）"
       name="demonstrationProgress"
-      extra={'300字以内，分项列举示范工程建设进展、各课题科研成果应用情况，重点汇报工程批复、建设方案过审情况等。如无则填"无"。'}
       rules={[{ required: true }]}
     >
       <Input.TextArea
         rows={5}
         showCount
-        maxLength={300}
         placeholder={'项目完成XX个示范工程的初设/可研，进展如下：\n1.完成示范工程批复，开展工程设计及建设。\n2.完成工程纳规、核准并取得施工许可证，于XX日正式开工。\n3.工程土建进度XX%，设备到货XX%。'}
       />
     </Form.Item>

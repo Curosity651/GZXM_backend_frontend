@@ -361,6 +361,7 @@ paths:
     post:
       tags: [Reports]
       operationId: submitReport
+      description: 示范工程进展正式提交时至少300字；确无进展时可单独填写“无”。草稿保存不受最少字数限制。
       parameters: [{ $ref: '#/components/parameters/ReportId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: 已提交初审并冻结版本, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressReport' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
   /reports/{reportId}/reviews:
@@ -398,13 +399,15 @@ paths:
     post:
       tags: [Archives]
       operationId: createNationalCustomFolder
+      description: 有权访问该目录的管理角色或本单位账号可创建；required=true表示必存，false表示有则必存。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/UnitId' }]
-      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 200 } } } } } }
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 200 }, required: { type: boolean, default: true } } } } } }
       responses: { '201': { description: 已创建单位私有文件夹, content: { application/json: { schema: { $ref: '#/components/schemas/ArchiveFolder' } } } } }
   /archive/folders/{folderId}:
     delete:
       tags: [Archives]
       operationId: deleteCustomArchiveFolder
+      description: 只允许删除有权管理的空自定义文件夹；系统模板不可删除，技术负责人和科研助理创建的文件夹只有创建者可删除。
       parameters: [{ $ref: '#/components/parameters/FolderId' }]
       responses: { '204': { description: 已删除空的自定义文件夹 }, '409': { $ref: '#/components/responses/Conflict' } }
   /archive/folders/{folderId}/files:
@@ -424,7 +427,7 @@ paths:
       tags: [Archives]
       operationId: removeArchiveFolderFile
       parameters: [{ $ref: '#/components/parameters/FolderId' }, { $ref: '#/components/parameters/FileId' }]
-      responses: { '204': { description: 已解除并按策略删除对象 } }
+      responses: { '204': { description: 已解除关联；物理文件仍可被其他业务引用 } }
   /self-funded-projects:
     get:
       tags: [Archives]
@@ -465,7 +468,7 @@ paths:
     post:
       tags: [Files]
       operationId: createUploadTicket
-      description: 返回短期上传地址；底层可以是 Mock、MinIO 或其他 S3 服务。
+      description: 返回短期上传地址；本地实现写入 FILE_MOCK_ROOT 指定目录，数据库只保存元数据。存储位置通过 FileStorage 抽象可替换。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicketRequest' } } } }
       responses: { '201': { description: 上传票据, content: { application/json: { schema: { $ref: '#/components/schemas/UploadTicket' } } } } }
   '/files/{fileId}:complete':
@@ -486,6 +489,27 @@ paths:
       operationId: getPreviewUrl
       parameters: [{ $ref: '#/components/parameters/FileId' }]
       responses: { '200': { description: 短期预览地址, content: { application/json: { schema: { $ref: '#/components/schemas/SignedUrl' } } } } }
+  /files/{fileId}/content:
+    put:
+      tags: [Files]
+      operationId: uploadFileContent
+      description: 使用上传票据的 expires 和 signature，携带登录令牌与票据指定的 Content-Type 上传原始字节；大小及可选 SHA-256 由服务端校验。
+      parameters:
+        - { $ref: '#/components/parameters/FileId' }
+        - { name: expires, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      responses: { '204': { description: 字节已写入配置的文件目录；还需调用 complete } }
+    get:
+      tags: [Files]
+      operationId: readFileContent
+      description: 使用短期下载或预览地址，并携带登录令牌；仍会检查当前用户的数据范围和文件状态。仅 PDF 与常见栅格图片允许内联预览，其余类型强制作为附件下载。
+      parameters:
+        - { $ref: '#/components/parameters/FileId' }
+        - { name: expires, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+        - { name: preview, in: query, schema: { type: boolean, default: false } }
+      responses: { '200': { description: 文件内容, content: { application/octet-stream: { schema: { type: string, format: binary } } } } }
 
   /dashboard/summary:
     get:
@@ -705,18 +729,31 @@ components:
       properties: { topicId: { type: string }, topicName: { type: string }, unitId: { type: string }, unitName: { type: string }, folderCount: { type: integer }, completedCount: { type: integer }, completionRate: { type: number } }
     ArchiveFolder:
       type: object
-      required: [id, name, ownerType, required, requiredQuantity, custom, fileCount, completed]
-      properties: { id: { type: string }, topicId: { type: [string, 'null'] }, unitId: { type: [string, 'null'] }, ownerType: { type: string, enum: [TOPIC_NATIONAL, SELF_FUNDED] }, ownerId: { type: string }, name: { type: string }, required: { type: boolean }, requiredQuantity: { type: integer }, custom: { type: boolean }, fileCount: { type: integer }, completed: { type: boolean } }
+      required: [id, name, ownerType, required, requiredQuantity, custom, fileCount, completed, canDelete]
+      properties: { id: { type: string }, topicId: { type: [string, 'null'] }, unitId: { type: [string, 'null'] }, ownerType: { type: string, enum: [TOPIC_NATIONAL, SELF_FUNDED] }, ownerId: { type: string }, name: { type: string }, required: { type: boolean }, requiredQuantity: { type: integer }, custom: { type: boolean }, fileCount: { type: integer }, completed: { type: boolean }, canDelete: { type: boolean } }
     SelfFundedProjectRequest:
       type: object
-      required: [topicId, code, name, projectType, principalName]
+      required: [topicId, code, name, projectType, principalName, startDate, endDate]
       properties: { topicId: { type: string }, code: { type: string }, name: { type: string }, projectType: { type: string, enum: [TECHNOLOGY, RENOVATION, INFRASTRUCTURE] }, principalName: { type: string }, startDate: { type: string, format: date }, endDate: { type: string, format: date }, budget: { type: number }, status: { type: string }, recordVersion: { type: integer } }
     SelfFundedProject:
-      allOf:
-        - { $ref: '#/components/schemas/SelfFundedProjectRequest' }
-        - type: object
-          required: [id, ownerUnitId, templateSnapshotId]
-          properties: { id: { type: string }, ownerUnitId: { type: string }, templateSnapshotId: { type: string }, completionRate: { type: number } }
+      type: object
+      description: 历史项目可能尚未补齐日期；新建和编辑请求均要求开始、结束日期。
+      required: [id, topicId, ownerUnitId, code, name, projectType, principalName, status, recordVersion, templateSnapshotId, completionRate]
+      properties:
+        id: { type: string }
+        topicId: { type: string }
+        ownerUnitId: { type: string }
+        code: { type: string }
+        name: { type: string }
+        projectType: { type: string, enum: [TECHNOLOGY, RENOVATION, INFRASTRUCTURE] }
+        principalName: { type: string }
+        startDate: { type: [string, 'null'], format: date }
+        endDate: { type: [string, 'null'], format: date }
+        budget: { type: [number, 'null'] }
+        status: { type: string }
+        recordVersion: { type: integer }
+        templateSnapshotId: { type: string }
+        completionRate: { type: number }
     ArchiveProgress:
       type: object
       required: [topicId, unitId, ownerType, requiredCount, completedCount, completionRate]
