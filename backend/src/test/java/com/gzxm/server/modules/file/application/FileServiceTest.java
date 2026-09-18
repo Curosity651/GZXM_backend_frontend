@@ -34,11 +34,11 @@ class FileServiceTest {
     @BeforeEach
     void setUp() {
         AppProperties properties = new AppProperties(null, null,
-                new AppProperties.File("MOCK", Path.of("storage/mock"), Duration.ofMinutes(15), Duration.ofMinutes(10)));
+                new AppProperties.File("FILESYSTEM", Path.of("storage/files"), Duration.ofMinutes(15), Duration.ofMinutes(10)));
         properties = new AppProperties(new AppProperties.Security("test", "test-secret-with-at-least-thirty-two-characters",
                 Duration.ofMinutes(15), Duration.ofDays(1), "http://localhost:5173"), null, properties.file());
-        when(storage.provider()).thenReturn("MOCK");
-        when(storage.supportsProvider("MOCK")).thenReturn(true);
+        when(storage.provider()).thenReturn("FILESYSTEM");
+        when(storage.supportsProvider(anyString())).thenReturn(true);
         service = new FileService(files, storage, security, properties);
     }
 
@@ -124,7 +124,7 @@ class FileServiceTest {
                 .thenReturn("/api/v1/files/9/content?preview=false");
         AppProperties properties = new AppProperties(new AppProperties.Security("test", "test-secret-with-at-least-thirty-two-characters",
                 Duration.ofMinutes(15), Duration.ofDays(1), "http://localhost:5173"), null,
-                new AppProperties.File("MOCK", Path.of("storage/mock"), Duration.ofMinutes(15), Duration.ofMinutes(10)));
+                new AppProperties.File("FILESYSTEM", Path.of("storage/files"), Duration.ofMinutes(15), Duration.ofMinutes(10)));
         service = new FileService(files, storage, security, properties, List.of((id, user) -> id == 9L && user.id() == 8L));
         assertThat(service.signedUrl(9, false).url()).contains("signature=");
     }
@@ -132,7 +132,7 @@ class FileServiceTest {
     private FileObjectEntity pendingFile(long uploaderId) {
         FileObjectEntity file = new FileObjectEntity();
         file.setId(9L); file.setUploaderId(uploaderId); file.setObjectKey("archive/7/key"); file.setStatus("PENDING");
-        file.setStorageProvider("MOCK");
+        file.setStorageProvider("FILESYSTEM");
         file.setOriginalName("material.pdf"); file.setContentType("application/pdf"); file.setSizeBytes(128L);
         return file;
     }

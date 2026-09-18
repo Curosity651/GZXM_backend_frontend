@@ -1,35 +1,36 @@
 package com.gzxm.server.modules.file.infrastructure;
 
-import com.gzxm.server.modules.file.application.FileStorage;
-import com.gzxm.server.config.AppProperties;
 import com.gzxm.server.common.exception.BusinessException;
+import com.gzxm.server.config.AppProperties;
+import com.gzxm.server.modules.file.application.FileStorage;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 
 @Component
-public class MockFileStorage implements FileStorage {
+public class LocalFileStorage implements FileStorage {
     private final Path root;
-    private final String provider;
 
-    public MockFileStorage(AppProperties properties) {
-        this.root = properties.file().mockRoot().toAbsolutePath().normalize();
-        this.provider = properties.file().provider();
-        if (!"MOCK".equals(provider) && !"FILESYSTEM".equals(provider))
-            throw new IllegalArgumentException("不支持的文件存储类型: " + provider);
-        if ("FILESYSTEM".equals(provider) && (!properties.file().mockRoot().isAbsolute()
-                || !Files.isDirectory(root) || !Files.isWritable(root)))
-            throw new IllegalArgumentException("FILESYSTEM 存储需要已存在且可写的绝对路径: " + root);
+    public LocalFileStorage(AppProperties properties) {
+        if (!"FILESYSTEM".equalsIgnoreCase(properties.file().provider()))
+            throw new IllegalArgumentException("当前仅支持 FILESYSTEM 文件存储；对象存储接入后再增加对应适配器");
+        this.root = properties.file().root().toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(root);
+            if (!Files.isWritable(root)) throw new IOException("目录不可写");
+        } catch (IOException ex) {
+            throw new IllegalArgumentException("FILESYSTEM 存储目录无法创建或不可写: " + root, ex);
+        }
     }
 
-    @Override public String provider() { return provider; }
+    @Override public String provider() { return "FILESYSTEM"; }
     @Override public boolean supportsProvider(String storedProvider) {
-        return "MOCK".equals(storedProvider) || "FILESYSTEM".equals(storedProvider);
+        return "FILESYSTEM".equals(storedProvider) || "MOCK".equals(storedProvider);
     }
     @Override public String createUploadUrl(long fileId, String objectKey, Duration ttl) {
         return "/api/v1/files/" + fileId + "/content";

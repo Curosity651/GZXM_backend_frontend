@@ -7,7 +7,7 @@ import java.time.LocalDate;
 public final class ArchiveDtos {
     private ArchiveDtos() {}
     public record Directory(String topicId, String topicName, String unitId, String unitName,
-                            int folderCount, int completedCount, double completionRate) {}
+                            int folderCount, int requiredCount, int completedCount, double completionRate) {}
     public record Folder(String id, String topicId, String unitId, String ownerType, String ownerId,
                          String name, boolean required, int requiredQuantity, boolean custom,
                          int fileCount, boolean completed, boolean canDelete) {}

@@ -52,10 +52,11 @@ public class SystemController {
         UserView result = service.setStatus(userId, request.enabled()); audit.success("system.user.status", "USER", String.valueOf(userId)); return result;
     }
 
-    @PostMapping("/users/{userId}/password:reset")
+    @PutMapping("/users/{userId}/password")
     @PreAuthorize("hasAuthority('system.manage')")
-    PasswordResetResponse resetPassword(@PathVariable long userId) {
-        PasswordResetResponse result = service.resetPassword(userId); audit.success("system.user.password.reset", "USER", String.valueOf(userId)); return result;
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void changePassword(@PathVariable long userId, @Valid @RequestBody PasswordChangeRequest request) {
+        service.changePassword(userId, request.password()); audit.success("system.user.password.change", "USER", String.valueOf(userId));
     }
 
     @GetMapping("/roles")

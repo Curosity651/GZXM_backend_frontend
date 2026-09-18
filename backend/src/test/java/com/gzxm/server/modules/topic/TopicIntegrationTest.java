@@ -180,7 +180,7 @@ class TopicIntegrationTest {
         JsonNode topic = create("TEST-T", "1", List.of("2", "3"));
         assertThat(topic.path("id").isTextual()).isTrue();
         assertThat(topic.path("recordVersion").asInt()).isEqualTo(1);
-        assertThat(topic.path("status").asText()).isEqualTo("ACTIVE");
+        assertThat(topic.path("status").asText()).isEqualTo("DRAFT");
         assertThat(topic.path("members").size()).isEqualTo(3);
         String id = topic.path("id").asText();
         call(get("/api/v1/topics/" + id), "INTERNAL_TOPIC_UNIT", 2L).andExpect(status().isOk());
@@ -198,7 +198,7 @@ class TopicIntegrationTest {
                 .andExpect(jsonPath("$.items[0].id").value(own));
         call(get("/api/v1/topics/" + other), "INTERNAL_TOPIC_UNIT", 2L).andExpect(status().isForbidden());
         call(get("/api/v1/topics/" + other + "/members"), "INTERNAL_TOPIC_UNIT", 2L).andExpect(status().isForbidden());
-        call(get("/api/v1/topics?keyword=HIDDEN&enabled=true&status=ACTIVE"), "SYSTEM_ADMIN", null)
+        call(get("/api/v1/topics?keyword=HIDDEN&enabled=true&status=DRAFT"), "SYSTEM_ADMIN", null)
                 .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
         call(get("/api/v1/topics?keyword=' OR 1=1 --"), "SYSTEM_ADMIN", null)
                 .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(0));

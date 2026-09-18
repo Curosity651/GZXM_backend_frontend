@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-mode';
+import { API_BASE_URL } from './api-config';
 
 export interface ApiProblem {
   type?: string;

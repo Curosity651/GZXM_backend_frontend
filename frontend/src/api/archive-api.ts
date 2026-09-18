@@ -1,7 +1,7 @@
 import { apiRequest } from './http-client';
 import type { ApiFile } from './file-api';
 
-export interface ApiArchiveDirectory { topicId: string; topicName: string; unitId: string; unitName: string; folderCount: number; completedCount: number; completionRate: number }
+export interface ApiArchiveDirectory { topicId: string; topicName: string; unitId: string; unitName: string; folderCount: number; requiredCount: number; completedCount: number; completionRate: number }
 export interface ApiArchiveFolder { id: string; topicId: string; unitId: string; ownerType: 'TOPIC_NATIONAL' | 'SELF_FUNDED'; ownerId: string; name: string; required: boolean; requiredQuantity: number; custom: boolean; fileCount: number; completed: boolean; canDelete: boolean }
 export interface ApiSelfFundedProject { id: string; topicId: string; ownerUnitId: string; code: string; name: string; projectType: 'TECHNOLOGY' | 'RENOVATION' | 'INFRASTRUCTURE'; principalName: string; startDate?: string; endDate?: string; budget?: number; status: string; recordVersion: number; templateSnapshotId: string; completionRate: number }
 export type SelfFundedWrite = Pick<ApiSelfFundedProject, 'topicId' | 'code' | 'name' | 'projectType' | 'principalName'> &

@@ -34,19 +34,19 @@ export interface ApiPermission {
   lockedForExternal: boolean;
 }
 
-export interface CreateUserResponse { user: ApiUser; temporaryPassword: string }
+export interface CreateUserResponse { user: ApiUser }
 export interface ApiUnit { id: string; code: string; name: string; internal: boolean; enabled: boolean }
 
 export const systemApi = {
   users: (params: URLSearchParams) => apiRequest<ApiPage<ApiUser>>(`/users?${params.toString()}`),
-  createUser: (data: { username: string; roleId: string; name: string; phone?: string; email?: string; enabled?: boolean }) =>
+  createUser: (data: { username: string; roleId: string; name: string; phone?: string; email?: string; enabled?: boolean; password: string }) =>
     apiRequest<CreateUserResponse>('/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id: string, data: { username: string; name: string; phone?: string; email?: string }) =>
     apiRequest<ApiUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   setUserStatus: (id: string, enabled: boolean) =>
     apiRequest<ApiUser>(`/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
-  resetPassword: (id: string) =>
-    apiRequest<{ temporaryPassword: string }>(`/users/${id}/password:reset`, { method: 'POST' }),
+  changePassword: (id: string, password: string) =>
+    apiRequest<void>(`/users/${id}/password`, { method: 'PUT', body: JSON.stringify({ password }) }),
   roles: () => apiRequest<ApiRole[]>('/roles'),
   permissions: () => apiRequest<ApiPermission[]>('/permissions'),
   units: () => apiRequest<ApiUnit[]>('/units'),

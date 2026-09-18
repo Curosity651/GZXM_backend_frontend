@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from 'antd';
+import { Button, Card, Col, Form, Input, Modal, Row, Select, Space, Switch, Table, Tag, Tooltip, Typography, message } from 'antd';
 import { DownOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UpOutlined } from '@ant-design/icons';
 import { systemApi, type ApiRole, type ApiUser } from '../../api/system-api';
 import { useSessionStore } from '../../store/session';
 
 interface UserFilters { username?: string; roleId?: string; contactName?: string; enabled?: boolean; phone?: string; email?: string }
-interface UserForm { username: string; roleId: string; name: string; phone?: string; email?: string; enabled?: boolean }
+interface UserForm { username: string; roleId: string; name: string; phone?: string; email?: string; enabled?: boolean; password?: string; confirmPassword?: string }
+interface PasswordForm { password: string; confirmPassword: string }
 
 export function UserManagementPage() {
   const currentUser = useSessionStore((state) => state.user);
+  const expireSession = useSessionStore((state) => state.expire);
   const [editForm] = Form.useForm<UserForm>();
+  const [passwordForm] = Form.useForm<PasswordForm>();
   const [filterForm] = Form.useForm<UserFilters>();
   const [filters, setFilters] = useState<UserFilters>({});
   const [users, setUsers] = useState<ApiUser[]>([]);
@@ -19,6 +22,8 @@ export function UserManagementPage() {
   const [editing, setEditing] = useState<ApiUser | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<ApiUser | null>(null);
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const load = useCallback(async (next: UserFilters) => {
     setLoading(true);
@@ -49,10 +54,6 @@ export function UserManagementPage() {
     editForm.setFieldsValue(user ? { ...user, roleId: user.roleId! } : { enabled: true, roleId: activeRoles[0]?.id });
     setOpen(true);
   };
-  const showPassword = (title: string, password: string) => Modal.success({
-    title,
-    content: <><Typography.Paragraph>临时密码仅显示本次，请安全告知用户。</Typography.Paragraph><Typography.Text code copyable>{password}</Typography.Text></>,
-  });
   const save = async () => {
     const values = await editForm.validateFields(); setSaving(true);
     try {
@@ -61,8 +62,8 @@ export function UserManagementPage() {
         if (values.enabled !== undefined && values.enabled !== editing.enabled) await systemApi.setUserStatus(editing.id, values.enabled);
         message.success('账号信息已更新');
       } else {
-        const result = await systemApi.createUser({ username: values.username.trim(), roleId: values.roleId, name: values.name.trim(), phone: values.phone, email: values.email, enabled: true });
-        showPassword('账号已创建', result.temporaryPassword);
+        await systemApi.createUser({ username: values.username.trim(), roleId: values.roleId, name: values.name.trim(), phone: values.phone, email: values.email, enabled: true, password: values.password! });
+        message.success('账号已创建，可使用设置的密码登录');
       }
       setOpen(false); editForm.resetFields(); await load(filters);
     } catch (error) { message.error(error instanceof Error ? error.message : '保存失败'); }
@@ -72,9 +73,16 @@ export function UserManagementPage() {
     try { await systemApi.setUserStatus(user.id, enabled); message.success(enabled ? '账号已启用' : '账号已停用'); await load(filters); }
     catch (error) { message.error(error instanceof Error ? error.message : '状态修改失败'); }
   };
-  const resetPassword = async (user: ApiUser) => {
-    try { const result = await systemApi.resetPassword(user.id); showPassword(`已重置 ${user.username} 的密码`, result.temporaryPassword); }
-    catch (error) { message.error(error instanceof Error ? error.message : '密码重置失败'); }
+  const changePassword = async () => {
+    if (!passwordUser) return;
+    const values = await passwordForm.validateFields(); setPasswordSaving(true);
+    try {
+      await systemApi.changePassword(passwordUser.id, values.password);
+      setPasswordUser(null); passwordForm.resetFields();
+      message.success('密码修改成功，原有登录会话已失效');
+      if (passwordUser.id === currentUser?.id) expireSession();
+    } catch (error) { message.error(error instanceof Error ? error.message : '密码修改失败'); }
+    finally { setPasswordSaving(false); }
   };
   const search = (values: UserFilters) => { setFilters(values); void load(values); };
   const resetFilters = () => { filterForm.resetFields(); setFilters({}); void load({}); };
@@ -96,14 +104,20 @@ export function UserManagementPage() {
         { title: '手机号', dataIndex: 'phone', width: 130, render: (value) => value || '—' },
         { title: '邮箱', dataIndex: 'email', width: 210, render: (value) => value || '—' },
         { title: '状态', dataIndex: 'enabled', width: 90, render: (value, user) => <Switch checked={value} disabled={user.id === currentUser?.id} onChange={(checked) => void changeStatus(user, checked)} /> },
-        { title: '操作', width: 220, fixed: 'right', render: (_, user) => <Space><Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(user)}>编辑</Button><Popconfirm title="确认重置该账号密码？" onConfirm={() => void resetPassword(user)}><Button type="link" size="small" icon={<KeyOutlined />}>重置密码</Button></Popconfirm></Space> },
+        { title: '操作', width: 220, fixed: 'right', render: (_, user) => <Space><Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(user)}>编辑</Button><Button type="link" size="small" icon={<KeyOutlined />} onClick={() => { setPasswordUser(user); passwordForm.resetFields(); }}>修改密码</Button></Space> },
       ]} />
     </Card>
     <Modal title={editing ? '编辑用户' : '新增用户'} open={open} onCancel={() => { setOpen(false); editForm.resetFields(); }} onOk={() => void save()} confirmLoading={saving} width={720}>
       <Form form={editForm} layout="vertical"><Row gutter={16}><Col span={12}><Form.Item label="用户名（课题单位账号同时作为单位名称）" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="角色" name="roleId" rules={[{ required: true, message: '请选择角色' }]}><Select disabled={Boolean(editing)} options={activeRoles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item></Col></Row>
         <Form.Item label="单位联系人姓名" name="name" rules={[{ required: true, message: '请输入单位联系人姓名' }]}><Input /></Form.Item>
         <Row gutter={16}><Col span={12}><Form.Item label="手机号" name="phone"><Input /></Form.Item></Col><Col span={12}><Form.Item label="邮箱" name="email" rules={[{ type: 'email', message: '请输入正确的邮箱地址' }]}><Input /></Form.Item></Col></Row>
+        {!editing && <Row gutter={16}><Col span={12}><Form.Item label="登录密码" name="password" rules={[{ required: true, message: '请输入登录密码' }, { min: 8, max: 72, message: '密码长度应为8至72位' }]}><Input.Password autoComplete="new-password" /></Form.Item></Col><Col span={12}><Form.Item label="确认密码" name="confirmPassword" dependencies={['password']} rules={[{ required: true, message: '请再次输入密码' }, ({ getFieldValue }) => ({ validator: (_, value) => !value || getFieldValue('password') === value ? Promise.resolve() : Promise.reject(new Error('两次输入的密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item></Col></Row>}
         {editing && <Form.Item label="账号状态" name="enabled" valuePropName="checked"><Switch checkedChildren="启用" unCheckedChildren="停用" disabled={editing.id === currentUser?.id} /></Form.Item>}
+      </Form>
+    </Modal>
+    <Modal title={passwordUser ? `修改 ${passwordUser.username} 的密码` : '修改密码'} open={Boolean(passwordUser)} onCancel={() => { setPasswordUser(null); passwordForm.resetFields(); }} onOk={() => void changePassword()} confirmLoading={passwordSaving} okText="确认修改" cancelText="取消">
+      <Form form={passwordForm} layout="vertical"><Form.Item label="新密码" name="password" rules={[{ required: true, message: '请输入新密码' }, { min: 8, max: 72, message: '密码长度应为8至72位' }]}><Input.Password autoComplete="new-password" /></Form.Item>
+        <Form.Item label="确认新密码" name="confirmPassword" dependencies={['password']} rules={[{ required: true, message: '请再次输入新密码' }, ({ getFieldValue }) => ({ validator: (_, value) => !value || getFieldValue('password') === value ? Promise.resolve() : Promise.reject(new Error('两次输入的密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item>
       </Form>
     </Modal>
   </div>;

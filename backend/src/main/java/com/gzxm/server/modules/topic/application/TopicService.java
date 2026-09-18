@@ -69,7 +69,7 @@ public class TopicService {
             throw BusinessException.conflict("PROJECT_CONFIGURATION_REQUIRED", "必须先配置且仅配置一个有效重点项目");
         TopicEntity topic = new TopicEntity();
         topic.setProjectId(projects.getFirst()); topic.setLeadUnitId(leadId);
-        topic.setStatus("ACTIVE"); topic.setEnabled(true); topic.setRecordVersion(1);
+        topic.setStatus("DRAFT"); topic.setEnabled(true); topic.setRecordVersion(1);
         topic.setCreatedBy(user.id()); apply(request, topic, user);
         try {
             topics.insert(topic);

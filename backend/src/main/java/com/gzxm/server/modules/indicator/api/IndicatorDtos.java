@@ -7,7 +7,11 @@ import jakarta.validation.constraints.*;
 
 public final class IndicatorDtos {
     private IndicatorDtos() {}
-    public record TimeNodeView(String id, String name, LocalDate deadline, int sortOrder, boolean enabled) {}
+    public record TimeNodeView(String id, String code, String name, LocalDate deadline, int sortOrder, boolean enabled) {}
+    public record TimeNodeWrite(@NotBlank @Size(max=100) String name,
+                                @NotNull LocalDate deadline,
+                                @NotNull @Positive Integer sortOrder) {}
+    public record TimeNodeStatus(@NotNull Boolean enabled) {}
     public record DefinitionView(String id, String code, String name, String achievementType,
                                  String unit, String category, boolean enabled) {}
     public record TargetInput(@NotBlank @Pattern(regexp="[1-9][0-9]*") String indicatorDefinitionId,

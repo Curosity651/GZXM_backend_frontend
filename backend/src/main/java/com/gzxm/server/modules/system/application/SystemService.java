@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
@@ -23,7 +22,6 @@ import java.util.stream.Collectors;
 public class SystemService {
     private static final Set<String> UNIT_ROLES = Set.of("INTERNAL_TOPIC_UNIT", "EXTERNAL_TOPIC_UNIT");
     private static final String EXTERNAL_ROLE = "EXTERNAL_TOPIC_UNIT";
-    private static final String PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
 
     private final UserMapper users;
     private final RoleMapper roles;
@@ -31,7 +29,6 @@ public class SystemService {
     private final UnitMapper units;
     private final SystemRelationMapper relations;
     private final PasswordEncoder passwordEncoder;
-    private final SecureRandom random = new SecureRandom();
 
     public SystemService(UserMapper users, RoleMapper roles, PermissionMapper permissions,
                          UnitMapper units, SystemRelationMapper relations, PasswordEncoder passwordEncoder) {
@@ -66,10 +63,9 @@ public class SystemService {
     public CreateUserResponse createUser(CreateUserRequest request) {
         RoleEntity role = requireRole(parseId(request.roleId(), "roleId"));
         Long unitId = UNIT_ROLES.contains(role.getCode()) ? createAccountUnit(request.username().trim(), role) : null;
-        String temporaryPassword = randomPassword();
         UserEntity user = new UserEntity();
         user.setUsername(request.username().trim());
-        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setContactName(request.name().trim());
         user.setPhone(trimToNull(request.phone()));
         user.setEmail(trimToNull(request.email()));
@@ -85,7 +81,7 @@ public class SystemService {
         } catch (DuplicateKeyException ex) {
             throw BusinessException.conflict("USER_UNIQUE_CONFLICT", "用户名已存在，或该单位已经存在有效课题账号");
         }
-        return new CreateUserResponse(toUserView(user), temporaryPassword);
+        return new CreateUserResponse(toUserView(user));
     }
 
     @Transactional
@@ -130,14 +126,12 @@ public class SystemService {
     }
 
     @Transactional
-    public PasswordResetResponse resetPassword(long id) {
+    public void changePassword(long id, String password) {
         UserEntity user = requireUser(id);
-        String temporaryPassword = randomPassword();
-        user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
+        user.setPasswordHash(passwordEncoder.encode(password));
         user.setTokenVersion(user.getTokenVersion() + 1);
         user.setUpdatedAt(LocalDateTime.now());
         users.updateById(user);
-        return new PasswordResetResponse(temporaryPassword);
     }
 
     public List<RoleView> listRoles() {
@@ -246,9 +240,4 @@ public class SystemService {
     }
 
     private String trimToNull(String value) { return StringUtils.hasText(value) ? value.trim() : null; }
-    private String randomPassword() {
-        StringBuilder value = new StringBuilder(14);
-        for (int i = 0; i < 14; i++) value.append(PASSWORD_CHARS.charAt(random.nextInt(PASSWORD_CHARS.length())));
-        return value.toString();
-    }
 }

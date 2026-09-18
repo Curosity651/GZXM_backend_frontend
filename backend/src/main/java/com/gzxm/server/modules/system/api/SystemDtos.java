@@ -18,13 +18,14 @@ public final class SystemDtos {
     public record CreateUserRequest(@NotBlank String username,
                                     @NotBlank String roleId,
                                     @NotBlank String name, String phone,
-                                    @Email String email, Boolean enabled) {}
+                                    @Email String email, Boolean enabled,
+                                    @NotBlank @Size(min = 8, max = 72) String password) {}
 
-    public record CreateUserResponse(UserView user, String temporaryPassword) {}
+    public record CreateUserResponse(UserView user) {}
 
     public record UpdateUserRequest(String username, String name, String phone, @Email String email) {}
     public record StatusRequest(boolean enabled) {}
-    public record PasswordResetResponse(String temporaryPassword) {}
+    public record PasswordChangeRequest(@NotBlank @Size(min = 8, max = 72) String password) {}
 
     public record RoleView(String id, String code, String name, String description,
                            List<String> pagePermissions, List<String> actionPermissions,

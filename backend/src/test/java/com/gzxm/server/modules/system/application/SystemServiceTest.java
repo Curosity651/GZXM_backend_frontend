@@ -58,7 +58,7 @@ class SystemServiceTest {
     }
 
     @Test
-    void creatingExternalTopicAccountCreatesMatchingUnitAndReturnsOneTimePassword() {
+    void creatingExternalTopicAccountCreatesMatchingUnitAndUsesProvidedPassword() {
         RoleEntity external = role(5, "EXTERNAL_TOPIC_UNIT");
         external.setName("外部课题单位");
         when(roles.selectById(5L)).thenReturn(external);
@@ -76,9 +76,8 @@ class SystemServiceTest {
         when(relations.findRoleId(41L)).thenReturn(5L);
 
         var result = service.createUser(new CreateUserRequest(
-                "清华大学", "5", "张老师", "13800000000", "teacher@example.com", true));
+                "清华大学", "5", "张老师", "13800000000", "teacher@example.com", true, "Password123"));
 
-        assertThat(result.temporaryPassword()).hasSize(14);
         assertThat(result.user().username()).isEqualTo("清华大学");
         assertThat(result.user().unitId()).isEqualTo("31");
         assertThat(result.user().roleName()).isEqualTo("外部课题单位");
@@ -97,6 +96,7 @@ class SystemServiceTest {
             assertThat(user.getPasswordHash()).isEqualTo("hashed-password");
         });
         verify(relations).assignRole(41L, 5L);
+        verify(passwordEncoder).encode("Password123");
     }
 
     private RoleEntity role(long id, String code) {

@@ -1,6 +1,6 @@
 import { apiRequest, apiRequestDetailed } from './http-client';
 
-export interface TimeNode { id: string; name: string; deadline: string; sortOrder: number; enabled: boolean }
+export interface TimeNode { id: string; code: string; name: string; deadline: string; sortOrder: number; enabled: boolean }
 export interface IndicatorDefinition { id: string; code: string; name: string; achievementType: string; unit: string; category: 'BASE' | 'SPECIAL'; enabled: boolean }
 export interface IndicatorTarget { id: string; topicId: string; nodeId: string; indicatorDefinitionId: string; targetQuantity: number; status: string; version: number }
 export interface UnitAllocation { id: string; topicId: string; unitId: string; nodeId: string; indicatorDefinitionId: string; targetQuantity: number; status: string; version: number }
@@ -10,7 +10,10 @@ const version = (response: Response, name: string) => Number(response.headers.ge
 const key = () => `web-${crypto.randomUUID()}`;
 
 export const indicatorApi = {
-  nodes: () => apiRequest<TimeNode[]>('/time-nodes'),
+  nodes: (includeDisabled = false) => apiRequest<TimeNode[]>(`/time-nodes${includeDisabled ? '?includeDisabled=true' : ''}`),
+  createNode: (data: { name: string; deadline: string; sortOrder: number }) => apiRequest<TimeNode>('/time-nodes', { method: 'POST', body: JSON.stringify(data) }),
+  updateNode: (id: string, data: { name: string; deadline: string; sortOrder: number }) => apiRequest<TimeNode>(`/time-nodes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  setNodeStatus: (id: string, enabled: boolean) => apiRequest<TimeNode>(`/time-nodes/${id}/status`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
   definitions: () => apiRequest<IndicatorDefinition[]>('/indicator-definitions'),
   targets: async (topicId: string, nodeId: string, view: 'effective' | 'draft' = 'effective'): Promise<VersionedRows<IndicatorTarget>> => {
     const { data, response } = await apiRequestDetailed<IndicatorTarget[]>(`/topics/${topicId}/indicator-targets?nodeId=${nodeId}&view=${view}`);

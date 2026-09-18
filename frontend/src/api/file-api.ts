@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './api-mode';
+import { API_BASE_URL } from './api-config';
 import { apiRequest } from './http-client';
 
 export interface ApiFile { id: string; originalName: string; size: number; contentType: string; sha256?: string; status: string; uploaderId: string; createdAt: string }

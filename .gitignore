@@ -24,6 +24,7 @@ Thumbs.db
 # Local storage
 infrastructure/data/
 storage/
+backend/storage/
 .tmp/
 
 # Local agent and runtime artifacts

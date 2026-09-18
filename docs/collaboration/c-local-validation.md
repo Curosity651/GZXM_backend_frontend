@@ -5,7 +5,7 @@
 1. 确认 `/opt/local/bin/colima status` 与 `/opt/local/bin/docker ps` 正常，并在工作树根目录运行 `/opt/local/bin/docker compose --env-file .env -f infrastructure/compose.yaml up -d`。
 2. 在 `backend` 目录运行 `set -a; source ../.env; set +a; bash ./mvnw spring-boot:run`。`curl http://localhost:8080/actuator/health` 应返回健康状态。首启由 Flyway 自动创建表。
 3. 管理员本地用户名是 `admin`，随机密码在根目录 `.env` 的 `APP_BOOTSTRAP_ADMIN_PASSWORD`。本地联调用户的密码也在 `.env`，前缀为 `C_SMOKE_`。这些凭据不应上传。
-4. 文件内容写在根目录 `.env` 的 `FILE_MOCK_ROOT` 指定目录（本机设为工作树内的 `backend/storage/mock`），文件上传和下载请通过 `/api/v1/files`，不要直接访问此目录。
+4. 文件内容写在根目录 `.env` 的 `FILE_STORAGE_ROOT` 指定目录（默认 `backend/storage/files`），文件上传和下载请通过 `/api/v1/files`，不要直接访问此目录。
 5. 前端 `npm test`、`npm run lint`、`npm run build` 可独立运行。真实 API 模式的 C 页面已接接口，但 A 的真实登录和会话尚未接入前端路由；目前真实业务链路可通过后端 API 验证，前端默认仍为演示模式。
 
 测试容器若使用 Docker Engine 29 和仓库当前 Testcontainers 版本，可用以下仅影响当前命令的环境设置运行后端测试：

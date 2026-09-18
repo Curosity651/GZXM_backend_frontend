@@ -62,7 +62,7 @@ public class ArchiveService {
                     String unitName = topic.members().stream().filter(m -> m.unitId().equals(String.valueOf(member.unitId())))
                             .map(m -> m.unitName()).findFirst().orElse(String.valueOf(member.unitId()));
                     result.add(new Directory(topic.id(), topic.name(), String.valueOf(member.unitId()), unitName,
-                            folders.size(), completed, rate(required, completed)));
+                            folders.size(), required, completed, rate(required, completed)));
                 }
             }
             if (slice.items().size() < 200) break;

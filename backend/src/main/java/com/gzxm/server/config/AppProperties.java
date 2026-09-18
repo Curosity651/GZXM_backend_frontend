@@ -12,6 +12,6 @@ public record AppProperties(Security security, Bootstrap bootstrap, File file) {
 
     public record Bootstrap(boolean enabled, String adminUsername, String adminPassword) {}
 
-    public record File(String provider, Path mockRoot, Duration uploadTicketTtl,
+    public record File(String provider, Path root, Duration uploadTicketTtl,
                        Duration signedUrlTtl) {}
 }
