@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
 import { Alert, Button, Card, Col, Drawer, Empty, Form, Input, InputNumber, message, Modal, Progress, Row, Select, Space, Table, Tag, Upload } from 'antd';
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, FileAddOutlined, FileOutlined, FolderOpenOutlined, TeamOutlined, UploadOutlined } from '@ant-design/icons';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
-import { archiveApi, type ApiArchiveDirectory, type ApiArchiveFolder, type ApiArchiveProgress, type ApiSelfFundedProject, type SelfFundedWrite } from '../../api/archive-api';
+import { archiveApi, type ApiArchiveDirectory, type ApiArchiveFolder, type ApiSelfFundedProject, type SelfFundedWrite } from '../../api/archive-api';
 import { canPreviewFile, fileApi, type ApiFile } from '../../api/file-api';
 import { topicApi, type ApiTopic } from '../../api/topic-api';
 
@@ -280,15 +280,4 @@ export function RealSelfFundedPage() {
       {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={Boolean(editable && selected && user?.unitId === selected.ownerUnitId)} onChanged={() => selected && openProject(selected)} />}
     </Drawer>
   </>;
-}
-
-export function RealArchiveMonitoringPage() {
-  const [rows, setRows] = useState<ApiArchiveProgress[]>([]);
-  useEffect(() => { void archiveApi.progress().then(setRows).catch((error) => message.error(error.message)); }, []);
-  return <Card><Table rowKey={(row) => `${row.topicId}:${row.unitId}:${row.ownerType}`} dataSource={rows} columns={[
-    { title: '课题 ID', dataIndex: 'topicId' }, { title: '单位 ID', dataIndex: 'unitId' },
-    { title: '类型', render: (_, row) => row.ownerType === 'TOPIC_NATIONAL' ? '国家材料' : '自筹材料' },
-    { title: '必存材料', render: (_, row) => `${row.completedCount}/${row.requiredCount}` },
-    { title: '完成率', render: (_, row) => <Progress percent={row.completionRate} /> },
-  ]} /></Card>;
 }
