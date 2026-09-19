@@ -13,8 +13,8 @@ const FORMAL_REQUIREMENTS: Record<AchievementType, AchievementMaterialRequiremen
     { materialType: '项目标注页', description: '能看清项目名称或项目编号', required: true },
   ],
   发明专利: [
-    { materialType: '专利受理通知书', description: '专利局出具的受理文件', required: true },
-    { materialType: '专利申请文件', description: '请求书、说明书及权利要求书等', required: true },
+    { materialType: '专利授权证书', description: '国家知识产权局颁发的授权证书', required: true },
+    { materialType: '专利授权文件', description: '能够核验授权公告号及授权内容', required: true },
     { materialType: '项目关联说明', description: '说明专利与课题的对应关系', required: true },
   ],
   软件著作权: [

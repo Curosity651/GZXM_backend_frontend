@@ -106,14 +106,14 @@ class AchievementWorkflowIntegrationTest {
     @ParameterizedTest @ValueSource(ints={1,2,3,4,5})
     void fullWorkflowWithTestOnlyFileBoundaryCountsExactlyOnce(int definition) throws Exception {
         String id=create(definition,2).path("id").asText();preApprove(id);if(definition<=2) register(id);
-        var types=Map.of(1,List.of("论文定稿","录用通知或接收函","项目标注页"),2,List.of("专利受理通知书","专利申请文件","项目关联说明"),
+        var types=Map.of(1,List.of("论文定稿","录用通知或接收函","项目标注页"),2,List.of("专利授权证书","专利授权文件","项目关联说明"),
                 3,List.of("软件著作权证书","软件鉴别材料","著作权人证明"),4,List.of("标准送审稿","送审或立项证明"),5,List.of("研究生学位论文证明材料"));
-        var detail=Map.of(1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",2,"{\"patentStatus\":\"已受理\",\"receiptDate\":\"2026-02-01\"}",
+        var detail=Map.of(1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",2,"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-02-01\"}",
                 3,"{\"certificateDate\":\"2026-02-01\"}",4,"{\"draftCommitDate\":\"2026-02-01\"}",5,"{\"actualGraduationDate\":\"2026-02-01\"}");
         setMaterials(id,definition,detail.get(definition),types.get(definition));action(id,"SUBMIT_FORMAL");
         review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
         if(definition<=2) {
-            assertThat(current(id).path("countsToIndicator").asBoolean()).isFalse();
+            assertThat(current(id).path("countsToIndicator").asBoolean()).isTrue();
             assertThat(current(id).path("status").asText()).isEqualTo(definition==1?"WAIT_PUBLICATION":"WAIT_GRANT");
             String supplement=definition==1?"{\"paperStatus\":\"已正式刊出\",\"publicationDate\":\"2026-03-01\",\"paperType\":\"SCI\",\"isChineseCoreJournal\":true}"
                     :"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-03-01\"}";
@@ -240,7 +240,7 @@ class AchievementWorkflowIntegrationTest {
         assertThat(resubmit.path("submittedVersion").asInt()).isEqualTo(3);assertThat(resubmit.path("countsToIndicator").asBoolean()).isFalse();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM submission_snapshot WHERE business_type='ACHIEVEMENT'",Integer.class)).isEqualTo(3);
     }
-    @Test void supplementRequiresConditionalProofAndReturnDoesNotCount() throws Exception {
+    @Test void supplementRequiresConditionalProofAndKeepsFormalCompletion() throws Exception {
         String id=create(1,2).path("id").asText();preApprove(id);register(id);
         setMaterials(id,1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",List.of("论文定稿","录用通知或接收函","项目标注页"));
         action(id,"SUBMIT_FORMAL");review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
@@ -250,7 +250,7 @@ class AchievementWorkflowIntegrationTest {
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("ACHIEVEMENT_MATERIALS_REQUIRED"));
         setMaterials(id,1,detail,List.of("正式刊出论文全文","期刊封面、目录及见刊页","项目标注页","检索证明","中文核心期刊认定证明"));
         action(id,"SUBMIT_SUPPLEMENT");review(id,"RESEARCH_ASSISTANT","RETURN");
-        assertThat(current(id).path("status").asText()).isEqualTo("SUPPLEMENT_RETURNED");assertThat(current(id).path("countsToIndicator").asBoolean()).isFalse();
+        assertThat(current(id).path("status").asText()).isEqualTo("SUPPLEMENT_RETURNED");assertThat(current(id).path("countsToIndicator").asBoolean()).isTrue();
         assertThat(action(id,"SUBMIT_SUPPLEMENT").path("status").asText()).isEqualTo("SUPPLEMENT_INITIAL");
     }
     @Test void failedOperationPersistenceRollsBackApprovalAndStatus() throws Exception {

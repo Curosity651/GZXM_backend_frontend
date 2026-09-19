@@ -520,19 +520,16 @@ class TopicIntegrationTest {
     }
 
     @Test
-    void indicatorChecksBothCumulativeDirectionsAndRechecksEffectiveValuesAtPublish() throws Exception {
+    void indicatorStagesAreIndependentAndPublishedStageCannotBeReduced() throws Exception {
         String topic=indicatorTopic();
         saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
-        saveTarget(topic,2,0,target(1)).andExpect(status().isUnprocessableEntity());
-        saveTarget(topic,2,0,target(5)).andExpect(status().isOk());
-        saveTarget(topic,1,1,target(6)).andExpect(status().isUnprocessableEntity());
-        publishTarget(topic,1,1,"cumulative-midpoint").andExpect(status().isNoContent());
-        publishTarget(topic,2,1,"cumulative-endpoint").andExpect(status().isNoContent());
-        saveTarget(topic,1,1,target(1)).andExpect(status().isOk());
-        publishTarget(topic,1,2,"unsupported-reduction").andExpect(status().isConflict());
-        saveTarget(topic,1,2,"[]").andExpect(status().isOk());
-        publishTarget(topic,1,3,"empty-revision-publish").andExpect(status().isUnprocessableEntity());
-        assertThat(jdbc.queryForObject("SELECT target_quantity FROM topic_indicator WHERE node_id=1",Integer.class)).isEqualTo(2);
+        saveTarget(topic,2,0,target(1)).andExpect(status().isOk());
+        saveTarget(topic,1,1,target(6)).andExpect(status().isOk());
+        publishTarget(topic,1,2,"stage-midpoint").andExpect(status().isNoContent());
+        publishTarget(topic,2,1,"stage-endpoint").andExpect(status().isNoContent());
+        saveTarget(topic,1,2,target(1)).andExpect(status().isOk());
+        publishTarget(topic,1,3,"unsupported-reduction").andExpect(status().isConflict());
+        assertThat(jdbc.queryForObject("SELECT target_quantity FROM topic_indicator WHERE node_id=1",Integer.class)).isEqualTo(6);
     }
 
     @Test
@@ -641,7 +638,7 @@ class TopicIntegrationTest {
     }
 
     @Test
-    void publicationRevalidatesCatalogAndEffectiveCumulativeConstraints() throws Exception {
+    void publicationRevalidatesCatalogButAllowsIndependentStageValues() throws Exception {
         String topic=indicatorTopic();
         saveTarget(topic,1,0,target(2)).andExpect(status().isOk());
         jdbc.update("UPDATE indicator_definition SET enabled=0 WHERE id=1");
@@ -651,8 +648,8 @@ class TopicIntegrationTest {
         publishTarget(topic,1,1,"revalidate-node-key").andExpect(status().isUnprocessableEntity());
         jdbc.update("UPDATE time_node SET enabled=1 WHERE id=1");
         jdbc.update("INSERT INTO topic_indicator(project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(1,?,2,1,1,'PUBLISHED',1)",topic);
-        publishTarget(topic,1,1,"revalidate-cumulative").andExpect(status().isUnprocessableEntity());
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isZero();
+        publishTarget(topic,1,1,"independent-stage-value").andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isEqualTo(1);
     }
 
     @Test

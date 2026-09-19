@@ -12,7 +12,7 @@ import java.util.*;
 public class AchievementSubmissionRules {
     private static final Map<String,List<String>> FORMAL=Map.of(
         "PAPER",List.of("论文定稿","录用通知或接收函","项目标注页"),
-        "PATENT",List.of("专利受理通知书","专利申请文件","项目关联说明"),
+        "PATENT",List.of("专利授权证书","专利授权文件","项目关联说明"),
         "COPYRIGHT",List.of("软件著作权证书","软件鉴别材料","著作权人证明"),
         "STANDARD",List.of("标准送审稿","送审或立项证明"),
         "TALENT",List.of("研究生学位论文证明材料"));
@@ -35,10 +35,10 @@ public class AchievementSubmissionRules {
         List<String> required=new ArrayList<>();
         if("FORMAL".equals(stage)) {
             required.addAll(FORMAL.get(type));
-            String date=switch(type) {case "PAPER"->"acceptanceDate";case "PATENT"->"receiptDate";case "COPYRIGHT"->"certificateDate";case "STANDARD"->"draftCommitDate";case "TALENT"->"actualGraduationDate";default->throw new IllegalStateException("Unknown type");};
+            String date=switch(type) {case "PAPER"->"acceptanceDate";case "PATENT"->"grantDate";case "COPYRIGHT"->"certificateDate";case "STANDARD"->"draftCommitDate";case "TALENT"->"actualGraduationDate";default->throw new IllegalStateException("Unknown type");};
             requireText(detail,date);
             if("PAPER".equals(type)) requireValue(detail,"paperStatus",Set.of("已录用","已正式刊出"));
-            if("PATENT".equals(type)) requireValue(detail,"patentStatus",Set.of("已受理","已授权"));
+            if("PATENT".equals(type)) requireValue(detail,"patentStatus",Set.of("已授权"));
         } else if("SUPPLEMENT".equals(stage) && "PAPER".equals(type)) {
             requireText(detail,"publicationDate");requireValue(detail,"paperStatus",Set.of("已正式刊出"));
             required.addAll(List.of("正式刊出论文全文","期刊封面、目录及见刊页","项目标注页"));

@@ -30,6 +30,7 @@ public final class IndicatorDtos {
     public record AllocationBatch(@NotBlank @Pattern(regexp="[1-9][0-9]*") String nodeId,
                                   @NotNull @Size(max=5000) List<@NotNull @Valid AllocationInput> allocations,
                                   @Min(0) @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using=StrictIntegerDeserializer.class) Integer draftVersion) {}
+    public record AllocationPlanBatch(@NotNull @Size(min=1, max=100) List<@NotNull @Valid AllocationBatch> stages) {}
     public record AllocationView(String id,String topicId,String unitId,String nodeId,String indicatorDefinitionId,
                                  int targetQuantity,String status,int version) {}
     public record AllocationDraftResult(int draftVersion,int topicIndicatorVersion,List<AllocationView> allocations) {}

@@ -6,7 +6,7 @@ import java.util.*;
 
 public final class AchievementProgressDtos {
     private AchievementProgressDtos() {}
-    public record Stages(long initiated,long preApproved,long external,long formal,long supplement,long effective) {}
+    public record Stages(long initiated,long submitted,long preApproved,long external,long formal,long supplement,long effective) {}
     @JsonInclude(JsonInclude.Include.ALWAYS)
     public record Row(String scope,String topicId,String unitId,String nodeId,String indicatorDefinitionId,String achievementType,
                       Long targetQuantity,Integer targetVersion,boolean targetPublished,boolean hasTarget,BigDecimal completionRate,

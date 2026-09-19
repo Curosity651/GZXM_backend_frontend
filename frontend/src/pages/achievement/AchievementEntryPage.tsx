@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Col, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
-import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined, SendOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
-import { achievementApi, type ApiAchievement, type AchievementProgress, type AchievementWrite } from '../../api/achievement-api';
+import { Alert, Button, Card, Col, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, message } from 'antd';
+import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
+import { achievementApi, type ApiAchievement, type AchievementProgress, type AchievementProgressRow, type AchievementWrite } from '../../api/achievement-api';
 import { indicatorApi, type IndicatorDefinition, type TimeNode, type UnitAllocation } from '../../api/indicator-api';
-import { topicApi, type ApiTopic } from '../../api/topic-api';
+import { isBusinessTopic, topicApi, type ApiTopic } from '../../api/topic-api';
 import { systemApi, type ApiUnit } from '../../api/system-api';
 import { fileApi } from '../../api/file-api';
 import { useSessionStore } from '../../store/session';
@@ -28,6 +28,33 @@ interface FormValues extends Record<string, unknown> {
   achievementType: ApiAchievement['achievementType']; title: string; responsiblePerson: string;
 }
 
+interface TopicProgressSummary {
+  topicId: string;
+  target: number;
+  stages: AchievementProgressRow['stages'];
+  details: Array<AchievementProgressRow & { special: boolean }>;
+  units: UnitProgressSummary[];
+}
+
+interface UnitProgressSummary {
+  key: string;
+  topicId: string;
+  unitId: string;
+  target: number;
+  stages: AchievementProgressRow['stages'];
+  details: Array<AchievementProgressRow & { special: boolean }>;
+}
+
+const emptyStages = (): AchievementProgressRow['stages'] => ({ initiated: 0, submitted: 0, preApproved: 0, external: 0, formal: 0, supplement: 0, effective: 0 });
+const addStages = (target: AchievementProgressRow['stages'], source: AchievementProgressRow['stages']) => {
+  target.initiated += source.initiated; target.submitted += source.submitted; target.preApproved += source.preApproved; target.external += source.external;
+  target.formal += source.formal; target.supplement += source.supplement; target.effective += source.effective;
+};
+const groupIndicatorRows = (base: AchievementProgressRow[], special: AchievementProgressRow[]) => base.flatMap((baseRow) => [
+  { ...baseRow, special: false },
+  ...special.filter((row) => row.achievementType === baseRow.achievementType).map((row) => ({ ...row, special: true })),
+]);
+
 export function AchievementEntryPage() {
   const user = useSessionStore((state) => state.user)!;
   const [form] = Form.useForm<FormValues>();
@@ -39,7 +66,8 @@ export function AchievementEntryPage() {
   const [allocations, setAllocations] = useState<UnitAllocation[]>([]);
   const [rows, setRows] = useState<ApiAchievement[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState({ topicId: '', nodeId: '', status: '', indicatorDefinitionId: '', unitId: '', keyword: '', pendingForMe: false });
+  const [filters, setFilters] = useState({ topicId: '', status: '', indicatorDefinitionId: '', unitId: '', keyword: '', pendingForMe: false });
+  const [progressFilters, setProgressFilters] = useState({ topicId: '', nodeId: '' });
   const [filterExpanded, setFilterExpanded] = useState(false);
   const [editing, setEditing] = useState<ApiAchievement>();
   const [formOpen, setFormOpen] = useState(false);
@@ -50,56 +78,135 @@ export function AchievementEntryPage() {
   const [opinion, setOpinion] = useState('');
   const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
   const [progress, setProgress] = useState<AchievementProgress>();
-  const [progressPagination, setProgressPagination] = useState({ current: 1, pageSize: 5 });
+  const [progressLoading, setProgressLoading] = useState(false);
   const [entryPagination, setEntryPagination] = useState({ current: 1, pageSize: 5 });
   const canSubmit = ['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT'].includes(user.roleCode) && user.actionPermissions.includes('achievement.submit');
   const canInitial = user.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('achievement.initial.approve');
   const canFinal = user.roleCode === 'PROJECT_TECH_LEADER' && user.actionPermissions.includes('achievement.final.approve');
+  const canViewMultipleUnits = ['SYSTEM_ADMIN', 'RESEARCH_ASSISTANT', 'PROJECT_TECH_LEADER'].includes(user.roleCode)
+    || user.memberships.some((membership) => membership.enabled && membership.membershipType === 'LEAD');
 
   const loadBase = useCallback(async () => {
     const [topicPage, unitRows, nodeRows, definitionRows] = await Promise.all([
       topicApi.list(), systemApi.units(), indicatorApi.nodes(user.roleCode === 'RESEARCH_ASSISTANT'), indicatorApi.definitions(),
     ]);
-    setTopics(topicPage.items); setUnits(unitRows); setNodes(nodeRows); setDefinitions(definitionRows.filter((item) => item.enabled));
-    if (!filters.nodeId) setFilters((current) => ({ ...current, nodeId: [...nodeRows].filter((node) => node.enabled).sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id ?? '' }));
+    const businessTopics = topicPage.items.filter(isBusinessTopic);
+    setTopics(businessTopics); setUnits(unitRows); setNodes(nodeRows); setDefinitions(definitionRows.filter((item) => item.enabled));
+    if (!progressFilters.nodeId) setProgressFilters((current) => ({ ...current, nodeId: [...nodeRows].filter((node) => node.enabled).sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id ?? '' }));
     if (canSubmit && user.unitId) {
-      const calls = topicPage.items.flatMap((topic) => nodeRows.filter((node) => node.enabled).map((node) => indicatorApi.allocations(topic.id, node.id)));
+      const calls = businessTopics.flatMap((topic) => nodeRows.filter((node) => node.enabled).map((node) => indicatorApi.allocations(topic.id, node.id)));
       const settled = await Promise.allSettled(calls);
       setAllocations(settled.flatMap((result) => result.status === 'fulfilled' ? result.value.rows : []).filter((item) => item.unitId === user.unitId && item.targetQuantity > 0));
     }
-  }, [canSubmit, filters.nodeId, user.roleCode, user.unitId]);
+  }, [canSubmit, progressFilters.nodeId, user.roleCode, user.unitId]);
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
-      // 成果列表按所选考核节点累计展示，不能让后端按 nodeId 精确过滤掉历史节点成果。
       const page = await achievementApi.list({ topicId: filters.topicId, status: filters.status, indicatorDefinitionId: filters.indicatorDefinitionId, pendingForMe: filters.pendingForMe || undefined });
       setRows(page.items);
-      if (filters.nodeId) setProgress(await achievementApi.progress(filters.nodeId, filters.topicId || undefined));
     } catch (error) { message.error(error instanceof Error ? error.message : '成果数据加载失败'); }
     finally { setLoading(false); }
-  }, [filters.indicatorDefinitionId, filters.nodeId, filters.pendingForMe, filters.status, filters.topicId]);
+  }, [filters.indicatorDefinitionId, filters.pendingForMe, filters.status, filters.topicId]);
+  const loadProgress = useCallback(async () => {
+    if (!progressFilters.nodeId) return;
+    setProgressLoading(true);
+    try { setProgress(await achievementApi.progress(progressFilters.nodeId, progressFilters.topicId || undefined)); }
+    catch (error) { message.error(error instanceof Error ? error.message : '成果进度加载失败'); }
+    finally { setProgressLoading(false); }
+  }, [progressFilters.nodeId, progressFilters.topicId]);
   useEffect(() => { void loadBase().catch((error) => message.error(error.message)); }, [loadBase]);
   useEffect(() => { void loadRows(); }, [loadRows]);
+  useEffect(() => { void loadProgress(); }, [loadProgress]);
 
   const definitionMap = useMemo(() => Object.fromEntries(definitions.map((item) => [item.id, item])), [definitions]);
   const topicMap = useMemo(() => Object.fromEntries(topics.map((item) => [item.id, item])), [topics]);
   const unitMap = useMemo(() => Object.fromEntries(units.map((item) => [item.id, item.name])), [units]);
-  const nodeOrder = useMemo(() => Object.fromEntries(nodes.map((item) => [item.id, item.sortOrder])), [nodes]);
-  const selectedNodeOrder = filters.nodeId ? nodeOrder[filters.nodeId] : undefined;
+  const visibleUnitOptions = units.filter((unit) => rows.some((row) => row.unitId === unit.id));
   const selectedAllocation = allocations.find((item) => item.id === allocationId);
   const selectedType = editing?.achievementType ?? (selectedAllocation ? definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.achievementType as ApiAchievement['achievementType'] : undefined);
   const visibleRows = rows.filter((item) => (!filters.keyword || item.title.toLowerCase().includes(filters.keyword.toLowerCase()))
-    && (!filters.unitId || item.unitId === filters.unitId)
-    && (selectedNodeOrder === undefined || (nodeOrder[item.nodeId] ?? Number.MAX_SAFE_INTEGER) <= selectedNodeOrder));
-  const targetTotal = useMemo(() => {
-    if (!progress) return 0;
-    // 有课题汇总行时使用课题目标，避免再累加单位行造成重复统计；
-    // 普通课题单位仅能看到自己的单位行，因此直接汇总其单位目标。
-    const topicRows = progress.rows.filter((row) => row.scope === 'TOPIC');
-    const targetRows = topicRows.length > 0 ? topicRows : progress.rows.filter((row) => row.scope === 'UNIT');
-    return targetRows.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0);
+    && (!filters.unitId || item.unitId === filters.unitId));
+  const topicProgress = useMemo<TopicProgressSummary[]>(() => {
+    if (!progress) return [];
+    const topicIds = [...new Set(progress.rows.map((row) => row.topicId))];
+    return topicIds.map((topicId) => {
+      const base = progress.rows.filter((row) => row.topicId === topicId);
+      const baseTopicRows = base.filter((row) => row.scope === 'TOPIC');
+      const selectedBase = baseTopicRows.length ? baseTopicRows : base.filter((row) => row.scope === 'UNIT');
+      const special = progress.specialIndicators.filter((row) => row.topicId === topicId);
+      const specialTopicRows = special.filter((row) => row.scope === 'TOPIC');
+      const selectedSpecial = specialTopicRows.length ? specialTopicRows : special.filter((row) => row.scope === 'UNIT');
+      const stages = emptyStages(); selectedBase.forEach((row) => addStages(stages, row.stages));
+      const unitIds = [...new Set(base.filter((row) => row.scope === 'UNIT' && !row.historical && row.unitId).map((row) => row.unitId!))];
+      const unitRows = unitIds.map((unitId) => {
+        const unitBase = base.filter((row) => row.scope === 'UNIT' && row.unitId === unitId && !row.historical);
+        const unitSpecial = special.filter((row) => row.scope === 'UNIT' && row.unitId === unitId && !row.historical);
+        const unitStages = emptyStages(); unitBase.forEach((row) => addStages(unitStages, row.stages));
+        return {
+          key: `${topicId}-${unitId}`,
+          topicId,
+          unitId,
+          target: unitBase.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0),
+          stages: unitStages,
+          details: groupIndicatorRows(unitBase, unitSpecial)
+            .filter((row) => (row.targetQuantity ?? 0) > 0 || row.stages.submitted > 0),
+        };
+      }).filter((unit) => unit.target > 0 || unit.stages.submitted > 0);
+      return {
+        topicId,
+        target: selectedBase.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0),
+        stages,
+        details: groupIndicatorRows(selectedBase, selectedSpecial)
+          .filter((row) => (row.targetQuantity ?? 0) > 0 || row.stages.submitted > 0),
+        units: unitRows,
+      };
+    }).filter((summary) => summary.target > 0 || summary.stages.submitted > 0);
   }, [progress]);
-  const completionRate = targetTotal > 0 ? Math.round(((progress?.baseStages.effective ?? 0) / targetTotal) * 100) : 0;
+  const progressTotals = useMemo(() => topicProgress.reduce((total, row) => {
+    total.target += row.target; addStages(total.stages, row.stages); return total;
+  }, { target: 0, stages: emptyStages() }), [topicProgress]);
+  const unitProgressTotals = useMemo(() => {
+    const all = topicProgress.flatMap((topic) => topic.units);
+    return {
+      total: all.length,
+      complete: all.filter((unit) => unit.target > 0 && unit.stages.submitted >= unit.target).length,
+      partial: all.filter((unit) => unit.stages.submitted > 0 && unit.stages.submitted < unit.target).length,
+      missing: all.filter((unit) => unit.stages.submitted === 0).length,
+    };
+  }, [topicProgress]);
+
+  const renderIndicatorProgress = (details: TopicProgressSummary['details']) => <Table size="small"
+    rowKey={(row) => `${row.scope}-${row.unitId ?? ''}-${row.indicatorDefinitionId}-${row.special}`}
+    dataSource={details} pagination={false} columns={[
+      { title: '成果指标', dataIndex: 'indicatorDefinitionId', render: (value: string, row) => <span className={row.special ? 'achievement-special-indicator' : ''}>{row.special ? '其中：' : ''}{definitionMap[value]?.name ?? '未知指标'}</span> },
+      { title: '累计目标', dataIndex: 'targetQuantity', width: 100, render: (value?: number) => value ?? 0 },
+      { title: '已提交', width: 90, render: (_: unknown, row) => row.stages.submitted },
+      { title: '已生效', width: 90, render: (_: unknown, row) => row.stages.effective },
+      { title: '尚缺', width: 110, render: (_: unknown, row) => { const missing = Math.max((row.targetQuantity ?? 0) - row.stages.submitted, 0); return missing > 0 ? <Tag color="orange">{missing} 项</Tag> : <Tag color="green">已提交</Tag>; } },
+      { title: '完成率', width: 160, render: (_: unknown, row) => { const target = row.targetQuantity ?? 0; const rate = target > 0 ? Math.round(row.stages.submitted * 100 / target) : 0; return <Progress size="small" percent={Math.min(rate, 100)} status={rate >= 100 ? 'success' : 'active'} />; } },
+    ]} />;
+
+  const renderUnitProgress = (summary: TopicProgressSummary) => <div className="achievement-unit-progress">
+    <Alert type="info" showIcon message="按单位查看成果提交情况；展开单位可查看各项指标明细。" />
+    <Table<UnitProgressSummary> size="small" rowKey="key" dataSource={summary.units} pagination={false}
+      locale={{ emptyText: '当前权限范围内暂无单位分配数据' }}
+      expandable={{ expandRowByClick: true, expandedRowRender: (unit) => renderIndicatorProgress(unit.details) }}
+      columns={[
+        { title: '单位', dataIndex: 'unitId', render: (value: string) => <Text strong>{unitMap[value] ?? value}</Text> },
+        { title: '累计目标', dataIndex: 'target', width: 100 },
+        { title: '已提交', width: 90, render: (_: unknown, unit) => unit.stages.submitted },
+        { title: '正式成果', width: 100, render: (_: unknown, unit) => unit.stages.formal },
+        { title: '已生效', width: 90, render: (_: unknown, unit) => unit.stages.effective },
+        { title: '提交状态', width: 110, render: (_: unknown, unit) => unit.stages.submitted === 0
+          ? <Tag color="red">未提交</Tag>
+          : unit.stages.submitted < unit.target ? <Tag color="orange">部分提交</Tag> : <Tag color="green">全部提交</Tag> },
+        { title: '尚缺指标', width: 280, render: (_: unknown, unit) => {
+          const missing = unit.details.filter((item) => !item.special && (item.targetQuantity ?? 0) > item.stages.submitted)
+            .map((item) => `${definitionMap[item.indicatorDefinitionId]?.name ?? '未知指标'} ${Math.max((item.targetQuantity ?? 0) - item.stages.submitted, 0)}项`);
+          return missing.length ? <Text type="warning">{missing.join('、')}</Text> : <Text type="success">已全部提交</Text>;
+        } },
+      ]} />
+  </div>;
 
   const openCreate = () => {
     setEditing(undefined); setPendingFiles({}); form.resetFields();
@@ -167,51 +274,61 @@ export function AchievementEntryPage() {
   };
 
   return <>
-    <Card className="achievement-filter-card" style={{ marginBottom: 16 }}>
+    <Card className="achievement-progress-card" title="成果进度" style={{ marginBottom: 16 }} extra={<Space wrap>
+      <Text>课题</Text><Select allowClear placeholder="全部课题" value={progressFilters.topicId || undefined} style={{ width: 300 }}
+        onChange={(value) => setProgressFilters((current) => ({ ...current, topicId: value ?? '' }))}
+        options={topics.map((item) => ({ value: item.id, label: `${item.code} ${item.name}` }))} />
+      <Text>时间节点</Text><Select value={progressFilters.nodeId || undefined} style={{ width: 150 }}
+        onChange={(value) => setProgressFilters((current) => ({ ...current, nodeId: value }))}
+        options={nodes.filter((item) => item.enabled).sort((a, b) => a.sortOrder - b.sortOrder).map((item) => ({ value: item.id, label: item.name }))} />
+      <Button icon={<ReloadOutlined />} loading={progressLoading} onClick={() => void loadProgress()}>刷新</Button>
+    </Space>}>
+      <div className="achievement-progress-summary">
+        {[
+          ['累计分配指标', progressTotals.target, 'default'], ['成果已提交', progressTotals.stages.submitted, 'default'],
+          ['成果已生效', progressTotals.stages.effective, 'default'], ['应提交单位', unitProgressTotals.total, 'default'],
+          ['全部提交单位', unitProgressTotals.complete, 'default'], ['部分提交单位', unitProgressTotals.partial, 'warning'],
+          ['尚未提交单位', unitProgressTotals.missing, 'danger'],
+        ].map(([label, value, tone]) => <div className={`achievement-progress-metric${tone === 'warning' ? ' is-warning' : ''}${tone === 'danger' ? ' is-danger' : ''}`} key={String(label)}><Statistic title={label} value={value} suffix={String(label).includes('单位') ? '个' : '项'} /></div>)}
+      </div>
+      <Table<TopicProgressSummary> loading={progressLoading} size="small" rowKey="topicId" dataSource={topicProgress} pagination={false}
+        locale={{ emptyText: '当前课题和时间节点暂无已配置的成果指标' }}
+        expandable={{ expandRowByClick: true, expandedRowRender: (summary) => <Tabs defaultActiveKey="units" items={[
+          { key: 'units', label: `按单位查看（${summary.units.length}）`, children: renderUnitProgress(summary) },
+          { key: 'indicators', label: '按指标查看', children: renderIndicatorProgress(summary.details) },
+        ]} /> }}
+        columns={[
+          { title: '课题汇总', dataIndex: 'topicId', render: (value: string) => <Space><Text strong>{topicMap[value]?.name ?? value}</Text>{topicMap[value]?.code && <Tag color="blue">{topicMap[value].code}</Tag>}</Space> },
+          { title: '累计目标', dataIndex: 'target', width: 100 },
+          { title: '成果已提交', width: 110, render: (_: unknown, row) => row.stages.submitted },
+          { title: '已生效', width: 90, render: (_: unknown, row) => row.stages.effective },
+          { title: '单位提交情况', width: 230, render: (_: unknown, row) => {
+            const complete = row.units.filter((unit) => unit.target > 0 && unit.stages.submitted >= unit.target).length;
+            const rate = row.units.length > 0 ? Math.round(complete * 100 / row.units.length) : 0;
+            return <Space><Text>{complete}/{row.units.length}</Text><Progress className="achievement-unit-rate" size="small" percent={rate} showInfo={false} status={rate >= 100 ? 'success' : 'active'} /></Space>;
+          } },
+          { title: '未提交单位', width: 120, render: (_: unknown, row) => {
+            const count = row.units.filter((unit) => unit.stages.submitted === 0).length;
+            return count > 0 ? <Tag color="red">{count} 个</Tag> : <Tag color="green">全部提交</Tag>;
+          } },
+        ]} />
+    </Card>
+    <Card className="achievement-record-card" title="成果记录" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void loadRows()}>刷新</Button>{canSubmit && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增成果</Button>}</Space>}>
       <div className={`achievement-filter-grid${filterExpanded ? ' is-expanded' : ''}`}>
         {(canInitial || canFinal) && <Space className="achievement-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingForMe} onChange={(value) => setFilters({ ...filters, pendingForMe: value })} options={[{ value: true, label: '待我处理' }, { value: false, label: '全部成果' }]} /></Space>}
-        <Space className="achievement-filter-field" size={8}><Text>考核节点</Text><Select value={filters.nodeId || undefined} onChange={(value) => setFilters({ ...filters, nodeId: value })} options={nodes.filter((item) => item.enabled).map((item) => ({ value: item.id, label: item.name }))} /></Space>
         <Space className="achievement-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部相关课题" value={filters.topicId || undefined} onChange={(value) => setFilters({ ...filters, topicId: value ?? '' })} options={topics.map((item) => ({ value: item.id, label: `${item.code} ${item.name}` }))} /></Space>
         <Space className="achievement-filter-field" size={8}><Text>成果状态</Text><Select allowClear placeholder="全部状态" value={filters.status || undefined} onChange={(value) => setFilters({ ...filters, status: value ?? '' })} options={Object.entries(statusNames).map(([value, label]) => ({ value, label }))} /></Space>
         {filterExpanded && <>
           <Space className="achievement-filter-field" size={8}><Text>成果指标</Text><Select allowClear placeholder="全部指标" value={filters.indicatorDefinitionId || undefined} onChange={(value) => setFilters({ ...filters, indicatorDefinitionId: value ?? '' })} options={definitions.map((item) => ({ value: item.id, label: item.name }))} /></Space>
-          <Space className="achievement-filter-field" size={8}><Text>提交单位</Text><Select allowClear placeholder="全部单位" value={filters.unitId || undefined} onChange={(value) => setFilters({ ...filters, unitId: value ?? '' })} options={units.map((item) => ({ value: item.id, label: item.name }))} /></Space>
+          {canViewMultipleUnits && <Space className="achievement-filter-field" size={8}><Text>提交单位</Text><Select allowClear placeholder="全部单位" value={filters.unitId || undefined} onChange={(value) => setFilters({ ...filters, unitId: value ?? '' })} options={visibleUnitOptions.map((item) => ({ value: item.id, label: item.name }))} /></Space>}
           <Space className="achievement-filter-field" size={8}><Text>成果名称</Text><Input allowClear placeholder="请输入成果名称" value={filters.keyword} onChange={(event) => setFilters({ ...filters, keyword: event.target.value })} /></Space>
         </>}
         <Space className="achievement-filter-actions" size={10}>
-          <Button type="primary" icon={<SearchOutlined />} onClick={() => void loadRows()}>查询</Button>
           <Button onClick={() => setFilters((current) => ({ ...current, topicId: '', status: '', indicatorDefinitionId: '', unitId: '', keyword: '', pendingForMe: canInitial || canFinal }))}>重置</Button>
           <Button type="link" icon={filterExpanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setFilterExpanded((value) => !value)}>{filterExpanded ? '收起' : '展开'}</Button>
         </Space>
       </div>
-    </Card>
-    <Card title="成果进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
-      {[
-        ['分配指标', targetTotal], ['已发起', progress?.baseStages.initiated ?? 0], ['预审通过', progress?.baseStages.preApproved ?? 0],
-        ['已投稿/申请', progress?.baseStages.external ?? 0], ['正式成果', progress?.baseStages.formal ?? 0], ['进入补充阶段', progress?.baseStages.supplement ?? 0], ['已生效', progress?.baseStages.effective ?? 0],
-      ].map(([label, value]) => <Col flex="1 1 125px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
-      <Col flex="1 1 220px"><Text type="secondary">完成率</Text><Progress percent={Math.min(completionRate, 100)} status={completionRate >= 100 ? 'success' : 'active'} format={() => `${completionRate}%`} /></Col>
-    </Row>
-      <Table size="small" rowKey={(row) => `${row.scope}-${row.topicId ?? ''}-${row.unitId ?? ''}-${row.indicatorDefinitionId ?? ''}`} style={{ marginTop: 16 }} dataSource={progress?.rows ?? []} pagination={{
-        current: progressPagination.current,
-        pageSize: progressPagination.pageSize,
-        showSizeChanger: true,
-        pageSizeOptions: [5, 10, 20],
-        showTotal: (total) => `共 ${total} 条`,
-        onChange: (page, pageSize) => setProgressPagination((current) => ({ current: pageSize !== current.pageSize ? 1 : page, pageSize })),
-      }} scroll={{ x: 1100 }} columns={[
-        { title: '课题', dataIndex: 'topicId', width: 190, render: (value: string) => topicMap[value]?.name ?? '全部课题' },
-        { title: '单位', dataIndex: 'unitId', width: 160, render: (value: string) => unitMap[value] ?? '全部单位' },
-        { title: '成果指标', dataIndex: 'indicatorDefinitionId', width: 160, render: (value: string) => definitionMap[value]?.name ?? '综合统计' },
-        { title: '分配指标', dataIndex: 'targetQuantity', width: 90 },
-        { title: '已发起', width: 80, render: (_: unknown, row) => row.stages.initiated },
-        { title: '预审通过', width: 90, render: (_: unknown, row) => row.stages.preApproved },
-        { title: '正式成果', width: 90, render: (_: unknown, row) => row.stages.formal },
-        { title: '已生效', width: 80, render: (_: unknown, row) => row.stages.effective },
-        { title: '完成率', dataIndex: 'completionRate', width: 130, render: (value: number) => <Progress size="small" percent={Math.min(Math.round(value ?? 0), 100)} /> },
-      ]} />
-    </Card>
-    <Card><Table loading={loading} rowKey="id" dataSource={visibleRows} pagination={{
+      <Table className="achievement-record-table" loading={loading} rowKey="id" dataSource={visibleRows} pagination={{
       current: entryPagination.current,
       pageSize: entryPagination.pageSize,
       showSizeChanger: true,
@@ -226,7 +343,8 @@ export function AchievementEntryPage() {
       { title: '负责人', dataIndex: 'responsiblePerson', width: 110 },
       { title: '状态', width: 130, render: (_, row) => <Tag color={statusColor(row.status)}>{statusNames[row.status] ?? row.status}</Tag> },
       { title: '操作', width: 310, fixed: 'right', render: (_, row) => actionButtons(row) },
-    ]} title={() => <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Space><Button icon={<ReloadOutlined />} onClick={() => void loadRows()}>刷新</Button>{canSubmit && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增成果</Button>}</Space></div>} /></Card>
+    ]} />
+    </Card>
 
     <Drawer width={980} title={editing ? '编辑成果' : '新建成果'} open={formOpen} onClose={() => setFormOpen(false)} destroyOnHidden
       extra={<Space><Button onClick={() => setFormOpen(false)}>取消</Button><Button type="primary" onClick={() => void save()}>保存草稿</Button></Space>}>

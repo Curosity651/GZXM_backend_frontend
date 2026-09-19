@@ -13,6 +13,8 @@ public interface TopicIndicatorMapper {
 
     @Select("SELECT id,project_id,name,sort_order,enabled FROM time_node WHERE id=#{id}")
     Node node(long id);
+    @Select("SELECT id,project_id,name,sort_order,enabled FROM time_node WHERE project_id=#{project} AND enabled=1 ORDER BY sort_order,id")
+    List<Node> nodes(long project);
     @Select("SELECT id,name,achievement_type,category,enabled FROM indicator_definition ORDER BY id")
     List<Definition> definitions();
     @Select("SELECT id,draft_version,published_draft_version,publish_version FROM topic_indicator_draft WHERE topic_id=#{topic} AND node_id=#{node}")

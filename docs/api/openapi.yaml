@@ -78,7 +78,7 @@ paths:
     patch:
       tags: [Users]
       operationId: updateUserProfile
-      description: 编辑用户名、联系人、手机和邮箱；角色不可通过本接口修改。
+      description: 编辑用户名、角色、联系人、手机和邮箱；平台角色与课题单位角色不能直接互换，修改角色后旧会话失效。
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UserUpdateRequest' } } } }
       responses: { '200': { description: 已更新, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } } }
   /users/{userId}/status:
@@ -259,11 +259,11 @@ paths:
       operationId: listUnitAllocations
       description: 默认view=effective读取生效分配；管理角色和当前牵头看全课题，承担单位只能看自身。view=draft仅当前牵头且有unit-allocation.manage权限可读，返回X-Draft-Version和X-Topic-Indicator-Version响应头。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { name: nodeId, in: query, required: true, schema: { type: string } }, { name: view, in: query, schema: { type: string, enum: [effective, draft], default: effective } }]
-      responses: { '200': { description: 当前节点单位累计分配, headers: { X-Draft-Version: { description: 草稿版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
+      responses: { '200': { description: 当前节点的本阶段单位分配, headers: { X-Draft-Version: { description: 草稿版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本，仅草稿查询返回, schema: { type: integer, minimum: 0 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/ValidationError' } }
     put:
       tags: [Indicators]
       operationId: saveUnitAllocations
-      description: 当前有效牵头且有unit-allocation.manage权限。完整替换节点草稿，首次draftVersion省略或0，后续必须匹配响应X-Draft-Version；空数组清空草稿，不改变生效分配。每行单位/定义不能重复，单位须为有效且启用成员，目标须已由课题下发。草稿可暂不满足覆盖/合计，但须满足单位节点累计和专项子集约束。
+      description: 当前有效牵头且有unit-allocation.manage权限。完整替换节点的本阶段分配草稿，首次draftVersion省略或0，后续必须匹配响应X-Draft-Version；每行单位/定义不能重复，单位须为有效且启用成员，目标须已由课题下发。
       parameters: [{ $ref: '#/components/parameters/TopicId' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitAllocationBatch' } } } }
       responses: { '200': { description: 已保存, headers: { X-Draft-Version: { description: 保存后的草稿版本, schema: { type: integer, minimum: 1 } }, X-Topic-Indicator-Version: { description: 草稿绑定的课题指标发布版本, schema: { type: integer, minimum: 1 } } }, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UnitIndicatorAllocation' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
@@ -271,7 +271,7 @@ paths:
     post:
       tags: [Indicators]
       operationId: publishUnitAllocations
-      description: 当前有效牵头且有unit-allocation.publish权限。必须覆盖所有有效且启用成员（含牵头）和该节点全部生效指标，零目标显式填0；每项单位合计不得低于课题要求，允许超额。课题目标版本变化后须重新保存草稿。请求绑定draftVersion；同一用户同键同请求重放204，不同请求409。本阶段不允许降低有效成员已生效分配，停用成员历史保留但不计发布合计。
+      description: 当前有效牵头且有unit-allocation.publish权限。必须覆盖所有有效且启用成员（含牵头）和该节点全部生效指标，零目标显式填0；每项单位合计必须等于课题本阶段要求。课题目标版本变化后须重新保存草稿。请求绑定draftVersion；同一用户同键同请求重放204，不同请求409。
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { type: object, required: [nodeId, draftVersion], properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 1, maximum: 2147483647 } } } } } }
       responses: { '204': { description: 已下发或成功重放 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
@@ -283,6 +283,14 @@ paths:
       parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitAllocationBatch' } } } }
       responses: { '204': { description: 分配已确认并生效 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  '/topics/{topicId}/unit-allocations:confirm-plan':
+    put:
+      tags: [Indicators]
+      operationId: confirmUnitAllocationPlan
+      description: 当前有效牵头一次提交全部启用时间阶段的完整单位分配方案；任一阶段缺失、任一单位指标未覆盖或阶段合计不等于课题本阶段目标时拒绝，全部阶段在同一事务中生效。
+      parameters: [{ $ref: '#/components/parameters/TopicId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UnitAllocationPlanBatch' } } } }
+      responses: { '204': { description: 全部分配方案已确认并生效 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
 
   /achievements:
     get:
@@ -330,7 +338,7 @@ paths:
     post:
       tags: [Achievements]
       operationId: reviewAchievement
-      description: 仅科研助理初审、项目技术负责人终审，角色和动作权限同时检查；必须匹配recordVersion与submittedVersion，退回意见必填。退回重提回初审。论文/专利正式终审后等待补充，补充终审才计数；其他三类正式终审生效。成功重试返回原审批记录。
+      description: 仅科研助理初审、项目技术负责人终审，角色和动作权限同时检查；必须匹配recordVersion与submittedVersion，退回意见必填。退回重提回初审。五类成果在第二轮正式终审通过后即计入完成，其中论文须已录用、专利须已授权、软件著作权须取得证书；论文/专利仍保留第三轮后续补充材料双审，进入或退回补充阶段不撤销已经取得的完成计数。成功重试返回原审批记录。
       parameters: [{ $ref: '#/components/parameters/AchievementId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AchievementReviewRequest' } } } }
       responses: { '201': { description: 审批完成, content: { application/json: { schema: { $ref: '#/components/schemas/ApprovalRecord' } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '404': { description: 成果不存在, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }, '503': { description: 文件公共能力尚未接入, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } } }
@@ -345,7 +353,7 @@ paths:
     get:
       tags: [Achievements]
       operationId: getAchievementProgress
-      description: 按同项目节点sortOrder累计成果，读取当前事实而非历史时点；阶段按历史证据去重，生效须EFFECTIVE且countsToIndicator=true。只取查询节点已下发目标作分母。零目标或未下发完成率null，允许超过100%。停用成员/单位仅管理角色可见historical行，不计当前汇总。专项独立展示，不累加到基础总数；非法match_rule返回422。
+      description: 按同项目节点sortOrder累计成果，读取当前事实而非历史时点；阶段按历史证据去重，完成数以countsToIndicator=true为准，包含正式终审已通过且正在后续补充流程的论文/专利。只取查询节点已下发目标作分母。零目标或未下发完成率null，允许超过100%。停用成员/单位仅管理角色可见historical行，不计当前汇总。专项独立展示，不累加到基础总数；非法match_rule返回422。
       parameters:
         - { name: topicId, in: query, schema: { type: string } }
         - { name: nodeId, in: query, required: true, schema: { type: string } }
@@ -494,6 +502,12 @@ paths:
       operationId: listSelfFundedProjectFolders
       parameters: [{ name: projectId, in: path, required: true, schema: { type: string } }]
       responses: { '200': { description: 项目创建时冻结的文件夹清单, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ArchiveFolder' } } } } } }
+    post:
+      tags: [Archives]
+      operationId: createSelfFundedCustomFolder
+      parameters: [{ name: projectId, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [name], properties: { name: { type: string, maxLength: 200 }, required: { type: boolean, default: true } } } } } }
+      responses: { '201': { description: 已创建自定义材料文件夹, content: { application/json: { schema: { $ref: '#/components/schemas/ArchiveFolder' } } } } }
   /archive-progress:
     get:
       tags: [Archives]
@@ -631,7 +645,7 @@ components:
       properties: { user: { $ref: '#/components/schemas/User' } }
     UserUpdateRequest:
       type: object
-      properties: { username: { type: string }, name: { type: string }, phone: { type: string }, email: { type: string, format: email } }
+      properties: { username: { type: string }, roleId: { type: string }, name: { type: string }, phone: { type: string }, email: { type: string, format: email } }
     PasswordChangeRequest:
       type: object
       required: [password]
@@ -701,6 +715,10 @@ components:
       type: object
       required: [nodeId, allocations]
       properties: { nodeId: { type: string }, draftVersion: { type: integer, minimum: 0, maximum: 2147483647 }, allocations: { type: array, maxItems: 5000, items: { type: object, required: [unitId, indicatorDefinitionId, targetQuantity], properties: { unitId: { type: string }, indicatorDefinitionId: { type: string }, targetQuantity: { type: integer, minimum: 0, maximum: 2147483647 } } } } }
+    UnitAllocationPlanBatch:
+      type: object
+      required: [stages]
+      properties: { stages: { type: array, minItems: 1, maxItems: 100, items: { $ref: '#/components/schemas/UnitAllocationBatch' } } }
     Achievement:
       type: object
       required: [id, topicId, unitId, nodeId, indicatorDefinitionId, achievementType, title, status, recordVersion, submittedVersion, materials]
@@ -754,9 +772,10 @@ components:
         rows: { type: array, description: 基础指标行；TOPIC与UNIT不能相加；historical=true仅管理角色可见且不计汇总, items: { $ref: '#/components/schemas/AchievementProgressRow' } }
     AchievementStageCounts:
       type: object
-      required: [initiated, preApproved, external, formal, supplement, effective]
+      required: [initiated, submitted, preApproved, external, formal, supplement, effective]
       properties:
         initiated: { type: integer, format: int64, minimum: 0, description: 已创建的成果数 }
+        submitted: { type: integer, format: int64, minimum: 0, description: 已进入审批或后续流程的成果数，不含初始草稿 }
         preApproved: { type: integer, format: int64, minimum: 0, description: 曾有预审终审通过记录的成果数 }
         external: { type: integer, format: int64, minimum: 0, description: 曾成功登记投稿或申请的论文及专利数 }
         formal: { type: integer, format: int64, minimum: 0, description: 曾有FORMAL提交快照的成果数 }

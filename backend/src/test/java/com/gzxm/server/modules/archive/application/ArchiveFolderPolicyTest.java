@@ -25,6 +25,8 @@ class ArchiveFolderPolicyTest {
         assertThat(ArchiveFolderPolicy.canDelete(unit, 21, true, 2, "INTERNAL_TOPIC_UNIT")).isFalse();
         assertThat(ArchiveFolderPolicy.canDelete(user(1, null, "RESEARCH_ASSISTANT"), 20, true, 1,
                 "RESEARCH_ASSISTANT")).isTrue();
+        assertThat(ArchiveFolderPolicy.canDelete(user(4, null, "PROJECT_TECH_LEADER"), 20, true, 1,
+                "RESEARCH_ASSISTANT")).isTrue();
     }
 
     private CurrentUser user(long id, Long unitId, String role) {

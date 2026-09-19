@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成果进度单位提交情况原型</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1180px; background: #f3f6fb; color: #1f2329; font-family: "Microsoft YaHei", Arial, sans-serif; }
+    button, select { font: inherit; }
+    .page { padding: 24px; }
+    .card { overflow: hidden; border: 1px solid #e5eaf1; border-radius: 14px; background: #fff; box-shadow: 0 2px 10px rgba(31,35,41,.04); }
+    .head { display: flex; min-height: 70px; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 24px; border-bottom: 1px solid #edf0f5; }
+    .title { font-size: 20px; font-weight: 700; }
+    .toolbar { display: flex; align-items: center; gap: 12px; }
+    .field { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    select, .btn { height: 40px; border: 1px solid #d9dde5; border-radius: 9px; background: #fff; }
+    select { min-width: 170px; padding: 0 36px 0 13px; }
+    .topic { width: 300px; }
+    .btn { padding: 0 18px; cursor: pointer; }
+    .btn:hover { border-color: #1677ff; color: #1677ff; }
+    .body { padding: 20px 24px 28px; }
+    .summary { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .metric { min-height: 92px; padding: 14px 16px; border: 1px solid #edf0f5; border-radius: 10px; background: #fafcff; }
+    .metric.warn { background: #fffaf2; }
+    .metric.danger { background: #fff7f7; }
+    .metric-label { margin-bottom: 7px; color: #7b818c; font-size: 14px; }
+    .metric-value { font-size: 27px; font-weight: 700; }
+    .metric-value small { margin-left: 3px; color: #8a919c; font-size: 13px; font-weight: 400; }
+    .bar { height: 7px; overflow: hidden; border-radius: 8px; background: #e8ebf0; }
+    .bar > i { display: block; height: 100%; border-radius: 8px; background: #1677ff; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    th { height: 48px; padding: 0 14px; background: #f5f7fa; color: #405172; font-weight: 600; text-align: left; }
+    td { height: 58px; padding: 10px 14px; border-bottom: 1px solid #edf0f5; }
+    .clickable { cursor: pointer; }
+    .clickable:hover td { background: #fafcff; }
+    .arrow { display: inline-flex; width: 22px; justify-content: center; margin-right: 6px; color: #1677ff; transition: transform .2s; }
+    .expanded .arrow { transform: rotate(90deg); }
+    .name { font-weight: 600; }
+    .code { margin-left: 8px; padding: 2px 8px; border-radius: 5px; background: #eaf3ff; color: #1677ff; font-size: 12px; }
+    .tag { display: inline-block; padding: 4px 9px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
+    .green { background: #e8f8ee; color: #15803d; }
+    .orange { background: #fff1d6; color: #d46b08; }
+    .red { background: #fff0f0; color: #cf1322; }
+    .gray { background: #f0f2f5; color: #667085; }
+    .progress { display: flex; min-width: 150px; align-items: center; gap: 9px; }
+    .progress .bar { width: 105px; }
+    .topic-detail { display: none; }
+    .topic-detail.open { display: table-row; }
+    .topic-detail > td { padding: 0 24px 24px 54px; background: #fafcff; }
+    .detail-panel { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 11px; background: #fff; }
+    .tabs { display: flex; height: 54px; align-items: flex-end; gap: 26px; padding: 0 20px; border-bottom: 1px solid #edf0f5; }
+    .tab { height: 54px; padding: 0 3px; border: 0; border-bottom: 3px solid transparent; background: none; color: #667085; cursor: pointer; }
+    .tab.active { border-bottom-color: #1677ff; color: #1677ff; font-weight: 600; }
+    .panel { display: none; padding: 16px 18px 20px; }
+    .panel.active { display: block; }
+    .unit-detail { display: none; }
+    .unit-detail.open { display: table-row; }
+    .unit-detail > td { padding: 12px 20px 18px 52px; background: #f8fbff; }
+    .inner { overflow: hidden; border: 1px solid #e3e9f2; border-radius: 9px; background: #fff; }
+    .inner th { height: 40px; background: #f8fafc; }
+    .inner td { height: 45px; }
+    .sub { padding-left: 22px; color: #667085; }
+    .missing { color: #d4380d; font-weight: 600; }
+    .hint { margin-bottom: 14px; color: #7a818c; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="head">
+        <div class="title">成果进度</div>
+        <div class="toolbar">
+          <div class="field"><label>课题</label><select class="topic"><option>全部课题</option><option>K1 总体架构与关键技术研究</option><option>K2 核心设备研制</option></select></div>
+          <div class="field"><label>时间节点</label><select><option>第一年度</option><option selected>第二年度</option><option>第三年度</option><option>项目结项</option></select></div>
+          <button class="btn" id="refresh">↻ 刷新</button>
+        </div>
+      </header>
+      <div class="body">
+        <div class="summary">
+          <div class="metric"><div class="metric-label">累计分配指标</div><div class="metric-value">30<small>项</small></div></div>
+          <div class="metric"><div class="metric-label">成果已提交</div><div class="metric-value">18<small>项</small></div></div>
+          <div class="metric"><div class="metric-label">成果已生效</div><div class="metric-value">12<small>项</small></div></div>
+          <div class="metric"><div class="metric-label">应提交单位</div><div class="metric-value">7<small>家</small></div></div>
+          <div class="metric"><div class="metric-label">全部提交单位</div><div class="metric-value">3<small>家</small></div></div>
+          <div class="metric warn"><div class="metric-label">部分提交单位</div><div class="metric-value">2<small>家</small></div></div>
+          <div class="metric danger"><div class="metric-label">尚未提交单位</div><div class="metric-value">2<small>家</small></div></div>
+        </div>
+
+        <table>
+          <thead><tr><th style="width:31%">课题汇总</th><th>累计目标</th><th>成果已提交</th><th>已生效</th><th style="width:185px">单位提交情况</th><th>未提交单位</th></tr></thead>
+          <tbody>
+            <tr class="clickable topic-row" data-target="topic-k1"><td><span class="arrow">▶</span><span class="name">总体架构与关键技术研究</span><span class="code">K1</span></td><td>20</td><td>14</td><td>8</td><td><div class="progress"><div class="bar"><i style="width:50%"></i></div><span>2/4 家</span></div></td><td><span class="tag red">2 家未提交</span></td></tr>
+            <tr class="topic-detail" id="topic-k1"><td colspan="6"><div class="detail-panel">
+              <div class="tabs"><button class="tab active" data-panel="units-k1">按单位查看（默认）</button><button class="tab" data-panel="indicators-k1">按指标查看</button></div>
+              <div class="panel active" id="units-k1">
+                <div class="hint">只统计当前时间节点已分配指标的单位；点击单位可查看具体缺少的成果指标。</div>
+                <table><thead><tr><th style="width:23%">单位</th><th>累计目标</th><th>已提交</th><th>正式成果</th><th>已生效</th><th>提交状态</th><th style="width:210px">尚缺指标</th></tr></thead><tbody>
+                  <tr class="clickable unit-row" data-target="unit-sdu"><td><span class="arrow">▶</span><b>山东大学</b></td><td>8</td><td>8</td><td>6</td><td>5</td><td><span class="tag green">已提交</span></td><td>—</td></tr>
+                  <tr class="unit-detail" id="unit-sdu"><td colspan="7"><div class="inner"><table><thead><tr><th>成果指标</th><th>累计目标</th><th>已提交</th><th>已生效</th><th>尚缺</th></tr></thead><tbody><tr><td>学术论文总数</td><td>4</td><td>4</td><td>3</td><td>0</td></tr><tr><td>发明专利总数</td><td>2</td><td>2</td><td>1</td><td>0</td></tr><tr><td>软件著作权总数</td><td>2</td><td>2</td><td>1</td><td>0</td></tr></tbody></table></div></td></tr>
+                  <tr class="clickable unit-row" data-target="unit-tsinghua"><td><span class="arrow">▶</span><b>清华大学</b></td><td>6</td><td>3</td><td>2</td><td>1</td><td><span class="tag orange">部分提交</span></td><td><span class="missing">论文 2、专利 1</span></td></tr>
+                  <tr class="unit-detail" id="unit-tsinghua"><td colspan="7"><div class="inner"><table><thead><tr><th>成果指标</th><th>累计目标</th><th>已提交</th><th>已生效</th><th>尚缺</th></tr></thead><tbody><tr><td>学术论文总数</td><td>4</td><td>2</td><td>1</td><td class="missing">2</td></tr><tr><td class="sub">其中：中文核心期刊</td><td>2</td><td>1</td><td>1</td><td class="missing">1</td></tr><tr><td>发明专利总数</td><td>2</td><td>1</td><td>0</td><td class="missing">1</td></tr></tbody></table></div></td></tr>
+                  <tr class="clickable unit-row" data-target="unit-gx"><td><span class="arrow">▶</span><b>广西电网</b></td><td>4</td><td>0</td><td>0</td><td>0</td><td><span class="tag red">未提交</span></td><td><span class="missing">论文 2、软著 2</span></td></tr>
+                  <tr class="unit-detail" id="unit-gx"><td colspan="7"><div class="inner"><table><thead><tr><th>成果指标</th><th>累计目标</th><th>已提交</th><th>已生效</th><th>尚缺</th></tr></thead><tbody><tr><td>学术论文总数</td><td>2</td><td>0</td><td>0</td><td class="missing">2</td></tr><tr><td>软件著作权总数</td><td>2</td><td>0</td><td>0</td><td class="missing">2</td></tr></tbody></table></div></td></tr>
+                  <tr class="clickable unit-row" data-target="unit-digital"><td><span class="arrow">▶</span><b>南网数字集团</b></td><td>2</td><td>0</td><td>0</td><td>0</td><td><span class="tag red">未提交</span></td><td><span class="missing">标准规范 2</span></td></tr>
+                  <tr class="unit-detail" id="unit-digital"><td colspan="7"><div class="inner"><table><thead><tr><th>成果指标</th><th>累计目标</th><th>已提交</th><th>已生效</th><th>尚缺</th></tr></thead><tbody><tr><td>标准规范总数</td><td>2</td><td>0</td><td>0</td><td class="missing">2</td></tr></tbody></table></div></td></tr>
+                </tbody></table>
+              </div>
+              <div class="panel" id="indicators-k1">
+                <div class="hint">该视图保留现有的按指标汇总方式，专项指标作为对应总指标的子项展示。</div>
+                <table><thead><tr><th>成果指标</th><th>累计目标</th><th>已提交</th><th>已生效</th><th>尚缺</th><th>完成率</th></tr></thead><tbody><tr><td><b>学术论文总数</b></td><td>10</td><td>7</td><td>4</td><td class="missing">3</td><td>40%</td></tr><tr><td class="sub">其中：广西电网第一作者</td><td>4</td><td>3</td><td>2</td><td class="missing">1</td><td>50%</td></tr><tr><td class="sub">其中：中文核心期刊</td><td>3</td><td>2</td><td>2</td><td class="missing">1</td><td>67%</td></tr><tr><td><b>发明专利总数</b></td><td>6</td><td>4</td><td>3</td><td class="missing">2</td><td>50%</td></tr><tr><td><b>软件著作权总数</b></td><td>4</td><td>3</td><td>1</td><td class="missing">1</td><td>25%</td></tr></tbody></table>
+              </div>
+            </div></td></tr>
+            <tr class="clickable topic-row" data-target="topic-k2"><td><span class="arrow">▶</span><span class="name">核心设备研制</span><span class="code">K2</span></td><td>10</td><td>10</td><td>7</td><td><div class="progress"><div class="bar"><i style="width:100%"></i></div><span>3/3 家</span></div></td><td><span class="tag green">全部提交</span></td></tr>
+            <tr class="topic-detail" id="topic-k2"><td colspan="6"><div class="detail-panel"><div class="panel active"><div class="hint">K2 所有承担单位均已提交成果。</div><table><thead><tr><th>单位</th><th>累计目标</th><th>已提交</th><th>已生效</th><th>提交状态</th></tr></thead><tbody><tr><td>广西大学</td><td>4</td><td>4</td><td>3</td><td><span class="tag green">已提交</span></td></tr><tr><td>华南理工大学</td><td>3</td><td>3</td><td>2</td><td><span class="tag green">已提交</span></td></tr><tr><td>广西电网</td><td>3</td><td>3</td><td>2</td><td><span class="tag green">已提交</span></td></tr></tbody></table></div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll('[data-target]').forEach((row) => {
+      row.addEventListener('click', (event) => {
+        if (event.target.closest('button')) return;
+        const detail = document.getElementById(row.dataset.target);
+        const open = detail.classList.toggle('open');
+        row.classList.toggle('expanded', open);
+      });
+    });
+    document.querySelectorAll('.tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const tabs = tab.closest('.tabs');
+        const detail = tab.closest('.detail-panel');
+        tabs.querySelectorAll('.tab').forEach((item) => item.classList.remove('active'));
+        detail.querySelectorAll('.panel').forEach((item) => item.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.panel).classList.add('active');
+      });
+    });
+    document.getElementById('refresh').addEventListener('click', (event) => {
+      event.currentTarget.textContent = '↻ 刷新中';
+      setTimeout(() => { event.currentTarget.textContent = '↻ 刷新'; }, 650);
+    });
+  </script>
+</body>
+</html>

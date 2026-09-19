@@ -58,4 +58,14 @@ public class UnitAllocationController {
         audit.success("allocation.confirm","TOPIC",topicId);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/unit-allocations:confirm-plan")
+    @PreAuthorize("hasAuthority('unit-allocation.manage') and hasAuthority('unit-allocation.publish')")
+    @Operation(operationId="confirmUnitAllocationPlan")
+    public ResponseEntity<Void> confirmPlan(@PathVariable String topicId,@Valid @RequestBody AllocationPlanBatch request,
+                                            @RequestHeader(value="Idempotency-Key",required=false) String key) {
+        service.confirmPlan(TopicService.id(topicId), request, key);
+        audit.success("allocation.plan.confirm","TOPIC",topicId);
+        return ResponseEntity.noContent().build();
+    }
 }

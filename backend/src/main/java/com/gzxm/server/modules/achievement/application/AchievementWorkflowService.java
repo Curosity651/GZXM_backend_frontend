@@ -60,7 +60,11 @@ public class AchievementWorkflowService {
             row.setSubmittedVersion(row.getSubmittedVersion()+1);
             materials.markCurrent(id,"SUBMITTED");
         }
-        row.setStatus(next);row.setUpdatedBy(user.id());row.setCountsToIndicator(false);persist(row);
+        boolean alreadyEffective=row.isCountsToIndicator();
+        row.setStatus(next);row.setUpdatedBy(user.id());
+        // The optional third-round supplement review must not revoke completion obtained
+        // after the second-round formal review.
+        row.setCountsToIndicator(alreadyEffective && "SUBMIT_SUPPLEMENT".equals(request.action()));persist(row);
         var result=achievements.view(records.find(id));
         if(submitting) {
             ObjectNode payload=json.valueToTree(result);
@@ -90,12 +94,16 @@ public class AchievementWorkflowService {
         String stage=AchievementWorkflow.stage(row.getStatus());
         if(history.snapshots(id).stream().noneMatch(snapshot->snapshot.submittedVersion()==row.getSubmittedVersion() && stage.equals(snapshot.stage())))
             throw BusinessException.conflict("SUBMISSION_SNAPSHOT_REQUIRED","缺少当前阶段提交快照，不能审批");
-        String next=AchievementWorkflow.review(row.getStatus(),request.decision(),row.getAchievementType());
+        String currentStatus=row.getStatus();
+        String next=AchievementWorkflow.review(currentStatus,request.decision(),row.getAchievementType());
         if("APPROVE".equals(request.decision())) rules.validate(row,stage);
         history.approve(id,stage,level,"APPROVE".equals(request.decision())?"APPROVED":"RETURNED",request.opinion(),user.id(),row.getSubmittedVersion());
         if("RETURN".equals(request.decision())) materials.markCurrent(id,"RETURNED");
         else if("FINAL".equals(level)) materials.markCurrent(id,"APPROVED");
-        row.setStatus(next);row.setCountsToIndicator("EFFECTIVE".equals(next));row.setUpdatedBy(user.id());persist(row);
+        row.setStatus(next);
+        boolean formalCompleted="FORMAL_FINAL".equals(currentStatus) && "APPROVE".equals(request.decision());
+        row.setCountsToIndicator(row.isCountsToIndicator() || formalCompleted || "EFFECTIVE".equals(next));
+        row.setUpdatedBy(user.id());persist(row);
         var result=achievements.approvalView(history.approvals(id).getLast());
         remember(id,user.id(),key,"REVIEW",request,result);
         return new Outcome<>(result,false);

@@ -15,6 +15,9 @@ export interface TopicWrite {
   participantUnitIds: string[]; startDate?: string; endDate?: string; recordVersion?: number;
 }
 
+/** Business pages must not expose configuration drafts as selectable topics. */
+export const isBusinessTopic = (topic: ApiTopic) => topic.enabled && topic.status !== 'DRAFT';
+
 export const topicApi = {
   list: (params = new URLSearchParams({ page: '1', size: '200' })) => apiRequest<ApiPage<ApiTopic>>(`/topics?${params}`),
   get: (id: string) => apiRequest<ApiTopic>(`/topics/${id}`),

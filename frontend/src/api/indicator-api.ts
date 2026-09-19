@@ -36,4 +36,6 @@ export const indicatorApi = {
   publishAllocations: (topicId: string, nodeId: string, draftVersion: number) => apiRequest<void>(`/topics/${topicId}/unit-allocations:publish`, { method: 'POST', headers: { 'Idempotency-Key': key() }, body: JSON.stringify({ nodeId, draftVersion }) }),
   confirmAllocations: (topicId: string, nodeId: string, draftVersion: number, allocations: Array<{ unitId: string; indicatorDefinitionId: string; targetQuantity: number }>) =>
     apiRequest<void>(`/topics/${topicId}/unit-allocations:confirm`, { method: 'PUT', headers: { 'Idempotency-Key': key() }, body: JSON.stringify({ nodeId, draftVersion, allocations }) }),
+  confirmAllocationPlan: (topicId: string, stages: Array<{ nodeId: string; draftVersion: number; allocations: Array<{ unitId: string; indicatorDefinitionId: string; targetQuantity: number }> }>) =>
+    apiRequest<void>(`/topics/${topicId}/unit-allocations:confirm-plan`, { method: 'PUT', headers: { 'Idempotency-Key': key() }, body: JSON.stringify({ stages }) }),
 };

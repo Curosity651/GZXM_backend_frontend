@@ -142,6 +142,7 @@ export function RealIndicatorConfigPage() {
 interface TopicFormValues { code: string; name: string; summary?: string; leadUnitId: string; participantUnitIds: string[]; startDate?: string; endDate?: string }
 type TargetMap = Record<string, Record<string, number>>;
 type VersionMap = Record<string, number>;
+type AllocationMap = Record<string, Record<string, number | undefined>>;
 
 const groupIndicatorDefinitions = (definitions: IndicatorDefinition[]) => {
   const grouped: IndicatorDefinition[] = [];
@@ -177,10 +178,9 @@ export function RealTopicIndicatorConfigPage() {
   const [nodeId, setNodeId] = useState<string>();
   const [targetsByNode, setTargetsByNode] = useState<TargetMap>({});
   const [targetDraftVersions, setTargetDraftVersions] = useState<VersionMap>({});
-  const [allocationTargets, setAllocationTargets] = useState<IndicatorTarget[]>([]);
-  const [allocations, setAllocations] = useState<Record<string, number>>({});
-  const [allocationDraftVersion, setAllocationDraftVersion] = useState(0);
-  const [allocationAssigned, setAllocationAssigned] = useState(false);
+  const [allocationTargetsByNode, setAllocationTargetsByNode] = useState<Record<string, IndicatorTarget[]>>({});
+  const [allocationsByNode, setAllocationsByNode] = useState<AllocationMap>({});
+  const [allocationDraftVersions, setAllocationDraftVersions] = useState<VersionMap>({});
   const isResearchAssistant = user.roleCode === 'RESEARCH_ASSISTANT';
   const topicEditable = isNew || Boolean(topic?.enabled && (topic.status === 'DRAFT' || topic.status === 'ACTIVE'));
   const isCurrentTopicLead = Boolean(topic && user.memberships.some((membership) => membership.topicId === topic.id && membership.membershipType === 'LEAD' && membership.enabled));
@@ -227,31 +227,26 @@ export function RealTopicIndicatorConfigPage() {
   }, [allocationMode, canManageTargets, definitions, nodes, topic]);
   useEffect(() => { void loadTargets(); }, [loadTargets]);
 
-  const loadAllocationNode = useCallback(async () => {
-    if (!topic || !nodeId || !allocationMode) return;
+  const loadAllocationPlan = useCallback(async () => {
+    if (!topic || !nodes.length || !allocationMode) return;
     try {
-      const [effective, allocationEffective] = await Promise.all([indicatorApi.targets(topic.id, nodeId), indicatorApi.allocations(topic.id, nodeId)]);
-      const allocationDraft = canManageAllocations ? await indicatorApi.allocations(topic.id, nodeId, 'draft') : allocationEffective;
-      setAllocationTargets(effective.rows); setAllocationDraftVersion(allocationDraft.draftVersion); setAllocationAssigned(allocationEffective.rows.length > 0);
-      setAllocations(Object.fromEntries(allocationEffective.rows.map((row) => [`${row.unitId}:${row.indicatorDefinitionId}`, row.targetQuantity])));
+      const loaded = await Promise.all(nodes.map(async (node) => {
+        const [targets, effective, draft] = await Promise.all([
+          indicatorApi.targets(topic.id, node.id), indicatorApi.allocations(topic.id, node.id),
+          canManageAllocations ? indicatorApi.allocations(topic.id, node.id, 'draft') : Promise.resolve({ rows: [], draftVersion: 0 }),
+        ]);
+        return { nodeId: node.id, targets: targets.rows, effective: effective.rows, draftVersion: draft.draftVersion };
+      }));
+      setAllocationTargetsByNode(Object.fromEntries(loaded.map((item) => [item.nodeId, item.targets])));
+      setAllocationsByNode(Object.fromEntries(loaded.map((item) => [item.nodeId,
+        Object.fromEntries(item.effective.map((row) => [`${row.unitId}:${row.indicatorDefinitionId}`, row.targetQuantity]))])));
+      setAllocationDraftVersions(Object.fromEntries(loaded.map((item) => [item.nodeId, item.draftVersion])));
     } catch (error) { message.error(error instanceof Error ? error.message : '单位指标加载失败'); }
-  }, [allocationMode, canManageAllocations, nodeId, topic]);
-  useEffect(() => { void loadAllocationNode(); }, [loadAllocationNode]);
+  }, [allocationMode, canManageAllocations, nodes, topic]);
+  useEffect(() => { void loadAllocationPlan(); }, [loadAllocationPlan]);
 
   const validateTargets = () => {
     if (!nodes.length) { message.warning('请先配置并启用至少一个时间节点'); return false; }
-    for (const definition of definitions) {
-      let previous = 0;
-      for (const node of nodes) {
-        const value = targetsByNode[node.id]?.[definition.id] ?? 0;
-        if (value < previous) {
-          const previousNode = nodes[nodes.indexOf(node) - 1];
-          message.warning(`${node.name}的“${definition.name}”为 ${value}，不能低于前序节点“${previousNode?.name ?? ''}”的 ${previous}`);
-          return false;
-        }
-        previous = value;
-      }
-    }
     for (const node of nodes) {
       for (const special of definitions.filter((item) => item.category === 'SPECIAL')) {
         const base = definitions.find((item) => item.category === 'BASE' && item.achievementType === special.achievementType);
@@ -309,19 +304,53 @@ export function RealTopicIndicatorConfigPage() {
 
   const activeMembers = (topic?.members ?? []).filter((member) => member.enabled);
   const eligibleTopicUnits = units.filter((unit) => unit.enabled && unit.topicUnitEligible);
+  const allocationIssue = () => {
+    for (const node of nodes) {
+      const targetMap = Object.fromEntries((allocationTargetsByNode[node.id] ?? []).map((target) => [target.indicatorDefinitionId, target.targetQuantity]));
+      if (!Object.keys(targetMap).length) return `${node.name}的课题指标尚未提交`;
+      const stageValues = allocationsByNode[node.id] ?? {};
+      for (const definition of definitions) {
+        for (const member of activeMembers) {
+          if (stageValues[`${member.unitId}:${definition.id}`] === undefined)
+            return `${node.name} / ${unitMap[member.unitId] ?? member.unitName} / ${definition.name}尚未填写`;
+        }
+        const sum = activeMembers.reduce((total, member) => total + (stageValues[`${member.unitId}:${definition.id}`] ?? 0), 0);
+        if (sum !== (targetMap[definition.id] ?? 0))
+          return `${node.name} / ${definition.name}：要求分配 ${targetMap[definition.id] ?? 0}${definition.unit}，当前已分配 ${sum}${definition.unit}`;
+      }
+      for (const special of definitions.filter((item) => item.category === 'SPECIAL')) {
+        const base = definitions.find((item) => item.category === 'BASE' && item.achievementType === special.achievementType);
+        if (!base) continue;
+        for (const member of activeMembers) {
+          const specialValue = stageValues[`${member.unitId}:${special.id}`] ?? 0;
+          const baseValue = stageValues[`${member.unitId}:${base.id}`] ?? 0;
+          if (specialValue > baseValue)
+            return `${node.name} / ${unitMap[member.unitId] ?? member.unitName} / ${special.name}为 ${specialValue}，不能超过${base.name}总数 ${baseValue}`;
+        }
+      }
+    }
+    return undefined;
+  };
   const confirmAllocations = () => {
-    if (!topic || !nodeId || !canManageAllocations) return;
-    const rows = activeMembers.flatMap((member) => definitions.map((definition) => ({ unitId: member.unitId, indicatorDefinitionId: definition.id, targetQuantity: allocations[`${member.unitId}:${definition.id}`] ?? 0 })));
-    const selectedNode = nodes.find((node) => node.id === nodeId);
+    if (!topic || !canManageAllocations) return;
+    const issue = allocationIssue();
+    if (issue) { message.warning(issue); return; }
+    const stages = nodes.map((node) => ({
+      nodeId: node.id, draftVersion: allocationDraftVersions[node.id] ?? 0,
+      allocations: activeMembers.flatMap((member) => definitions.map((definition) => ({
+        unitId: member.unitId, indicatorDefinitionId: definition.id,
+        targetQuantity: allocationsByNode[node.id]?.[`${member.unitId}:${definition.id}`] ?? 0,
+      }))),
+    }));
     Modal.confirm({
-      title: allocationAssigned ? '确认更新指标分配' : '确认提交指标分配',
-      content: `确认提交“${selectedNode?.name ?? '当前时间节点'}”的单位指标分配吗？提交后立即生效。`,
-      okText: '确认分配', cancelText: '取消',
+      title: '确认提交全部分配方案',
+      content: '确认一次性提交全部时间阶段的单位指标分配方案吗？提交后立即生效。',
+      okText: '提交全部分配方案', cancelText: '取消',
       onOk: async () => {
         setSaving(true);
         try {
-          await indicatorApi.confirmAllocations(topic.id, nodeId, allocationDraftVersion, rows);
-          message.success('单位指标分配已确认并生效'); await loadAllocationNode();
+          await indicatorApi.confirmAllocationPlan(topic.id, stages);
+          message.success('全部时间阶段的单位指标分配已确认并生效'); await loadAllocationPlan();
         } catch (error) { message.error(error instanceof Error ? error.message : '单位指标分配失败'); throw error; }
         finally { setSaving(false); }
       },
@@ -334,28 +363,57 @@ export function RealTopicIndicatorConfigPage() {
   const unitMap = Object.fromEntries(units.map((unit) => [unit.id, unit.name]));
   const currentTargets = nodeId ? targetsByNode[nodeId] ?? {} : {};
   const groupedDefinitions = groupIndicatorDefinitions(definitions);
+  const allocationTargets = nodeId ? allocationTargetsByNode[nodeId] ?? [] : [];
+  const allocations = nodeId ? allocationsByNode[nodeId] ?? {} : {};
   const allocationTargetMap = Object.fromEntries(allocationTargets.map((target) => [target.indicatorDefinitionId, target]));
   const allocationRows = groupedDefinitions.map((definition) => allocationTargetMap[definition.id]
     ?? ({ indicatorDefinitionId: definition.id, targetQuantity: 0 } as IndicatorTarget));
+  const selectedNodeIndex = nodes.findIndex((node) => node.id === nodeId);
+  const cumulativeTarget = (definitionId: string) => nodes.slice(0, selectedNodeIndex + 1)
+    .reduce((sum, node) => sum + (targetsByNode[node.id]?.[definitionId] ?? 0), 0);
+  const cumulativeAllocation = (unitId: string, definitionId: string) => nodes.slice(0, selectedNodeIndex + 1)
+    .reduce((sum, node) => sum + (allocationsByNode[node.id]?.[`${unitId}:${definitionId}`] ?? 0), 0);
+  const stageComplete = (stageId: string) => {
+    const targets = Object.fromEntries((allocationTargetsByNode[stageId] ?? []).map((target) => [target.indicatorDefinitionId, target.targetQuantity]));
+    const values = allocationsByNode[stageId] ?? {};
+    return Object.keys(targets).length > 0 && definitions.every((definition) =>
+      activeMembers.every((member) => values[`${member.unitId}:${definition.id}`] !== undefined)
+      && activeMembers.reduce((sum, member) => sum + (values[`${member.unitId}:${definition.id}`] ?? 0), 0) === (targets[definition.id] ?? 0));
+  };
+  const completedStages = nodes.filter((node) => stageComplete(node.id)).length;
 
   if (allocationMode) return <div className="topic-indicator-editor">
     <Button style={{ marginBottom: 16 }} icon={<ArrowLeftOutlined />} onClick={() => navigate('/indicator')}>返回课题列表</Button>
-    <Row gutter={[18, 18]}>
-      <Col span={24}><Card extra={<Space><Tag color={allocationAssigned ? 'green' : 'default'}>{allocationAssigned ? '已分配' : '未分配'}</Tag><span>时间节点</span><Select style={{ width: 180 }} value={nodeId} onChange={setNodeId} options={nodes.map((node) => ({ value: node.id, label: node.name }))} />
-        {canManageAllocations && <Button type="primary" loading={saving} onClick={confirmAllocations}>提交分配</Button>}</Space>}>
-        {!canManageAllocations && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="当前账号为只读查看，或课题已暂停、结题、停用。" />}
-        {!nodes.length && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="科研助理尚未配置时间节点，暂时无法分配指标。" />}
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} message="专项指标是对应成果总数的子集；同一成果可同时满足多个专项条件，但在成果总数中仅计算一次。" />
-        <Table size="small" pagination={false} rowKey="indicatorDefinitionId" dataSource={allocationRows} scroll={{ x: 800 }} columns={[
-          { title: '成果指标', fixed: 'left', width: 300, render: (_: unknown, row: IndicatorTarget) => {
-            const definition = definitions.find((item) => item.id === row.indicatorDefinitionId);
-            return definition ? indicatorName(definition) : row.indicatorDefinitionId;
-          } },
-          ...activeMembers.map((member: TopicMember) => ({ title: unitMap[member.unitId] ?? member.unitName, width: 150, render: (_: unknown, row: IndicatorTarget) => <InputNumber min={0} precision={0} disabled={!canManageAllocations} value={allocations[`${member.unitId}:${row.indicatorDefinitionId}`] ?? 0} onChange={(value) => setAllocations({ ...allocations, [`${member.unitId}:${row.indicatorDefinitionId}`]: value ?? 0 })} /> })),
-          { title: '课题累计目标', dataIndex: 'targetQuantity', width: 120 },
-        ]} />
-      </Card></Col>
-    </Row>
+    <Card title="单位指标分配" extra={<Typography.Text type="secondary">方案状态：<Typography.Text strong type={completedStages === nodes.length && nodes.length ? 'success' : 'warning'}>{completedStages === nodes.length && nodes.length ? '已完成' : '未完成'}　{completedStages}/{nodes.length} 阶段完成</Typography.Text></Typography.Text>}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
+        <Space wrap>{nodes.map((node) => <Button key={node.id} type={node.id === nodeId ? 'primary' : 'default'} onClick={() => setNodeId(node.id)}>
+          {node.name} {stageComplete(node.id) ? '✓' : '!'}
+        </Button>)}</Space>
+        {canManageAllocations && <Button type="primary" loading={saving} onClick={confirmAllocations}>提交全部分配方案</Button>}
+      </div>
+      {!canManageAllocations && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="当前账号为只读查看，或课题已暂停、结题、停用。" />}
+      {!nodes.length && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="科研助理尚未配置时间节点，暂时无法分配指标。" />}
+      <div style={{ marginBottom: 16 }}><Typography.Title level={5} style={{ margin: 0 }}>当前阶段：{nodes.find((node) => node.id === nodeId)?.name ?? '-'}</Typography.Title>
+        <Typography.Text type="secondary">课题本阶段目标与各单位分配情况</Typography.Text></div>
+      <Table size="small" bordered pagination={false} rowKey="indicatorDefinitionId" dataSource={allocationRows} scroll={{ x: Math.max(1000, 340 + activeMembers.length * 220) }} columns={[
+        { title: '成果指标', fixed: 'left', width: 260, render: (_: unknown, row: IndicatorTarget) => {
+          const definition = definitions.find((item) => item.id === row.indicatorDefinitionId);
+          return definition ? indicatorName(definition) : row.indicatorDefinitionId;
+        } },
+        ...activeMembers.map((member: TopicMember) => ({ title: unitMap[member.unitId] ?? member.unitName, children: [
+          { title: '本阶段', width: 110, render: (_: unknown, row: IndicatorTarget) => <InputNumber min={0} precision={0} disabled={!canManageAllocations || !nodeId}
+            placeholder="未填" value={allocations[`${member.unitId}:${row.indicatorDefinitionId}`]}
+            onChange={(value) => nodeId && setAllocationsByNode({ ...allocationsByNode, [nodeId]: { ...allocations, [`${member.unitId}:${row.indicatorDefinitionId}`]: value ?? undefined } })} /> },
+          { title: '累计', width: 90, render: (_: unknown, row: IndicatorTarget) => <Typography.Text style={{ color: '#1677ff', fontWeight: 600 }}>{cumulativeAllocation(member.unitId, row.indicatorDefinitionId)}</Typography.Text> },
+        ] })),
+        { title: '此阶段分配情况', fixed: 'right', width: 170, render: (_: unknown, row: IndicatorTarget) => {
+          const filled = activeMembers.every((member) => allocations[`${member.unitId}:${row.indicatorDefinitionId}`] !== undefined);
+          const assigned = activeMembers.reduce((sum, member) => sum + (allocations[`${member.unitId}:${row.indicatorDefinitionId}`] ?? 0), 0);
+          const complete = filled && assigned === row.targetQuantity;
+          return <Typography.Text type={complete ? 'success' : 'warning'}>{complete ? '已完成' : '未完成'} {assigned}/{row.targetQuantity}</Typography.Text>;
+        } },
+      ]} />
+    </Card>
   </div>;
 
   return <div className="topic-indicator-editor">
@@ -377,14 +435,14 @@ export function RealTopicIndicatorConfigPage() {
           <Form.Item name="summary" label="研究内容摘要"><Input.TextArea rows={4} /></Form.Item>
         </Form>
       </Card></Col>
-      <Col span={14}><Card title="课题总体指标" extra={<Space><span>累计时间节点</span><Select style={{ width: 180 }} value={nodeId} onChange={setNodeId} options={nodes.map((node) => ({ value: node.id, label: node.name }))} /></Space>}>
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} message="各时间节点填写累计完成要求，后续节点不得低于前序节点。专项指标是对应成果总数的子集，同一成果可同时满足多个专项条件。" />
+      <Col span={14}><Card title="课题总体指标" extra={<Space><span>时间阶段</span><Select style={{ width: 180 }} value={nodeId} onChange={setNodeId} options={nodes.map((node) => ({ value: node.id, label: node.name }))} /></Space>}>
+        <Alert type="info" showIcon style={{ marginBottom: 12 }} message={`当前填写“${nodes.find((node) => node.id === nodeId)?.name ?? '当前阶段'}”内需要完成的指标，右侧累计值由系统自动计算。`} />
         <Table size="small" pagination={false} rowKey="id" dataSource={groupedDefinitions} columns={[
           { title: '成果指标', render: (_: unknown, row: IndicatorDefinition) => indicatorName(row) },
-          { title: '口径', width: 90, render: (_: unknown, row: IndicatorDefinition) => <Tag color={row.category === 'SPECIAL' ? 'purple' : 'blue'}>{row.category === 'SPECIAL' ? '其中' : '总数'}</Tag> },
           { title: '单位', dataIndex: 'unit', width: 70 },
-          { title: '累计目标', width: 130, render: (_: unknown, row: IndicatorDefinition) => <InputNumber min={0} precision={0} disabled={!canManageTargets || !nodeId} value={currentTargets[row.id] ?? 0}
+          { title: '本阶段指标', width: 130, render: (_: unknown, row: IndicatorDefinition) => <InputNumber min={0} precision={0} disabled={!canManageTargets || !nodeId} value={currentTargets[row.id] ?? 0}
             onChange={(value) => nodeId && setTargetsByNode({ ...targetsByNode, [nodeId]: { ...currentTargets, [row.id]: value ?? 0 } })} /> },
+          { title: '截至本阶段累计', width: 150, render: (_: unknown, row: IndicatorDefinition) => <Typography.Text style={{ color: '#1677ff', fontWeight: 600 }}>{cumulativeTarget(row.id)}</Typography.Text> },
         ]} />
       </Card></Col>
     </Row>

@@ -34,7 +34,7 @@
 | GET | `/users` | 按用户名、角色、状态分页查询用户 | 系统管理员 |
 | POST | `/users` | 创建用户并指定角色、联系人信息和登录密码；课题单位账号由后端按用户名自动建立同名单位 | 系统管理员；单位内外属性由角色决定，同一单位只能有一个有效课题单位账号 |
 | GET | `/users/{userId}` | 查看用户详情 | 系统管理员 |
-| PATCH | `/users/{userId}` | 修改用户名、联系人、手机和邮箱 | 系统管理员；不允许在编辑时修改角色 |
+| PATCH | `/users/{userId}` | 修改用户名、角色、联系人、手机和邮箱 | 系统管理员；角色变更后旧会话失效，平台角色与课题单位角色不能直接互换，管理员不能修改自己的角色 |
 | PUT | `/users/{userId}/status` | 启用或停用账号 | 系统管理员；不物理删除账号 |
 | PUT | `/users/{userId}/password` | 管理员指定新密码，并使该账号旧会话失效 | 系统管理员 |
 | GET | `/roles` | 查询五类固定角色 | 系统管理员 |
@@ -77,23 +77,24 @@
 | PUT | `/time-nodes/{nodeId}` | 编辑未锁定的时间节点 | 科研助理 |
 | DELETE | `/time-nodes/{nodeId}` | 删除未被指标、分配、发布历史或成果引用的时间节点 | 科研助理 |
 | GET | `/indicator-definitions` | 查询五类成果指标和专项指标定义 | 有指标页面权限的用户 |
-| GET | `/topics/{topicId}/indicator-targets` | 按时间节点查看课题累计指标 | 当前课题成员及管理角色 |
-| PUT | `/topics/{topicId}/indicator-targets` | 保存课题累计指标草稿 | 科研助理 |
-| POST | `/topics/{topicId}/indicator-targets:publish` | 正式下发课题累计指标 | 科研助理 |
+| GET | `/topics/{topicId}/indicator-targets` | 按时间节点查看课题本阶段指标 | 当前课题成员及管理角色 |
+| PUT | `/topics/{topicId}/indicator-targets` | 保存课题本阶段指标草稿 | 科研助理 |
+| POST | `/topics/{topicId}/indicator-targets:publish` | 正式下发课题本阶段指标 | 科研助理 |
 | GET | `/topics/{topicId}/unit-allocations` | 按时间节点查看单位指标分配 | 牵头单位看全课题，承担单位看本单位 |
 | PUT | `/topics/{topicId}/unit-allocations` | 保存各单位累计指标分配 | 当前课题牵头单位 |
 | POST | `/topics/{topicId}/unit-allocations:publish` | 正式下发单位指标 | 当前课题牵头单位；单位合计不得低于课题要求 |
 | PUT | `/topics/{topicId}/unit-allocations:confirm` | 一次确认单位指标并立即生效，失败整体回滚 | 当前课题牵头单位 |
+| PUT | `/topics/{topicId}/unit-allocations:confirm-plan` | 一次提交全部时间阶段的完整分配方案，失败整体回滚 | 当前课题牵头单位 |
 
 指标目录补充：`/time-nodes` 与 `/indicator-definitions` 检查 `page:topic-indicator` 权限，只返回启用目录项。节点取唯一有效项目并按 `sortOrder/id` 排序；项目配置不唯一返回 409。目录尚未初始化返回空数组，不自动创建业务配置。
 
-课题指标第 4 步：GET 默认读取生效目标；`view=draft` 仅限有 `indicator.manage` 的科研助理，并返回 `X-Draft-Version`。PUT 完整替换草稿，首次版本 0，后续 `draftVersion` 必须匹配；空数组清空草稿，不影响生效数据。发布必须携带 `draftVersion` 与 `Idempotency-Key`，保留历史；同键同请求重放 204，不同请求 409。数量非负、节点累计不递减、专项不超过同类基础。已发布目标的删除或降额草稿暂不能下发，须后续接入完成量与分配调整约束。见 [验收说明](../collaboration/b-contracts/topic-step4.md)。
+课题指标第 4 步：GET 默认读取生效目标；`view=draft` 仅限有 `indicator.manage` 的科研助理，并返回 `X-Draft-Version`。每个节点保存的是本阶段指标，累计值由系统按节点顺序求和；专项指标分别不得超过同阶段的对应基础指标。
 
-单位分配第 5 步：GET 默认读生效值，管理角色/当前牵头看全课题，承担单位只看本单位；`view=draft` 仅具有维护权限的当前牵头可读。PUT 按节点完整替换草稿，`draftVersion` 做编辑版本校验；发布须提交版本与幂等键。发布要求覆盖全部有效启用成员（含牵头）及全部生效指标，每项合计不得低于课题要求，允许超额，零分配显式填 0。课题指标版本变化后须重新核对保存；当前不能下发降低有效成员既有分配的草稿。详见 [第 5 步验收](../collaboration/b-contracts/topic-step5.md)。
+单位分配第 5 步：每个节点保存本阶段分配，累计值按节点顺序求和。牵头单位通过 `confirm-plan` 一次提交全部启用阶段；每阶段必须覆盖全部有效成员和指标，允许显式填 0，单位合计必须等于该阶段课题目标，任一步失败时全部回滚。
 
 ## 6. 成果管理
 
-第 7 步已实现列表、创建、详情、编辑、动作、审批、快照七个接口。五类均先两级预审，论文/专利再经正式及补充两级审批后计数；其他三类正式终审生效。编辑仅限草稿、退回和待补充；动作携带 recordVersion，审批携带 recordVersion + submittedVersion，并使用 Idempotency-Key。详情含 approvals，pendingForMe 按当前审批级别过滤。正式/补充提交及非空附件仍等待 A 的文件公开能力，未接入返回 503 并回滚；已有当前材料的记录查询也受限。详见[第 7 步验收说明](../collaboration/b-contracts/achievement-step7.md)。
+第 7 步已实现列表、创建、详情、编辑、动作、审批、快照七个接口。五类均先两级预审，并在第二轮正式成果双审通过后计入完成；论文须已录用、专利须已授权、软件著作权须取得证书。论文/专利仍保留第三轮后续补充材料双审，补充提交或退回不撤销第二轮已经取得的完成计数。编辑仅限草稿、退回和待补充；动作携带 recordVersion，审批携带 recordVersion + submittedVersion，并使用 Idempotency-Key。详情含 approvals，pendingForMe 按当前审批级别过滤。详见[第 7 步验收说明](../collaboration/b-contracts/achievement-step7.md)。
 
 
 
@@ -131,11 +132,11 @@
 |---|---|---|---|
 | GET | `/archive/national` | 查询“课题—单位”国家材料目录入口 | 课题单位及管理角色；按课题关系过滤 |
 | GET | `/archive/national/topics/{topicId}/units/{unitId}/folders` | 查看指定课题单位的国家材料文件夹 | 单位看本单位；牵头单位可查看所牵头课题全部单位 |
-| POST | `/archive/national/topics/{topicId}/units/{unitId}/folders` | 新建自定义国家材料文件夹 | 只能为本单位清单新增 |
-| DELETE | `/archive/folders/{folderId}` | 删除自定义文件夹 | 仅创建单位；预置文件夹不可删除 |
+| POST | `/archive/national/topics/{topicId}/units/{unitId}/folders` | 新建自定义国家材料文件夹 | 单位维护本单位；系统管理员、科研助理和项目技术负责人可维护可见目录 |
+| DELETE | `/archive/folders/{folderId}` | 删除自定义文件夹 | 单位维护本单位；管理角色可维护可见目录；预置文件夹不可删除 |
 | GET | `/archive/folders/{folderId}/files` | 查看文件夹中的文件 | 对该文件夹有查看权限的用户 |
-| POST | `/archive/folders/{folderId}/files` | 将已经上传的文件放入文件夹 | 只能操作本单位文件夹 |
-| DELETE | `/archive/folders/{folderId}/files/{fileId}` | 从文件夹删除文件 | 只能操作本单位文件夹；无审批流程 |
+| POST | `/archive/folders/{folderId}/files` | 将已经上传的文件放入文件夹 | 单位维护本单位；系统管理员、科研助理和项目技术负责人可维护可见目录 |
+| DELETE | `/archive/folders/{folderId}/files/{fileId}` | 从文件夹删除文件 | 单位维护本单位；管理角色可维护可见目录；无审批流程 |
 
 ## 9. 配套自筹材料
 
@@ -146,6 +147,7 @@
 | GET | `/self-funded-projects/{projectId}` | 查看自筹项目详情 | 项目所属内部单位；内部牵头单位可查看所牵头课题全部项目 |
 | PUT | `/self-funded-projects/{projectId}` | 修改自筹项目基本信息 | 仅项目所属单位 |
 | GET | `/self-funded-projects/{projectId}/folders` | 查看自筹项目材料文件夹 | 项目所属单位及有权查看的内部牵头单位 |
+| POST | `/self-funded-projects/{projectId}/folders` | 新增自筹项目自定义材料文件夹 | 项目所属内部单位；系统管理员、科研助理和项目技术负责人可维护可见项目 |
 | GET | `/archive-progress` | 汇总国家材料和自筹材料归档进度 | 科研助理、项目技术负责人 |
 
 自筹文件夹中的上传、查看和删除复用国家材料的通用文件夹接口，不再建立一套重复接口。

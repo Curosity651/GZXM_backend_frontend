@@ -23,7 +23,7 @@ public final class SystemDtos {
 
     public record CreateUserResponse(UserView user) {}
 
-    public record UpdateUserRequest(String username, String name, String phone, @Email String email) {}
+    public record UpdateUserRequest(String username, String roleId, String name, String phone, @Email String email) {}
     public record StatusRequest(boolean enabled) {}
     public record PasswordChangeRequest(@NotBlank @Size(min = 8, max = 72) String password) {}
 

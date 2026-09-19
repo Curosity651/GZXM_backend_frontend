@@ -3,6 +3,7 @@ package com.gzxm.server.modules.achievement.application;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gzxm.server.common.exception.BusinessException;
+import com.gzxm.server.common.security.CurrentUser;
 import com.gzxm.server.common.security.SecurityContextFacade;
 import com.gzxm.server.modules.achievement.api.AchievementProgressDtos.*;
 import com.gzxm.server.modules.achievement.repository.AchievementProgressMapper;
@@ -20,6 +21,11 @@ import java.util.stream.Collectors;
 @Transactional(readOnly=true)
 public class DefaultAchievementProgressQuery implements AchievementProgressQuery {
     private static final List<String> TYPES=List.of("PAPER","PATENT","COPYRIGHT","STANDARD","TALENT");
+    private static final Set<String> ASSISTANT_VISIBLE_STATES=Set.of(
+            "PRE_INITIAL","PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_INITIAL","FORMAL_FINAL",
+            "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
+    private static final Set<String> LEADER_VISIBLE_STATES=Set.of(
+            "PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_FINAL","EFFECTIVE");
     private final IndicatorProgressQuery indicators;
     private final TopicQueryService topics;
     private final AchievementProgressMapper mapper;
@@ -38,7 +44,8 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
                 if(!user.isGlobalRole() && !unitId.equals(user.unitId()) && !topics.isLeadUnit(topic.id(),user.unitId())) continue;
                 if(topics.listMembers(topic.id(),true).stream().noneMatch(member->member.unitId()==unitId)) continue;
             }
-            var context=indicators.targets(topic.id(),nodeId,unitId);var facts=facts(context);
+            var context=indicators.targets(topic.id(),nodeId,unitId);
+            var facts=facts(context).stream().filter(fact->visibleTo(user,fact,topic.id())).toList();
             var historical=context.units().stream().filter(Unit::historical).map(Unit::id).collect(Collectors.toSet());
             var activeFacts=facts.stream().filter(fact->!historical.contains(fact.unitId())).toList();
             totalFacts.addAll(activeFacts);
@@ -77,6 +84,12 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
         if(context.units().isEmpty()) return List.of();
         return mapper.facts(context.topicId(),context.cumulativeNodeIds(),context.units().stream().map(Unit::id).toList());
     }
+    private boolean visibleTo(CurrentUser user,Fact fact,long topicId) {
+        if("RESEARCH_ASSISTANT".equals(user.roleCode())) return ASSISTANT_VISIBLE_STATES.contains(fact.status());
+        if("PROJECT_TECH_LEADER".equals(user.roleCode())) return LEADER_VISIBLE_STATES.contains(fact.status());
+        if(user.isGlobalRole() || Objects.equals(user.unitId(),fact.unitId())) return true;
+        return topics.isLeadUnit(topicId,user.unitId()) && !Set.of("DRAFT","FORMAL_DRAFT").contains(fact.status());
+    }
     private boolean matches(Fact fact,Definition definition,JsonNode detail) {
         if(!definition.achievementType().equals(fact.achievementType())) return false;
         // A fact contributes once to its base total. Special rows are independent subsets, so the
@@ -90,9 +103,9 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
         return new Row(scope,Long.toString(context.topicId()),unit==null?null:unit.toString(),Long.toString(context.node().id()),Long.toString(definition.id()),definition.achievementType(),
                 target,version,target!=null,hasTarget,rate,historical,counts);
     }
-    private static boolean effective(Fact fact) {return "EFFECTIVE".equals(fact.status()) && fact.countsToIndicator();}
+    private static boolean effective(Fact fact) {return fact.countsToIndicator();}
     private Stages stages(List<Fact> facts) {
-        return new Stages(facts.size(),facts.stream().filter(Fact::preApproved).count(),
+        return new Stages(facts.size(),facts.stream().filter(fact->!"DRAFT".equals(fact.status())).count(),facts.stream().filter(Fact::preApproved).count(),
                 facts.stream().filter(fact->Set.of("PAPER","PATENT").contains(fact.achievementType()) && fact.external()).count(),
                 facts.stream().filter(Fact::formal).count(),facts.stream().filter(Fact::supplement).count(),facts.stream().filter(DefaultAchievementProgressQuery::effective).count());
     }

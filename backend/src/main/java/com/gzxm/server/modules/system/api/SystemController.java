@@ -2,11 +2,14 @@ package com.gzxm.server.modules.system.api;
 
 import com.gzxm.server.common.api.PageResult;
 import com.gzxm.server.common.audit.AuditService;
+import com.gzxm.server.common.exception.BusinessException;
+import com.gzxm.server.common.security.CurrentUser;
 import com.gzxm.server.modules.system.api.SystemDtos.*;
 import com.gzxm.server.modules.system.application.SystemService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,7 +45,11 @@ public class SystemController {
 
     @PatchMapping("/users/{userId}")
     @PreAuthorize("hasAuthority('system.manage')")
-    UserView updateUser(@PathVariable long userId, @Valid @RequestBody UpdateUserRequest request) {
+    UserView updateUser(@PathVariable long userId, @Valid @RequestBody UpdateUserRequest request,
+                        @AuthenticationPrincipal CurrentUser currentUser) {
+        if (currentUser.id() == userId && request.roleId() != null
+                && !request.roleId().trim().equals(service.getUser(userId).roleId()))
+            throw BusinessException.forbidden("SELF_ROLE_CHANGE_DENIED", "不能修改当前登录管理员自己的角色");
         UserView result = service.updateUser(userId, request); audit.success("system.user.update", "USER", String.valueOf(userId)); return result;
     }
 

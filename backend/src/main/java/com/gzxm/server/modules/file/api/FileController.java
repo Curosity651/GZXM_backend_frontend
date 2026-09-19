@@ -27,14 +27,14 @@ public class FileController {
 
     @PostMapping("/upload-tickets")
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('file.upload')")
+    @PreAuthorize("hasAuthority('file.upload') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
     @Operation(operationId = "createUploadTicket")
     UploadTicket createTicket(@Valid @RequestBody UploadTicketRequest request) {
         UploadTicket result = service.createTicket(request); audit.success("file.ticket.create", "FILE", result.fileId()); return result;
     }
 
     @PostMapping("/{fileId}:complete")
-    @PreAuthorize("hasAuthority('file.upload')")
+    @PreAuthorize("hasAuthority('file.upload') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
     @Operation(operationId = "completeUpload")
     FileView complete(@PathVariable long fileId) {
         FileView result = service.complete(fileId); audit.success("file.upload.complete", "FILE", String.valueOf(fileId)); return result;
@@ -52,7 +52,7 @@ public class FileController {
 
     @PutMapping("/{fileId}/content")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('file.upload')")
+    @PreAuthorize("hasAuthority('file.upload') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
     @Operation(operationId = "uploadFileContent")
     void uploadContent(@PathVariable long fileId, @RequestParam long expires, @RequestParam String signature,
                        @RequestHeader("Content-Type") String contentType, @RequestBody byte[] content) {

@@ -97,7 +97,7 @@ class AchievementProgressIntegrationTest {
         for(int version:List.of(1,2)) jdbc.update("INSERT INTO approval_record(business_type,business_id,stage,approval_level,decision,operator_id,submitted_version) VALUES('ACHIEVEMENT',1,'PRE_REVIEW','FINAL','APPROVED',9000,?)",version);
         jdbc.update("INSERT INTO achievement_workflow_operation(achievement_id,actor_id,request_key,operation_kind,request_json,response_json) VALUES(1,9000,'synthetic-register','ACTION',?, '{}')","{\"action\":\"REGISTER_EXTERNAL_SUBMISSION\"}");
         var result=statistics("INTERNAL_TOPIC_UNIT",2L,"nodeId=1&topicId=1").path("baseStages");
-        for(String stage:List.of("initiated","preApproved","external","formal","supplement")) assertThat(result.path(stage).asLong()).isEqualTo(1);
+        for(String stage:List.of("initiated","submitted","preApproved","external","formal","supplement")) assertThat(result.path(stage).asLong()).isEqualTo(1);
         assertThat(result.path("effective").asLong()).isZero();
     }
     @Test void totalsRequireEffectiveAndCountFlagAndNeverGuessMissingHistory() throws Exception {
@@ -105,7 +105,15 @@ class AchievementProgressIntegrationTest {
         var result=statistics("INTERNAL_TOPIC_UNIT",2L,"nodeId=1");
         assertThat(result.path("baseTotals").path("PAPER").asLong()).isEqualTo(1);
         assertThat(result.path("baseStages").path("initiated").asLong()).isEqualTo(3);
+        assertThat(result.path("baseStages").path("submitted").asLong()).isEqualTo(2);
         assertThat(result.path("baseStages").path("preApproved").asLong()).isZero();
+    }
+    @Test void progressUsesTheSameRoleVisibilityAsAchievementLists() throws Exception {
+        fact(1,2,1,1,"DRAFT",false,"{}");fact(2,2,1,1,"PRE_INITIAL",false,"{}");
+        assertThat(statistics("SYSTEM_ADMIN",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
+        assertThat(statistics("RESEARCH_ASSISTANT",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(1);
+        assertThat(statistics("PROJECT_TECH_LEADER",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isZero();
+        assertThat(statistics("INTERNAL_TOPIC_UNIT",2L,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
     }
     @Test void overlappingSpecialsDoNotInflateBaseAndBooleanStringsDoNotMatch() throws Exception {
         special(6,"PAPER","isChineseCoreJournal");special(7,"PAPER","isPowerGridFirstAuthor");special(8,"PATENT","isPowerGridFirstApplicant");special(9,"COPYRIGHT","isPowerGridFirstCompleter");

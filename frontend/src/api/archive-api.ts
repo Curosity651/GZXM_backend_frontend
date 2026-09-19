@@ -20,5 +20,6 @@ export const archiveApi = {
   createProject: (data: SelfFundedWrite) => apiRequest<ApiSelfFundedProject>('/self-funded-projects', { method: 'POST', body: JSON.stringify(data) }),
   updateProject: (id: string, data: SelfFundedWrite) => apiRequest<ApiSelfFundedProject>(`/self-funded-projects/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   projectFolders: (id: string) => apiRequest<ApiArchiveFolder[]>(`/self-funded-projects/${id}/folders`),
+  addProjectFolder: (id: string, name: string, required: boolean) => apiRequest<ApiArchiveFolder>(`/self-funded-projects/${id}/folders`, { method: 'POST', body: JSON.stringify({ name, required }) }),
   progress: () => apiRequest<ApiArchiveProgress[]>('/archive-progress'),
 };

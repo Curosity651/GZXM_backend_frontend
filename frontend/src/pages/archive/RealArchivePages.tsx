@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type Key } from 'react';
+import { useCallback, useEffect, useState, type Key } from 'react';
 import { Alert, Button, Card, Col, Drawer, Empty, Form, Input, InputNumber, message, Modal, Progress, Row, Select, Space, Table, Tag, Upload } from 'antd';
-import { DeleteOutlined, DownloadOutlined, EyeOutlined, FileAddOutlined, FileOutlined, FolderOpenOutlined, TeamOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, EyeOutlined, FileAddOutlined, FileOutlined, FolderOpenOutlined, ReloadOutlined, TeamOutlined, UploadOutlined } from '@ant-design/icons';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
 import { archiveApi, type ApiArchiveDirectory, type ApiArchiveFolder, type ApiSelfFundedProject, type SelfFundedWrite } from '../../api/archive-api';
 import { canPreviewFile, fileApi, type ApiFile } from '../../api/file-api';
-import { topicApi, type ApiTopic } from '../../api/topic-api';
+import { isBusinessTopic, topicApi, type ApiTopic } from '../../api/topic-api';
 
 const GLOBAL_ROLES = new Set(['SYSTEM_ADMIN', 'PROJECT_TECH_LEADER', 'RESEARCH_ASSISTANT']);
 const PROJECT_TYPE_LABELS: Record<ApiSelfFundedProject['projectType'], string> = {
@@ -92,7 +92,7 @@ export function RealNationalArchivePage() {
   const [topics, setTopics] = useState<ApiTopic[]>([]);
   const [directories, setDirectories] = useState<ApiArchiveDirectory[]>([]);
   const [topicFilter, setTopicFilter] = useState<string>();
-  const [unitFilter, setUnitFilter] = useState<string>();
+  const [unitFilter] = useState<string>();
   const [selectedTopicId, setSelectedTopicId] = useState<string>();
   const [selectedDirectory, setSelectedDirectory] = useState<ApiArchiveDirectory>();
   const [folders, setFolders] = useState<ApiArchiveFolder[]>([]);
@@ -102,7 +102,7 @@ export function RealNationalArchivePage() {
   const refresh = useCallback(async () => {
     try {
       const [who, topicPage, directoryList] = await Promise.all([authApi.me(), topicApi.list(), archiveApi.directories()]);
-      setUser(who); setTopics(topicPage.items); setDirectories(directoryList);
+      setUser(who); setTopics(topicPage.items.filter(isBusinessTopic)); setDirectories(directoryList);
     } catch (error) { message.error(error instanceof Error ? error.message : '归档目录加载失败'); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
@@ -112,10 +112,6 @@ export function RealNationalArchivePage() {
   }, [refresh]);
   const openDirectory = (directory: ApiArchiveDirectory) => { setSelectedDirectory(directory); setSelectedFolder(undefined); void refreshFolders(directory); };
   const resetDrillDown = () => { setSelectedTopicId(undefined); setSelectedDirectory(undefined); setSelectedFolder(undefined); };
-  const directoryUnits = useMemo(() => {
-    const unique = new Map<string, string>(); directories.forEach((item) => unique.set(item.unitId, item.unitName));
-    return [...unique.entries()].map(([value, label]) => ({ value, label }));
-  }, [directories]);
   const visibleTopics = topics.filter((topic) => {
     const rows = directories.filter((item) => item.topicId === topic.id);
     return rows.length > 0 && (!topicFilter || topic.id === topicFilter) && (!unitFilter || rows.some((item) => item.unitId === unitFilter));
@@ -143,13 +139,12 @@ export function RealNationalArchivePage() {
   });
 
   return <>
-    <Card className="archive-filter-card" style={{ marginBottom: 16 }}><Space wrap size={16}>
-      <b>课题</b><Select allowClear value={topicFilter} onChange={(value) => { setTopicFilter(value); resetDrillDown(); }} style={{ width: 360 }} placeholder="全部课题"
-        options={topics.filter((topic) => directories.some((item) => item.topicId === topic.id)).map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} />
-      <b>提交单位</b><Select allowClear value={unitFilter} onChange={(value) => { setUnitFilter(value); resetDrillDown(); }} style={{ width: 320 }}
-        placeholder={user && GLOBAL_ROLES.has(user.roleCode) ? '全部单位' : '权限范围内单位'} options={directoryUnits} />
-    </Space></Card>
-    <Card className="archive-content-card"><Row gutter={[16, 16]}>
+    <Card className="archive-content-card" title={`课题国家材料（${visibleTopics.length}）`} extra={<Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新列表</Button>}>
+      <div className="archive-list-filter"><Space wrap size={16}>
+        <b>课题</b><Select allowClear value={topicFilter} onChange={(value) => { setTopicFilter(value); resetDrillDown(); }} style={{ width: 360 }} placeholder="全部课题"
+          options={topics.filter((topic) => directories.some((item) => item.topicId === topic.id)).map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} />
+      </Space></div>
+      <Row gutter={[16, 16]}>
       {visibleTopics.map((topic) => {
         const rows = directories.filter((item) => item.topicId === topic.id && (!unitFilter || item.unitId === unitFilter));
         const required = rows.reduce((sum, item) => sum + item.requiredCount, 0);
@@ -163,7 +158,8 @@ export function RealNationalArchivePage() {
           </Space></Card></Col>;
       })}
       {!visibleTopics.length && <Col span={24}><Empty description="暂无可查看的课题国家材料" /></Col>}
-    </Row></Card>
+      </Row>
+    </Card>
     <Drawer width="78%" title={selectedTopic ? `${selectedTopic.name} · 课题参与单位` : ''} open={Boolean(selectedTopicId)} onClose={resetDrillDown}>
       <div className="archive-directory-hint">请先进入对应的课题参与单位，再查看或填报该单位的国家材料。</div>
       <Row gutter={[16, 16]}>{selectedTopicDirectories.map((directory) => {
@@ -183,7 +179,7 @@ export function RealNationalArchivePage() {
       extra={canManageSelectedUnit && <Button type="primary" icon={<FileAddOutlined />} onClick={() => { folderForm.setFieldsValue({ required: true }); setAddFolderOpen(true); }}>新增文件夹</Button>}>
       {selectedDirectory && <div className="archive-directory-hint"><Space wrap>
         <Tag color={membershipLabel(selectedTopic, selectedDirectory.unitId) === '牵头单位' ? 'blue' : 'default'}>{membershipLabel(selectedTopic, selectedDirectory.unitId)}</Tag>
-        <span>{canSubmitSelectedUnit ? '您可上传、补充和删除本单位材料。' : canManageSelectedUnit ? '您可管理自定义文件夹；文件上传由该单位办理。' : '当前为查看权限，不可修改该单位材料。'}</span>
+        <span>{canManageSelectedUnit ? '您可新增或删除自定义文件夹，并上传、补充和删除材料。' : '当前为查看权限，不可修改该单位材料。'}</span>
       </Space></div>}
       <Row gutter={[16, 16]}>{folders.map((folder) => <Col xs={24} sm={12} lg={8} xl={6} key={folder.id}>
         <Card size="small" hoverable className="archive-folder-card" onClick={() => setSelectedFolder(folder)}><Space align="start"><FolderOpenOutlined className="archive-folder-icon" /><div>
@@ -193,7 +189,7 @@ export function RealNationalArchivePage() {
       </Col>)}{!folders.length && <Col span={24}><Empty description="当前单位暂无材料文件夹" /></Col>}</Row>
     </Drawer>
     <Drawer width="78%" title={selectedFolder && selectedDirectory ? `${selectedDirectory.unitName} · ${selectedFolder.name} · 文件管理` : ''} open={Boolean(selectedFolder)} onClose={() => setSelectedFolder(undefined)}>
-      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canSubmitSelectedUnit} onChanged={() => selectedDirectory && refreshFolders(selectedDirectory)} />}
+      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedUnit} onChanged={() => selectedDirectory && refreshFolders(selectedDirectory)} />}
     </Drawer>
     <Modal title="新增自定义材料文件夹" open={addFolderOpen} onCancel={() => { setAddFolderOpen(false); folderForm.resetFields(); }} onOk={() => void submitFolder()} okText="创建" cancelText="取消">
       <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
@@ -214,18 +210,28 @@ export function RealSelfFundedPage() {
   const [folders, setFolders] = useState<ApiArchiveFolder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<ApiArchiveFolder>();
   const [editing, setEditing] = useState(false);
+  const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [form] = Form.useForm<SelfFundedWrite>();
+  const [folderForm] = Form.useForm<{ name: string; required: boolean }>();
   const refresh = useCallback(async () => {
     try {
       const [who, topicPage, directoryList, projectList] = await Promise.all([authApi.me(), topicApi.list(), archiveApi.directories(), archiveApi.projects()]);
-      setUser(who); setTopics(topicPage.items); setDirectories(directoryList); setProjects(projectList);
+      setUser(who); setTopics(topicPage.items.filter(isBusinessTopic)); setDirectories(directoryList); setProjects(projectList);
     } catch (error) { message.error(error instanceof Error ? error.message : '自筹项目加载失败'); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
+  const refreshProjectFolders = async (project: ApiSelfFundedProject) => {
+    try {
+      const list = await archiveApi.projectFolders(project.id);
+      setFolders(list);
+      setSelectedFolder((current) => current ? list.find((item) => item.id === current.id) : current);
+      await refresh();
+    }
+    catch (error) { message.error(error instanceof Error ? error.message : '材料清单加载失败'); }
+  };
   const openProject = async (project: ApiSelfFundedProject) => {
     setSelected(project); setSelectedFolder(undefined);
-    try { setFolders(await archiveApi.projectFolders(project.id)); }
-    catch (error) { message.error(error instanceof Error ? error.message : '材料清单加载失败'); }
+    await refreshProjectFolders(project);
   };
   const save = async () => {
     try {
@@ -237,20 +243,43 @@ export function RealSelfFundedPage() {
     } catch (error) { if (error instanceof Error) message.error(error.message); }
   };
   const editable = Boolean(user?.roleCode === 'INTERNAL_TOPIC_UNIT' && user.actionPermissions.includes('self-funded.manage'));
+  const selectedProjectTopic = topics.find((topic) => topic.id === selected?.topicId);
+  const selectedProjectOperational = Boolean(selectedProjectTopic?.enabled && selectedProjectTopic.status === 'ACTIVE');
+  const canManageSelectedProject = Boolean(user && selected && selectedProjectOperational
+    && (GLOBAL_ROLES.has(user.roleCode) || editable && user.unitId === selected.ownerUnitId));
   const editableTopics = topics.filter((topic) => topic.enabled && topic.status === 'ACTIVE' && user?.memberships.some((member) => member.topicId === topic.id && member.enabled));
   const filteredProjects = projects.filter((project) => (!topicFilter || project.topicId === topicFilter) && (!unitFilter || project.ownerUnitId === unitFilter));
   const unitNames = new Map(directories.map((item) => [item.unitId, item.unitName]));
   const unitOptions = [...new Set(projects.map((item) => item.ownerUnitId))].map((unitId) => ({ value: unitId, label: unitNames.get(unitId) ?? unitId }));
+  const submitFolder = async () => {
+    if (!selected || !canManageSelectedProject) return;
+    try {
+      const values = await folderForm.validateFields();
+      await archiveApi.addProjectFolder(selected.id, values.name.trim(), values.required);
+      setAddFolderOpen(false); folderForm.resetFields(); await refreshProjectFolders(selected); message.success('自定义材料文件夹已创建');
+    } catch (error) { if (error instanceof Error) message.error(error.message); }
+  };
+  const removeFolder = (folder: ApiArchiveFolder) => folder.canDelete && Modal.confirm({
+    title: '删除自定义文件夹', content: `确定删除“${folder.name}”吗？`, okText: '删除', okType: 'danger', cancelText: '取消',
+    onOk: async () => {
+      if (!selected) return;
+      try { await archiveApi.deleteFolder(folder.id); setSelectedFolder(undefined); await refreshProjectFolders(selected); message.success('文件夹已删除'); }
+      catch (error) { message.error(error instanceof Error ? error.message : '删除失败'); }
+    },
+  });
 
   return <>
-    <Card className="archive-filter-card" style={{ marginBottom: 16 }}><Space wrap size={16}>
-      <b>课题</b><Select allowClear value={topicFilter} onChange={setTopicFilter} style={{ width: 360 }} placeholder="全部课题" options={topics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} />
-      <b>提交单位</b><Select allowClear value={unitFilter} onChange={setUnitFilter} style={{ width: 320 }} placeholder="全部单位" options={unitOptions} />
-    </Space></Card>
-    {editable && editableTopics.length > 0 && <div className="archive-page-actions"><Button type="primary" icon={<FileAddOutlined />} onClick={() => {
-      setSelected(undefined); form.resetFields(); form.setFieldsValue({ topicId: editableTopics[0]?.id, projectType: 'TECHNOLOGY', status: '筹备中' }); setEditing(true);
-    }}>新建自筹项目</Button></div>}
-    <Card className="archive-content-card"><Row gutter={[16, 16]}>
+    <Card className="archive-content-card" title={`配套自筹项目（${filteredProjects.length}）`} extra={<Space>
+      <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新列表</Button>
+      {editable && editableTopics.length > 0 && <Button type="primary" icon={<FileAddOutlined />} onClick={() => {
+        setSelected(undefined); form.resetFields(); form.setFieldsValue({ topicId: editableTopics[0]?.id, projectType: 'TECHNOLOGY', status: '筹备中' }); setEditing(true);
+      }}>新建自筹项目</Button>}
+    </Space>}>
+      <div className="archive-list-filter"><Space wrap size={16}>
+        <b>课题</b><Select allowClear value={topicFilter} onChange={setTopicFilter} style={{ width: 360 }} placeholder="全部课题" options={topics.map((item) => ({ label: `${item.code} ${item.name}`, value: item.id }))} />
+        <b>提交单位</b><Select allowClear value={unitFilter} onChange={setUnitFilter} style={{ width: 320 }} placeholder="全部单位" options={unitOptions} />
+      </Space></div>
+      <Row gutter={[16, 16]}>
       {filteredProjects.map((project) => <Col xs={24} xl={12} key={project.id}><Card hoverable title={<Space><FolderOpenOutlined /><span>{project.name}</span></Space>}
         extra={<Tag color={project.status === '已完成' ? 'green' : 'blue'}>{project.status}</Tag>}
         actions={[<Button key={`open-${project.id}`} type="link" onClick={() => void openProject(project)}>进入归档</Button>,
@@ -260,7 +289,8 @@ export function RealSelfFundedPage() {
           <Progress percent={project.completionRate} status={project.completionRate < 50 ? 'exception' : 'active'} /><div>必存材料完成率：{project.completionRate}%</div>
         </Space></Card></Col>)}
       {!filteredProjects.length && <Col span={24}><Empty description="当前筛选条件下暂无配套自筹项目" /></Col>}
-    </Row></Card>
+      </Row>
+    </Card>
     <Modal title={selected ? '编辑配套自筹项目' : '新建配套自筹项目'} open={editing} onCancel={() => { setEditing(false); setSelected(undefined); form.resetFields(); }} onOk={() => void save()} width={680}>
       <Form form={form} layout="vertical"><Form.Item name="topicId" label="所属课题" rules={[{ required: true }]}><Select disabled={Boolean(selected)} options={editableTopics.map((item) => ({ value: item.id, label: `${item.code} ${item.name}` }))} /></Form.Item>
         <Row gutter={16}><Col span={12}><Form.Item name="code" label="项目编号" rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item name="projectType" label="项目类型" rules={[{ required: true }]}><Select disabled={Boolean(selected)} options={Object.entries(PROJECT_TYPE_LABELS).map(([value, label]) => ({ value, label }))} /></Form.Item></Col></Row>
@@ -270,14 +300,20 @@ export function RealSelfFundedPage() {
         <Form.Item name="status" label="状态"><Select options={['筹备中', '实施中', '验收中', '已完成'].map((value) => ({ value, label: value }))} /></Form.Item>
       </Form>
     </Modal>
-    <Drawer width="78%" title={selected && !editing ? `${selected.name} · 自筹材料文件夹` : ''} open={Boolean(selected && !editing)} onClose={() => { setSelected(undefined); setSelectedFolder(undefined); }}>
+    <Drawer width="78%" title={selected && !editing ? `${selected.name} · 自筹材料文件夹` : ''} open={Boolean(selected && !editing)} onClose={() => { setSelected(undefined); setSelectedFolder(undefined); }}
+      extra={canManageSelectedProject && <Button type="primary" icon={<FileAddOutlined />} onClick={() => { folderForm.setFieldsValue({ required: true }); setAddFolderOpen(true); }}>新增文件夹</Button>}>
       <Row gutter={[16, 16]}>{folders.map((folder) => <Col xs={24} sm={12} lg={8} xl={6} key={folder.id}><Card size="small" hoverable className="archive-folder-card" onClick={() => setSelectedFolder(folder)}>
-        <Space align="start"><FolderOpenOutlined className="archive-folder-icon" /><div><div className="archive-folder-name">{folder.name}</div><div className="archive-folder-meta">{folder.required ? '必存材料' : '有则必存'} · 至少 {folder.requiredQuantity} 份</div>
+        <Space align="start"><FolderOpenOutlined className="archive-folder-icon" /><div><div className="archive-folder-name">{folder.name}</div><div className="archive-folder-meta">{folder.custom ? '自定义材料文件夹' : '清单材料'} · {folder.required ? '必存材料' : '有则必存'} · 至少 {folder.requiredQuantity} 份</div>
           <Progress percent={folder.completed ? 100 : 0} size="small" showInfo={false} /><span className="archive-folder-count">{folder.fileCount ? `${folder.fileCount} 个文件 · 已提交` : '暂无文件'}</span>
-        </div></Space></Card></Col>)}{!folders.length && <Col span={24}><Empty description="当前项目暂无材料文件夹" /></Col>}</Row>
+        </div></Space>{folder.canDelete && <Button type="text" danger size="small" className="archive-folder-delete" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); removeFolder(folder); }} />}</Card></Col>)}{!folders.length && <Col span={24}><Empty description="当前项目暂无材料文件夹" /></Col>}</Row>
     </Drawer>
     <Drawer width="78%" title={selectedFolder ? `${selectedFolder.name} · 文件管理` : ''} open={Boolean(selectedFolder)} onClose={() => setSelectedFolder(undefined)}>
-      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={Boolean(editable && selected && user?.unitId === selected.ownerUnitId)} onChanged={() => selected && openProject(selected)} />}
+      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedProject} onChanged={() => selected && refreshProjectFolders(selected)} />}
     </Drawer>
+    <Modal title="新增自定义材料文件夹" open={addFolderOpen} onCancel={() => { setAddFolderOpen(false); folderForm.resetFields(); }} onOk={() => void submitFolder()} okText="创建" cancelText="取消">
+      <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
+        <Form.Item name="required" label="材料要求" rules={[{ required: true, message: '请选择材料要求' }]}><Select options={[{ label: '必存', value: true }, { label: '有则必存', value: false }]} /></Form.Item>
+      </Form>
+    </Modal>
   </>;
 }

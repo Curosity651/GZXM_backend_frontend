@@ -62,11 +62,21 @@ button, input, textarea, select { font: inherit; }
 .role-list-toolbar .ant-typography { margin: 0; }
 .role-list-toolbar .ant-typography-secondary { display: block; margin-top: 3px; font-size: 13px; }
 .role-list-card .ant-table-wrapper { border-top: 1px solid #eef1f6; }
+.permission-checkbox-group { display: block; width: 100%; }
+.permission-group-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: stretch; }
+.permission-group-card { height: 100%; border-color: #e4eaf3; }
+.permission-group-card .ant-card-head { min-height: 46px; padding: 0 16px; }
+.permission-group-card .ant-card-head-title { padding: 11px 0; }
+.permission-group-card .ant-card-body { height: calc(100% - 46px); padding: 14px 16px 16px; }
+.permission-option-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; align-content: start; }
+.permission-option-list .ant-checkbox-wrapper { min-width: 0; margin-inline-start: 0; line-height: 22px; }
 .archive-page-actions { display: flex; justify-content: flex-end; margin-bottom: 16px; }
 .archive-filter-card .ant-card-body { padding: 18px 24px; }
 .archive-filter-card b { color: #1f2937; white-space: nowrap; }
 .archive-content-card { min-height: 520px; }
 .archive-content-card > .ant-card-body { min-height: 472px; }
+.archive-list-filter { margin: -4px 0 20px; padding-bottom: 18px; border-bottom: 1px solid #edf0f5; }
+.archive-list-filter b { color: #1f2937; white-space: nowrap; }
 .archive-folder-card { position: relative; min-height: 118px; }
 .archive-folder-icon { color: #f5b83d; font-size: 28px; margin-top: 2px; }
 .archive-folder-name { color: #1f2937; font-weight: 600; line-height: 24px; }
@@ -103,6 +113,26 @@ button, input, textarea, select { font: inherit; }
 .achievement-filter-field .ant-input-affix-wrapper { width: 100% !important; min-width: 0; }
 .achievement-filter-actions { grid-column: 5; grid-row: 1; justify-self: end; white-space: nowrap; }
 .achievement-filter-grid.is-expanded .achievement-filter-actions { grid-column: auto; grid-row: auto; justify-self: stretch; justify-content: flex-end; width: 100%; }
+.achievement-progress-card .ant-card-head { min-height: 68px; }
+.achievement-progress-card .ant-card-extra { max-width: calc(100% - 140px); }
+.achievement-progress-summary { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.achievement-progress-metric { min-height: 94px; padding: 14px 16px; border: 1px solid #edf0f5; border-radius: 10px; background: #fafcff; }
+.achievement-progress-metric.is-warning { background: #fffaf2; }
+.achievement-progress-metric.is-danger { background: #fff4f4; }
+.achievement-progress-metric .ant-statistic-title { margin-bottom: 6px; }
+.achievement-progress-metric .ant-statistic-content { font-size: 26px; }
+.achievement-progress-rate { margin-top: 4px; font-size: 26px; font-weight: 600; line-height: 1.35; }
+.achievement-progress-metric .ant-progress { margin-top: 5px; }
+.achievement-progress-card .ant-table-expanded-row > td { padding: 12px 18px 18px 56px !important; background: #fafcff !important; }
+.achievement-progress-card .ant-table-expanded-row .ant-table { overflow: hidden; border: 1px solid #e7ecf4; border-radius: 9px; }
+.achievement-unit-progress > .ant-alert { margin-bottom: 12px; }
+.achievement-unit-progress .ant-table-expanded-row > td { padding-left: 46px !important; background: #fff !important; }
+.achievement-unit-rate { width: 130px; margin: 0 !important; }
+.achievement-special-indicator { padding-left: 22px; color: #667085; }
+.achievement-record-card .achievement-filter-grid { padding-bottom: 18px; border-bottom: 1px solid #edf0f5; }
+.achievement-record-card .achievement-record-table { margin-top: 18px; }
+.achievement-record-card .achievement-filter-grid:not(.is-expanded) { grid-template-columns: repeat(3, minmax(210px, 1fr)) auto; }
+.achievement-record-card .achievement-filter-grid:not(.is-expanded) .achievement-filter-actions { grid-column: 4; }
 .report-filter-card .ant-card-body { padding: 20px 24px; }
 .report-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)) auto; gap: 16px 24px; align-items: center; }
 .report-filter-grid.is-expanded { grid-template-columns: repeat(4, minmax(210px, 1fr)); }
@@ -143,6 +173,7 @@ button, input, textarea, select { font: inherit; }
   .user-filter-actions { grid-column: 1 / -1; grid-row: auto; }
   .role-filter-grid { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
   .role-filter-actions { grid-column: 1 / -1; grid-row: auto; }
+  .permission-option-list { grid-template-columns: 1fr; }
   .achievement-filter-grid { grid-template-columns: repeat(3, minmax(180px, 1fr)); }
   .achievement-filter-actions { grid-column: 1 / -1; grid-row: auto; justify-self: end; }
   .achievement-filter-grid.is-expanded { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
@@ -155,6 +186,7 @@ button, input, textarea, select { font: inherit; }
 }
 
 @media (max-width: 900px) {
+  .permission-group-grid { grid-template-columns: 1fr; }
   .achievement-filter-grid,
   .achievement-filter-grid.is-expanded { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
   .achievement-filter-actions,

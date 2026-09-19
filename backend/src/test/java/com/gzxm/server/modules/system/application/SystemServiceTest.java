@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.gzxm.server.modules.system.api.SystemDtos.RolePermissionRequest;
 import com.gzxm.server.modules.system.api.SystemDtos.CreateUserRequest;
+import com.gzxm.server.modules.system.api.SystemDtos.UpdateUserRequest;
 import com.gzxm.server.modules.system.domain.*;
 import com.gzxm.server.modules.system.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,6 +98,21 @@ class SystemServiceTest {
         });
         verify(relations).assignRole(41L, 5L);
         verify(passwordEncoder).encode("Password123");
+    }
+
+    @Test
+    void platformAndTopicUnitRolesCannotBeExchangedDirectly() {
+        UserEntity user = new UserEntity(); user.setId(41L); user.setAccountType("PLATFORM");
+        when(users.selectById(41L)).thenReturn(user);
+        when(relations.findRoleId(41L)).thenReturn(2L);
+        when(roles.selectById(2L)).thenReturn(role(2, "RESEARCH_ASSISTANT"));
+        when(roles.selectById(4L)).thenReturn(role(4, "INTERNAL_TOPIC_UNIT"));
+
+        assertThatThrownBy(() -> service.updateUser(41L,
+                new UpdateUserRequest("assistant", "4", "科研助理", null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).code()).isEqualTo("USER_ROLE_CATEGORY_CHANGE_DENIED");
+        verify(relations, never()).assignRole(41L, 4L);
     }
 
     private RoleEntity role(long id, String code) {

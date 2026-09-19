@@ -24,9 +24,16 @@ export interface AchievementWrite {
 export interface AchievementProgress {
   nodeId: string; countingBasis: string;
   baseTotals: Record<string, number>;
-  baseStages: { initiated: number; preApproved: number; external: number; formal: number; supplement: number; effective: number };
-  specialIndicators: unknown[];
-  rows: Array<{ scope: string; topicId?: string; unitId?: string; indicatorDefinitionId?: string; achievementType: string; targetQuantity?: number; completionRate?: number; stages: { initiated: number; preApproved: number; external: number; formal: number; supplement: number; effective: number } }>;
+  baseStages: { initiated: number; submitted: number; preApproved: number; external: number; formal: number; supplement: number; effective: number };
+  specialIndicators: AchievementProgressRow[];
+  rows: AchievementProgressRow[];
+}
+
+export interface AchievementProgressRow {
+  scope: 'TOPIC' | 'UNIT'; topicId: string; unitId?: string; nodeId: string; indicatorDefinitionId: string;
+  achievementType: string; targetQuantity?: number; targetVersion?: number; targetPublished: boolean; hasTarget: boolean;
+  completionRate?: number; historical: boolean;
+  stages: { initiated: number; submitted: number; preApproved: number; external: number; formal: number; supplement: number; effective: number };
 }
 
 interface Page<T> { items: T[]; page: number; size: number; total: number }

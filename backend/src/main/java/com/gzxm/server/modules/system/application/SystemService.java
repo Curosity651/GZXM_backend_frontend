@@ -87,6 +87,18 @@ public class SystemService {
     @Transactional
     public UserView updateUser(long id, UpdateUserRequest request) {
         UserEntity user = requireUser(id);
+        Long oldRoleId = relations.findRoleId(id);
+        RoleEntity oldRole = oldRoleId == null ? null : requireRole(oldRoleId);
+        RoleEntity nextRole = StringUtils.hasText(request.roleId()) ? requireRole(parseId(request.roleId(), "roleId")) : oldRole;
+        boolean roleChanged = nextRole != null && !Objects.equals(oldRoleId, nextRole.getId());
+        if (roleChanged) {
+            if (!Boolean.TRUE.equals(nextRole.getEnabled()))
+                throw BusinessException.conflict("ROLE_DISABLED", "不能分配已停用的角色");
+            boolean oldUnitRole = oldRole != null && UNIT_ROLES.contains(oldRole.getCode());
+            boolean nextUnitRole = UNIT_ROLES.contains(nextRole.getCode());
+            if (oldUnitRole != nextUnitRole)
+                throw BusinessException.validation("USER_ROLE_CATEGORY_CHANGE_DENIED", "平台角色与课题单位角色不能直接互换");
+        }
         try {
             if (StringUtils.hasText(request.username())) {
                 String username = request.username().trim();
@@ -103,8 +115,20 @@ public class SystemService {
             if (StringUtils.hasText(request.name())) user.setContactName(request.name().trim());
             user.setPhone(trimToNull(request.phone()));
             user.setEmail(trimToNull(request.email()));
+            if (roleChanged) user.setTokenVersion(user.getTokenVersion() + 1);
             user.setUpdatedAt(LocalDateTime.now());
             users.updateById(user);
+            if (roleChanged) {
+                relations.assignRole(id, nextRole.getId());
+                if (UNIT_ROLES.contains(nextRole.getCode()) && user.getUnitId() != null) {
+                    UnitEntity unit = units.selectById(user.getUnitId());
+                    if (unit != null) {
+                        unit.setInternalFlag("INTERNAL_TOPIC_UNIT".equals(nextRole.getCode()));
+                        unit.setUpdatedAt(LocalDateTime.now());
+                        units.updateById(unit);
+                    }
+                }
+            }
         } catch (DuplicateKeyException ex) {
             throw BusinessException.conflict("USERNAME_EXISTS", "用户名或单位名称已存在");
         }

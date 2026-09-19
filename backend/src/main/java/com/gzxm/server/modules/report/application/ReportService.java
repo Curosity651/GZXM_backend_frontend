@@ -33,7 +33,8 @@ public class ReportService {
             "r.basic_information,r.milestone_progress,r.overall_progress,r.research_achievements," +
             "r.demonstration_progress,r.fund_usage,r.next_plan," +
             "r.problems_and_measures,r.status,r.overdue,r.record_version,r.submitted_version,r.submitted_at";
-    private static final String FROM = " FROM progress_report r JOIN report_task t ON t.id=r.task_id ";
+    private static final String FROM = " FROM progress_report r JOIN report_task t ON t.id=r.task_id " +
+            "JOIN biz_topic visible_topic ON visible_topic.id=r.topic_id AND visible_topic.enabled=1 AND visible_topic.status<>'DRAFT' ";
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final TopicQueryService topics;

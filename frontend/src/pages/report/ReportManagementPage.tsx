@@ -52,7 +52,7 @@ export function ReportManagementPage() {
       const [who, topicPage, reportPage] = await Promise.all([
         authApi.me(), apiRequest<TopicPage>('/topics?page=1&size=200'), reportApi.list(params),
       ]);
-      setUser(who); setTopics(topicPage.items); setReports(reportPage.items);
+      setUser(who); setTopics(topicPage.items.filter((topic) => topic.enabled && topic.status !== 'DRAFT')); setReports(reportPage.items);
       if (!pendingDefaultInitialized.current) {
         pendingDefaultInitialized.current = true;
         const reviewer = who.actionPermissions.includes('report.initial.approve') || who.actionPermissions.includes('report.final.approve');

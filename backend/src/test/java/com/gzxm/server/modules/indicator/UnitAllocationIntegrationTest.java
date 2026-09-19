@@ -89,6 +89,23 @@ class UnitAllocationIntegrationTest {
                 .content("{\"nodeId\":\""+node+"\",\"draftVersion\":"+revision+"}"),"INTERNAL_TOPIC_UNIT",1L);
     }
 
+    private ResultActions confirmPlan(String stages, String key) throws Exception {
+        return call(put("/api/v1/topics/1/unit-allocations:confirm-plan").header("Idempotency-Key",key)
+                .content("{\"stages\":"+stages+"}"),"INTERNAL_TOPIC_UNIT",1L);
+    }
+
+    @Test
+    void completePlanRequiresEveryActiveStageAndPublishesAtomically() throws Exception {
+        String first="{\"nodeId\":\"1\",\"draftVersion\":0,\"allocations\":"+rows(1,2,2)+"}";
+        String second="{\"nodeId\":\"2\",\"draftVersion\":0,\"allocations\":"+rows(2,4,4)+"}";
+        confirmPlan("["+first+"]","incomplete-plan-key").andExpect(status().isUnprocessableEntity());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM unit_allocation_draft",Integer.class)).isZero();
+        confirmPlan("["+first+","+second+"]","complete-plan-key").andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM unit_indicator_allocation",Integer.class)).isEqualTo(6);
+        assertThat(jdbc.queryForObject("SELECT SUM(target_quantity) FROM unit_indicator_allocation WHERE node_id=1",Long.class)).isEqualTo(5L);
+        assertThat(jdbc.queryForObject("SELECT SUM(target_quantity) FROM unit_indicator_allocation WHERE node_id=2",Long.class)).isEqualTo(10L);
+    }
+
     @Test
     void completeDraftPublishScopeAndVersionHistory() throws Exception {
         save(1,0,rows(1,2,2)).andExpect(status().isOk()).andExpect(header().string("X-Draft-Version","1"))
@@ -102,7 +119,7 @@ class UnitAllocationIntegrationTest {
         call(get("/api/v1/topics/1/unit-allocations?nodeId=1"),"EXTERNAL_TOPIC_UNIT",3L)
                 .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].unitId").value("3"));
         long id=jdbc.queryForObject("SELECT id FROM unit_indicator_allocation WHERE unit_id=1",Long.class);
-        save(1,1,rows(2,2,2)).andExpect(status().isOk());
+        save(1,1,rows(2,2,1)).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("SELECT target_quantity FROM unit_indicator_allocation WHERE unit_id=1",Integer.class)).isEqualTo(1);
         publish(1,2,"allocation-second-key").andExpect(status().isNoContent());
         assertThat(jdbc.queryForObject("SELECT id FROM unit_indicator_allocation WHERE unit_id=1",Long.class)).isEqualTo(id);
@@ -111,7 +128,7 @@ class UnitAllocationIntegrationTest {
     }
 
     @Test
-    void draftsMayBePartialButPublicationRequiresCoverageAndSufficientTotals() throws Exception {
+    void draftsMayBePartialButPublicationRequiresCoverageAndExactStageTotals() throws Exception {
         save(1,0,"["+row(1,1,5)+"]").andExpect(status().isOk());
         publish(1,1,"missing-coverage-key").andExpect(status().isUnprocessableEntity());
         save(1,1,rows(0,1,1)).andExpect(status().isOk());
@@ -119,8 +136,10 @@ class UnitAllocationIntegrationTest {
         save(1,2,"[]").andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
         publish(1,3,"empty-allocation-key").andExpect(status().isUnprocessableEntity());
         save(1,3,rows(0,3,3)).andExpect(status().isOk());
-        publish(1,4,"above-total-key").andExpect(status().isNoContent());
-        assertThat(jdbc.queryForObject("SELECT SUM(target_quantity) FROM unit_indicator_allocation",Long.class)).isEqualTo(6);
+        publish(1,4,"above-total-key").andExpect(status().isUnprocessableEntity());
+        save(1,4,rows(0,3,2)).andExpect(status().isOk());
+        publish(1,5,"exact-total-key").andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT SUM(target_quantity) FROM unit_indicator_allocation",Long.class)).isEqualTo(5);
     }
 
     @Test
@@ -193,25 +212,24 @@ class UnitAllocationIntegrationTest {
     }
 
     @Test
-    void perUnitCumulativeValuesAreCheckedInBothDirections() throws Exception {
+    void eachStageIsIndependentAndCanBeUpdatedToAnotherExactDistribution() throws Exception {
         save(1,0,rows(1,2,2)).andExpect(status().isOk());
-        save(2,0,rows(0,5,5)).andExpect(status().isUnprocessableEntity());
-        save(2,0,rows(2,4,4)).andExpect(status().isOk());
-        save(1,1,rows(3,2,2)).andExpect(status().isUnprocessableEntity());
-        publish(1,1,"mid-allocation-key").andExpect(status().isNoContent());
+        save(2,0,rows(0,5,5)).andExpect(status().isOk());
+        save(1,1,rows(3,2,0)).andExpect(status().isOk());
+        publish(1,2,"mid-allocation-key").andExpect(status().isNoContent());
         publish(2,1,"end-allocation-key").andExpect(status().isNoContent());
-        save(1,1,rows(0,3,3)).andExpect(status().isOk());
-        publish(1,2,"reduction-allocation-key").andExpect(status().isConflict());
+        save(1,2,rows(0,3,2)).andExpect(status().isOk());
+        publish(1,3,"redistributed-allocation-key").andExpect(status().isNoContent());
     }
 
     @Test
-    void specialAllocationCannotExceedSameUnitBaseAndSumsUseLong() throws Exception {
+    void specialAllocationCannotExceedSameUnitBaseAndStageTotalsMustMatch() throws Exception {
         jdbc.update("INSERT INTO topic_indicator(project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(1,1,1,2,1,'PUBLISHED',1)");
         save(1,0,"["+row(1,1,1)+","+row(1,2,2)+"]").andExpect(status().isUnprocessableEntity());
-        String complete="["+row(1,1,2147483647)+","+row(2,1,2147483647)+","+row(3,1,0)+","+row(1,2,1)+","+row(2,2,0)+","+row(3,2,0)+"]";
+        String complete="["+row(1,1,2)+","+row(2,1,2)+","+row(3,1,1)+","+row(1,2,1)+","+row(2,2,0)+","+row(3,2,0)+"]";
         save(1,0,complete).andExpect(status().isOk());
         publish(1,1,"large-sum-publish-key").andExpect(status().isNoContent());
-        assertThat(jdbc.queryForObject("SELECT SUM(target_quantity) FROM unit_indicator_allocation WHERE indicator_definition_id=1",Long.class)).isEqualTo(4294967294L);
+        assertThat(jdbc.queryForObject("SELECT SUM(target_quantity) FROM unit_indicator_allocation WHERE indicator_definition_id=1",Long.class)).isEqualTo(5L);
     }
 
     @Test
@@ -232,7 +250,7 @@ class UnitAllocationIntegrationTest {
         save(1,0,rows(1,2,2)).andExpect(status().isOk());
         try(var executor=Executors.newFixedThreadPool(2)) {
             var start=new CountDownLatch(1);
-            Callable<Integer> work=()->{start.await();return save(1,1,rows(2,2,2)).andReturn().getResponse().getStatus();};
+            Callable<Integer> work=()->{start.await();return save(1,1,rows(2,2,1)).andReturn().getResponse().getStatus();};
             var first=executor.submit(work);var second=executor.submit(work);start.countDown();
             assertThat(List.of(first.get(20,TimeUnit.SECONDS),second.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(200,409);
             var publishStart=new CountDownLatch(1);

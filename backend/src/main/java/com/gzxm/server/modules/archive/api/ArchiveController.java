@@ -49,14 +49,14 @@ public class ArchiveController {
     @Operation(operationId = "listArchiveFolderFiles")
     public List<FileView> files(@PathVariable String folderId) { return service.files(TopicService.id(folderId)); }
     @PostMapping("/archive/folders/{folderId}/files") @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage')")
+    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
     @Operation(operationId = "attachFileToArchiveFolder")
     public FileView attach(@PathVariable String folderId, @Valid @RequestBody FileLink request) {
         var result = service.attach(TopicService.id(folderId), TopicService.id(request.fileId()));
         audit.success("archive.file.attach", "ARCHIVE_FOLDER", folderId); return result;
     }
     @DeleteMapping("/archive/folders/{folderId}/files/{fileId}") @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage')")
+    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
     @Operation(operationId = "removeArchiveFolderFile")
     public void remove(@PathVariable String folderId, @PathVariable String fileId) {
         service.remove(TopicService.id(folderId), TopicService.id(fileId));
@@ -85,6 +85,13 @@ public class ArchiveController {
     @GetMapping("/self-funded-projects/{projectId}/folders") @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "listSelfFundedProjectFolders")
     public List<Folder> projectFolders(@PathVariable String projectId) { return service.projectFolders(TopicService.id(projectId)); }
+    @PostMapping("/self-funded-projects/{projectId}/folders") @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAuthority('self-funded.manage') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
+    @Operation(operationId = "createSelfFundedCustomFolder")
+    public Folder addProjectFolder(@PathVariable String projectId, @Valid @RequestBody FolderCreate request) {
+        var result = service.addProjectFolder(TopicService.id(projectId), request.name(), request.required());
+        audit.success("self-funded.folder.create", "ARCHIVE_FOLDER", result.id()); return result;
+    }
     @GetMapping("/archive-progress") @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "getArchiveProgress")
     public List<Progress> progress(@RequestParam(required = false) String topicId,

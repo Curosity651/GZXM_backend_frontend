@@ -14,7 +14,7 @@ final class ArchiveFolderPolicy {
     }
 
     static boolean canDelete(CurrentUser user, long unitId, boolean custom, long creatorId, String creatorRole) {
-        return custom && canManage(user, unitId)
-                && (creatorRole != null && !PROTECTED_CREATOR_ROLES.contains(creatorRole) || creatorId == user.id());
+        return custom && (user.isGlobalRole() || (canManage(user, unitId)
+                && (creatorRole != null && !PROTECTED_CREATOR_ROLES.contains(creatorRole) || creatorId == user.id())));
     }
 }

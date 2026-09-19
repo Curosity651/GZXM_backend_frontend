@@ -48,6 +48,11 @@ export function UserManagementPage() {
       && (!email || user.email?.toLowerCase().includes(email));
   }), [filters, users]);
   const activeRoles = roles.filter((role) => role.enabled || role.id === editing?.roleId);
+  const editingRole = roles.find((role) => role.id === editing?.roleId);
+  const unitRoleCodes = new Set(['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT']);
+  const selectableRoles = editingRole
+    ? activeRoles.filter((role) => unitRoleCodes.has(role.code) === unitRoleCodes.has(editingRole.code))
+    : activeRoles;
 
   const openForm = (user?: ApiUser) => {
     setEditing(user ?? null);
@@ -58,7 +63,7 @@ export function UserManagementPage() {
     const values = await editForm.validateFields(); setSaving(true);
     try {
       if (editing) {
-        await systemApi.updateUser(editing.id, { username: values.username.trim(), name: values.name.trim(), phone: values.phone, email: values.email });
+        await systemApi.updateUser(editing.id, { username: values.username.trim(), roleId: values.roleId, name: values.name.trim(), phone: values.phone, email: values.email });
         if (values.enabled !== undefined && values.enabled !== editing.enabled) await systemApi.setUserStatus(editing.id, values.enabled);
         message.success('账号信息已更新');
       } else {
@@ -108,7 +113,7 @@ export function UserManagementPage() {
       ]} />
     </Card>
     <Modal title={editing ? '编辑用户' : '新增用户'} open={open} onCancel={() => { setOpen(false); editForm.resetFields(); }} onOk={() => void save()} confirmLoading={saving} width={720}>
-      <Form form={editForm} layout="vertical"><Row gutter={16}><Col span={12}><Form.Item label="用户名（课题单位账号同时作为单位名称）" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="角色" name="roleId" rules={[{ required: true, message: '请选择角色' }]}><Select disabled={Boolean(editing)} options={activeRoles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item></Col></Row>
+      <Form form={editForm} layout="vertical"><Row gutter={16}><Col span={12}><Form.Item label="用户名（课题单位账号同时作为单位名称）" name="username" rules={[{ required: true, message: '请输入用户名' }]}><Input /></Form.Item></Col><Col span={12}><Form.Item label="角色" name="roleId" rules={[{ required: true, message: '请选择角色' }]}><Select disabled={Boolean(editing && editing.id === currentUser?.id)} options={selectableRoles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item></Col></Row>
         <Form.Item label="单位联系人姓名" name="name" rules={[{ required: true, message: '请输入单位联系人姓名' }]}><Input /></Form.Item>
         <Row gutter={16}><Col span={12}><Form.Item label="手机号" name="phone"><Input /></Form.Item></Col><Col span={12}><Form.Item label="邮箱" name="email" rules={[{ type: 'email', message: '请输入正确的邮箱地址' }]}><Input /></Form.Item></Col></Row>
         {!editing && <Row gutter={16}><Col span={12}><Form.Item label="登录密码" name="password" rules={[{ required: true, message: '请输入登录密码' }, { min: 8, max: 72, message: '密码长度应为8至72位' }]}><Input.Password autoComplete="new-password" /></Form.Item></Col><Col span={12}><Form.Item label="确认密码" name="confirmPassword" dependencies={['password']} rules={[{ required: true, message: '请再次输入密码' }, ({ getFieldValue }) => ({ validator: (_, value) => !value || getFieldValue('password') === value ? Promise.resolve() : Promise.reject(new Error('两次输入的密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item></Col></Row>}

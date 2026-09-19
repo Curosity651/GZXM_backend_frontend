@@ -139,23 +139,8 @@ public class TopicIndicatorService {
             throw conflict("PUBLISHED_TARGET_REDUCTION_UNSUPPORTED",node.name()+"的“"+old.definitionName()+"”已下发"+old.quantity()+
                     "，当前填写"+next+"，不能删除或降低已下发要求");
         }
-        checkCumulative(effective,node,values);
-        // Other node drafts may still contain their old values while the browser saves a complete
-        // multi-node form one request at a time. Cross-node draft validation would reject that
-        // harmless intermediate state; the final relation is enforced again during publication.
-    }
-
-    private void checkCumulative(List<Quantity> existing,Node node,Map<Long,Integer> values) {
-        for (var row:existing) {
-            var value=values.get(row.definitionId());
-            if (value==null || row.nodeId()==node.id()) continue;
-            if (row.sortOrder()<node.sortOrder() && row.quantity()>value)
-                throw invalid("INDICATOR_CUMULATIVE_INVALID",node.name()+"的“"+row.definitionName()+"”为"+value+
-                        "，不能低于前序节点“"+row.nodeName()+"”的"+row.quantity());
-            if (row.sortOrder()>node.sortOrder() && row.quantity()<value)
-                throw invalid("INDICATOR_CUMULATIVE_INVALID",node.name()+"的“"+row.definitionName()+"”为"+value+
-                        "，不能高于后续节点“"+row.nodeName()+"”的"+row.quantity());
-        }
+        // target_quantity stores the requirement of this stage. Cumulative values are derived
+        // by summing all published stages up to the selected node.
     }
 
     private Node node(long id,long project,boolean writing) {

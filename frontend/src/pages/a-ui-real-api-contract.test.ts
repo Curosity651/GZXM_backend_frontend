@@ -3,6 +3,7 @@ import homeSource from './HomePage.tsx?raw';
 import achievementSource from './achievement/AchievementEntryPage.tsx?raw';
 import reportSource from './report/ReportManagementPage.tsx?raw';
 import archiveSource from './archive/ArchiveMonitoringPage.tsx?raw';
+import archivePagesSource from './archive/RealArchivePages.tsx?raw';
 import indicatorSource from './indicator/RealIndicatorPages.tsx?raw';
 
 describe('A branch page design on real API contracts', () => {
@@ -42,12 +43,21 @@ describe('A branch page design on real API contracts', () => {
     expect(code).not.toContain('useAppStore');
   });
 
-  it('uses direct unit allocation confirmation and configurable time-node deletion', () => {
+  it('excludes draft topics from achievement, report and archive business selectors', () => {
+    expect(achievementSource).toContain('filter(isBusinessTopic)');
+    expect(reportSource).toContain("topic.status !== 'DRAFT'");
+    expect(archiveSource).toContain('filter(isBusinessTopic)');
+    expect(archivePagesSource).toContain('filter(isBusinessTopic)');
+  });
+
+  it('uses complete-plan allocation confirmation and configurable time-node deletion', () => {
     expect(indicatorSource).not.toContain('title="承担单位维护"');
     expect(indicatorSource).not.toContain('课题目标由科研助理下发，牵头单位按照时间节点分配至各参与单位。');
     expect(indicatorSource).not.toContain('saveAllocations(false)');
-    expect(indicatorSource).toContain("allocationAssigned ? '已分配' : '未分配'");
-    expect(indicatorSource).toContain('indicatorApi.confirmAllocations');
+    expect(indicatorSource).toContain('提交全部分配方案');
+    expect(indicatorSource).toContain('此阶段分配情况');
+    expect(indicatorSource).toContain('indicatorApi.confirmAllocationPlan');
+    expect(indicatorSource).toContain('截至本阶段累计');
     expect(indicatorSource).toContain('indicatorApi.deleteNode');
   });
 });

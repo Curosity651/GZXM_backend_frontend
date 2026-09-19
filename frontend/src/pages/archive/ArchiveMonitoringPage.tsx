@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Col, Progress, Row, Select, Space, Table, Tag, message } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { archiveApi, type ApiArchiveDirectory, type ApiArchiveProgress, type ApiSelfFundedProject } from '../../api/archive-api';
-import { topicApi, type ApiTopic } from '../../api/topic-api';
+import { isBusinessTopic, topicApi, type ApiTopic } from '../../api/topic-api';
 
 export function ArchiveMonitoringPage() {
   const [topics, setTopics] = useState<ApiTopic[]>([]);
@@ -19,7 +19,7 @@ export function ArchiveMonitoringPage() {
       const [topicPage, directoryRows, projectRows, progressRows] = await Promise.all([
         topicApi.list(), archiveApi.directories(), archiveApi.projects(), archiveApi.progress(),
       ]);
-      setTopics(topicPage.items); setDirectories(directoryRows); setProjects(projectRows); setRows(progressRows);
+      setTopics(topicPage.items.filter(isBusinessTopic)); setDirectories(directoryRows); setProjects(projectRows); setRows(progressRows);
     } catch (error) { message.error(error instanceof Error ? error.message : '归档进度加载失败'); }
     finally { setLoading(false); }
   }, []);

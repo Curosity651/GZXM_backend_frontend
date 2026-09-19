@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成果管理布局原型</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1180px; background: #f3f6fb; color: #1f2329; font-family: "Microsoft YaHei", Arial, sans-serif; }
+    button, select, input { font: inherit; }
+    .page { padding: 20px 24px 36px; }
+    .card { margin-bottom: 18px; overflow: hidden; border: 1px solid #e7ebf2; border-radius: 14px; background: #fff; box-shadow: 0 2px 10px rgba(31,35,41,.03); }
+    .card-head { display: flex; min-height: 68px; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 24px; border-bottom: 1px solid #edf0f5; }
+    .card-title { font-size: 20px; font-weight: 700; white-space: nowrap; }
+    .toolbar, .filters, .actions { display: flex; align-items: center; gap: 12px; }
+    .field { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .field label { color: #30343b; }
+    select, input { height: 40px; padding: 0 36px 0 13px; border: 1px solid #d9dde5; border-radius: 9px; background: #fff; color: #222; outline: none; }
+    select:focus, input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.12); }
+    .topic-select { width: 290px; }
+    .node-select { width: 160px; }
+    .btn { height: 40px; padding: 0 18px; border: 1px solid #d9dde5; border-radius: 9px; background: #fff; color: #222; cursor: pointer; }
+    .btn:hover { border-color: #1677ff; color: #1677ff; }
+    .btn-primary { border-color: #1677ff; background: #1677ff; color: #fff; }
+    .btn-primary:hover { background: #4096ff; color: #fff; }
+    .btn-link { border-color: transparent; color: #1677ff; }
+    .progress-body { padding: 20px 24px 24px; }
+    .summary { display: grid; grid-template-columns: repeat(7, minmax(110px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .metric { min-height: 94px; padding: 16px; border: 1px solid #edf0f5; border-radius: 11px; background: #fafcff; }
+    .metric.warning { background: #fffaf2; }
+    .metric.danger { background: #fff7f7; }
+    .metric-label { margin-bottom: 7px; color: #7a808a; font-size: 14px; }
+    .metric-value { font-size: 27px; font-weight: 700; line-height: 1.2; }
+    .metric-suffix { margin-left: 3px; color: #8b919a; font-size: 13px; font-weight: 400; }
+    .progress-track { height: 7px; margin-top: 10px; overflow: hidden; border-radius: 8px; background: #e8ebf0; }
+    .progress-bar { height: 100%; border-radius: 8px; background: #1677ff; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    th { height: 48px; padding: 0 14px; background: #f5f7fa; color: #405172; font-weight: 600; text-align: left; }
+    td { height: 58px; padding: 10px 14px; border-bottom: 1px solid #edf0f5; }
+    .main-row { cursor: pointer; }
+    .main-row:hover td { background: #fafcff; }
+    .expand-icon { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; margin-right: 7px; border-radius: 5px; color: #1677ff; transition: transform .2s; }
+    .expanded .expand-icon { transform: rotate(90deg); }
+    .topic-name { font-weight: 600; }
+    .topic-code { margin-left: 8px; padding: 2px 8px; border-radius: 5px; background: #eaf3ff; color: #1677ff; font-size: 12px; }
+    .tag { display: inline-block; min-width: 64px; padding: 3px 9px; border-radius: 6px; text-align: center; font-size: 13px; }
+    .tag-warn { background: #fff1d6; color: #d46b08; }
+    .tag-ok { background: #e8f8ee; color: #15803d; }
+    .mini-progress { display: flex; align-items: center; gap: 8px; }
+    .mini-progress .progress-track { width: 100px; margin: 0; }
+    .detail-row { display: none; }
+    .detail-row.open { display: table-row; }
+    .detail-cell { padding: 0 28px 22px 56px; background: #fafcff; }
+    .detail-box { overflow: hidden; border: 1px solid #e4eaf2; border-radius: 10px; background: #fff; }
+    .detail-box th { height: 42px; background: #f8fafc; }
+    .detail-box td { height: 48px; }
+    .sub-indicator { padding-left: 26px; color: #6b7280; }
+    .missing { color: #d4380d; font-weight: 600; }
+    .filter-area { padding: 18px 24px 14px; border-bottom: 1px solid #edf0f5; }
+    .filters { flex-wrap: wrap; }
+    .filters select { width: 190px; }
+    .filters input { width: 240px; padding-right: 13px; }
+    .filter-actions { margin-left: auto; }
+    .list-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px 10px; }
+    .list-title { font-size: 17px; font-weight: 700; }
+    .list-count { color: #8b919a; font-size: 14px; }
+    .table-wrap { padding: 0 24px 24px; }
+    .status { padding: 4px 9px; border-radius: 6px; background: #eaf3ff; color: #1677ff; font-size: 13px; }
+    .status.green { background: #e8f8ee; color: #15803d; }
+    .pagination { display: flex; justify-content: flex-end; gap: 8px; padding-top: 18px; }
+    .page-btn { width: 34px; height: 34px; border: 1px solid #d9dde5; border-radius: 7px; background: #fff; }
+    .page-btn.active { border-color: #1677ff; color: #1677ff; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="card-head">
+        <div class="card-title">成果进度</div>
+        <div class="toolbar">
+          <div class="field"><label>课题</label><select class="topic-select" id="topicFilter"><option>全部课题</option><option>K1 总体架构与关键技术研究</option><option>K2 核心设备研制</option><option>K3 系统平台研发</option></select></div>
+          <div class="field"><label>时间节点</label><select class="node-select"><option>第一年度</option><option selected>第二年度</option><option>第三年度</option><option>项目结项</option></select></div>
+          <button class="btn" id="refreshBtn">↻ 刷新</button>
+        </div>
+      </header>
+      <div class="progress-body">
+        <div class="summary">
+          <div class="metric"><div class="metric-label">累计分配指标</div><div class="metric-value">30<span class="metric-suffix">项</span></div></div>
+          <div class="metric"><div class="metric-label">已发起</div><div class="metric-value">22<span class="metric-suffix">项</span></div></div>
+          <div class="metric"><div class="metric-label">预审通过</div><div class="metric-value">18<span class="metric-suffix">项</span></div></div>
+          <div class="metric"><div class="metric-label">正式成果</div><div class="metric-value">15<span class="metric-suffix">项</span></div></div>
+          <div class="metric"><div class="metric-label">已生效</div><div class="metric-value">12<span class="metric-suffix">项</span></div></div>
+          <div class="metric warning"><div class="metric-label">尚未发起</div><div class="metric-value">8<span class="metric-suffix">项</span></div></div>
+          <div class="metric"><div class="metric-label">总体完成率</div><div class="metric-value">40<span class="metric-suffix">%</span></div><div class="progress-track"><div class="progress-bar" style="width:40%"></div></div></div>
+        </div>
+
+        <table>
+          <thead><tr><th style="width:34%">课题汇总</th><th>累计目标</th><th>已发起</th><th>已生效</th><th>尚未发起</th><th style="width:170px">完成率</th></tr></thead>
+          <tbody>
+            <tr class="main-row" data-detail="detail-k1"><td><span class="expand-icon">▶</span><span class="topic-name">总体架构与关键技术研究</span><span class="topic-code">K1</span></td><td>10</td><td>8</td><td>5</td><td><span class="tag tag-warn">2 项</span></td><td><div class="mini-progress"><div class="progress-track"><div class="progress-bar" style="width:50%"></div></div><span>50%</span></div></td></tr>
+            <tr class="detail-row" id="detail-k1"><td class="detail-cell" colspan="6"><div class="detail-box"><table>
+              <thead><tr><th>成果指标</th><th>累计目标</th><th>已发起</th><th>预审通过</th><th>已生效</th><th>尚未发起</th><th>完成率</th></tr></thead>
+              <tbody>
+                <tr><td><b>学术论文总数</b></td><td>5</td><td>4</td><td>3</td><td>2</td><td class="missing">1</td><td>40%</td></tr>
+                <tr><td class="sub-indicator">其中：广西电网第一作者</td><td>2</td><td>2</td><td>2</td><td>1</td><td>0</td><td>50%</td></tr>
+                <tr><td class="sub-indicator">其中：中文核心期刊</td><td>2</td><td>1</td><td>1</td><td>1</td><td class="missing">1</td><td>50%</td></tr>
+                <tr><td><b>发明专利总数</b></td><td>3</td><td>2</td><td>2</td><td>2</td><td class="missing">1</td><td>67%</td></tr>
+                <tr><td><b>软件著作权总数</b></td><td>2</td><td>2</td><td>1</td><td>1</td><td>0</td><td>50%</td></tr>
+              </tbody>
+            </table></div></td></tr>
+            <tr class="main-row" data-detail="detail-k2"><td><span class="expand-icon">▶</span><span class="topic-name">核心设备研制</span><span class="topic-code">K2</span></td><td>12</td><td>9</td><td>6</td><td><span class="tag tag-warn">3 项</span></td><td><div class="mini-progress"><div class="progress-track"><div class="progress-bar" style="width:50%"></div></div><span>50%</span></div></td></tr>
+            <tr class="detail-row" id="detail-k2"><td class="detail-cell" colspan="6"><div class="detail-box"><table><thead><tr><th>未完成指标</th><th>累计目标</th><th>已发起</th><th>尚未发起</th></tr></thead><tbody><tr><td>学术论文总数</td><td>6</td><td>4</td><td class="missing">2</td></tr><tr><td>标准规范总数</td><td>2</td><td>1</td><td class="missing">1</td></tr></tbody></table></div></td></tr>
+            <tr class="main-row" data-detail="detail-k3"><td><span class="expand-icon">▶</span><span class="topic-name">系统平台研发</span><span class="topic-code">K3</span></td><td>8</td><td>5</td><td>1</td><td><span class="tag tag-warn">3 项</span></td><td><div class="mini-progress"><div class="progress-track"><div class="progress-bar" style="width:13%"></div></div><span>13%</span></div></td></tr>
+            <tr class="detail-row" id="detail-k3"><td class="detail-cell" colspan="6"><div class="detail-box"><table><thead><tr><th>未完成指标</th><th>累计目标</th><th>已发起</th><th>尚未发起</th></tr></thead><tbody><tr><td>人才培养总数</td><td>4</td><td>2</td><td class="missing">2</td></tr><tr><td>软件著作权总数</td><td>2</td><td>1</td><td class="missing">1</td></tr></tbody></table></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="filter-area">
+        <div class="filters">
+          <div class="field"><label>处理范围</label><select><option>待我处理</option><option>全部成果</option></select></div>
+          <div class="field"><label>所属课题</label><select><option>全部相关课题</option><option>K1 总体架构与关键技术研究</option></select></div>
+          <div class="field"><label>成果状态</label><select><option>全部状态</option><option>预审中</option><option>已生效</option></select></div>
+          <div class="field"><label>成果指标</label><select><option>全部指标</option><option>学术论文</option><option>发明专利</option></select></div>
+          <div class="field"><label>成果名称</label><input placeholder="请输入成果名称" /></div>
+          <div class="actions filter-actions"><button class="btn">重置</button><button class="btn btn-link">收起⌃</button></div>
+        </div>
+      </div>
+      <div class="list-head"><div><span class="list-title">成果记录</span><span class="list-count">　共 5 条</span></div><button class="btn btn-primary">＋ 新增成果</button></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>成果名称</th><th>课题</th><th>提交单位</th><th>成果类型</th><th>负责人</th><th>状态</th><th>操作</th></tr></thead>
+          <tbody>
+            <tr><td><b>面向智能电网的调度算法研究</b><br><span class="list-count">学术论文</span></td><td>K1 总体架构研究</td><td>山东大学</td><td>学术论文</td><td>张三</td><td><span class="status">预审中</span></td><td><button class="btn btn-link">审批</button></td></tr>
+            <tr><td><b>电网负荷预测方法及系统</b><br><span class="list-count">发明专利</span></td><td>K2 核心设备研制</td><td>清华大学</td><td>发明专利</td><td>李四</td><td><span class="status green">已生效</span></td><td><button class="btn btn-link">查看</button></td></tr>
+            <tr><td><b>科研数据协同管理平台</b><br><span class="list-count">软件著作权</span></td><td>K3 系统平台研发</td><td>广西电网</td><td>软件著作权</td><td>王五</td><td><span class="status">终审中</span></td><td><button class="btn btn-link">审批</button></td></tr>
+          </tbody>
+        </table>
+        <div class="pagination"><button class="page-btn">‹</button><button class="page-btn active">1</button><button class="page-btn">2</button><button class="page-btn">›</button></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll('.main-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const detail = document.getElementById(row.dataset.detail);
+        const open = detail.classList.toggle('open');
+        row.classList.toggle('expanded', open);
+      });
+    });
+    document.getElementById('refreshBtn').addEventListener('click', (event) => {
+      const button = event.currentTarget;
+      button.textContent = '↻ 刷新中';
+      setTimeout(() => { button.textContent = '↻ 刷新'; }, 650);
+    });
+  </script>
+</body>
+</html>

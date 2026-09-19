@@ -8,6 +8,8 @@ public interface AchievementMapper {
                   List<String> visibleStates,List<String> pendingStates,long offset,long size) {}
     String FILTER="""
         <where>
+        AND EXISTS (SELECT 1 FROM biz_topic visible_topic WHERE visible_topic.id=achievement.topic_id
+          AND visible_topic.enabled=1 AND visible_topic.status&lt;&gt;'DRAFT')
         <if test='unit != null'>
           AND ((unit_id=#{unit} AND topic_id IN <foreach collection='memberTopics' item='t' open='(' close=')' separator=','>#{t}</foreach>)
           OR (topic_id IN <foreach collection='leadTopics' item='t' open='(' close=')' separator=','>#{t}</foreach>

@@ -8,7 +8,7 @@
 
 - 五类都从 DRAFT 开始，均需科研助理初审、项目技术负责人终审；人才不跳过预审。
 - 论文、专利预审通过后登记投稿/申请，再进入正式草稿。其他三类预审终审通过直接进入正式草稿。
-- 论文、专利正式终审通过后仍不计数，分别等待见刊、授权材料补充；补充也走两级审批，终审后生效。其他三类正式终审通过即生效。
+- 五类成果在正式终审通过后计入完成；论文须已录用、专利须已授权、软件著作权须取得证书。论文、专利仍保留后续补充材料两级审批，进入或退回补充阶段不撤销已有完成计数。
 - 所属单位仅能编辑草稿、退回和待补充状态；审批中及生效后锁定。任何退回重提都从初审重新开始。
 - 动作必须携带 recordVersion；审批同时携带 recordVersion、submittedVersion，退回意见必填。
 - 同一幂等键、同一请求返回原结果；同键不同请求 409。
@@ -33,7 +33,7 @@
 | SUPPLEMENT_FINAL | 终审通过 / 退回 | EFFECTIVE / SUPPLEMENT_RETURNED |
 | EFFECTIVE | 编辑、再次提交、再次审批 | 拒绝 |
 
-只有 EFFECTIVE 的 countsToIndicator=true；其他状态均为 false。阶段转换更新同一条成果，不复制新成果，不对目标数量执行加一。第 8 步再消费生效标记实现累计和专项统计，本步没有实现进度聚合。
+正式终审通过后 countsToIndicator=true；论文、专利后续处于待补充、补充审批或补充退回状态时仍保持 true，补充终审后状态转为 EFFECTIVE。阶段转换更新同一条成果，不复制新成果，不对目标数量执行加一。第 8 步消费该完成标记实现累计和专项统计。
 
 允许编辑状态精确为 DRAFT、PRE_RETURNED、FORMAL_DRAFT、FORMAL_RETURNED、WAIT_PUBLICATION、WAIT_GRANT、SUPPLEMENT_RETURNED。PRE_APPROVED 和 EXTERNAL_SUBMITTED 仅用于阶段动作，不允许编辑。
 
@@ -62,7 +62,7 @@
 | 类型 | 正式提交日期和状态 | 正式必需材料 |
 |---|---|---|
 | PAPER | acceptanceDate；paperStatus 已录用或已正式刊出 | 论文定稿、录用通知或接收函、项目标注页 |
-| PATENT | receiptDate；patentStatus 已受理或已授权 | 专利受理通知书、专利申请文件、项目关联说明 |
+| PATENT | grantDate；patentStatus 已授权 | 专利授权证书、专利授权文件、项目关联说明 |
 | COPYRIGHT | certificateDate | 软件著作权证书、软件鉴别材料、著作权人证明 |
 | STANDARD | draftCommitDate | 标准送审稿、送审或立项证明 |
 | TALENT | actualGraduationDate | 研究生学位论文证明材料 |

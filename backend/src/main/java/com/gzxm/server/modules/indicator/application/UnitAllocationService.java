@@ -117,6 +117,32 @@ public class UnitAllocationService {
         publish(topicId, new PublishRequest(request.nodeId(), saved.draftVersion()), key);
     }
 
+    @Transactional
+    public void confirmPlan(long topicId, AllocationPlanBatch request, String key) {
+        if (key == null || !key.matches("[!-~]{8,80}"))
+            throw invalid("INVALID_IDEMPOTENCY_KEY", "Idempotency-Key必须是8到80位可见ASCII字符");
+        var topic = topics.lockTopic(topicId);
+        lead(topicId, "unit-allocation.publish");
+        writable(topic);
+        if (request == null || request.stages() == null)
+            throw invalid("ALLOCATION_PLAN_REQUIRED", "必须提交全部时间阶段的分配方案");
+        var activeNodes = indicators.nodes(topic.projectId());
+        var submitted = new LinkedHashMap<Long, AllocationBatch>();
+        for (var stage : request.stages()) {
+            long stageId = TopicService.id(stage.nodeId());
+            if (submitted.putIfAbsent(stageId, stage) != null)
+                throw invalid("DUPLICATE_ALLOCATION_STAGE", "同一时间阶段不能重复提交");
+        }
+        var missing = activeNodes.stream().filter(node -> !submitted.containsKey(node.id())).map(TopicIndicatorMapper.Node::name).toList();
+        if (!missing.isEmpty() || submitted.size() != activeNodes.size())
+            throw invalid("ALLOCATION_PLAN_INCOMPLETE", "必须一次提交全部时间阶段；缺少：" + String.join("、", missing));
+        for (var node : activeNodes) {
+            var stage = submitted.get(node.id());
+            var saved = save(topicId, stage);
+            publish(topicId, new PublishRequest(stage.nodeId(), saved.draftVersion()), key + "-" + node.id());
+        }
+    }
+
     private Context context(TopicQueryService.TopicSummary topic,long nodeId) {
         var node=node(nodeId,topic.projectId(),true);
         var targets=indicators.effective(topic.id(),nodeId).stream().collect(Collectors.toMap(row->TopicService.id(row.indicatorDefinitionId()),row->row));
@@ -155,29 +181,15 @@ public class UnitAllocationService {
                 if(base.size()!=1 || base.getFirst().getValue()<row.getValue()) throw invalid("ALLOCATION_SPECIAL_EXCEEDS_BASE","每个单位的各专项分配必须分别不超过对应成果总数；专项之间允许重叠");
             }
         }
-        var effective=mapper.effectiveQuantities(topic);
-        cumulative(effective,context.node(),values);
-        if(!publishing) cumulative(mapper.pendingQuantities(topic),context.node(),values);
         if(publishing) {
             for(var member:context.members().keySet()) for(var target:context.targets().keySet())
                 if(!values.containsKey(new Dimension(member,target))) throw invalid("ALLOCATION_COVERAGE_INCOMPLETE","发布须覆盖所有有效启用成员（含牵头）及生效指标，零目标请显式填0");
             for(var target:context.targets().entrySet()) {
                 long sum=values.entrySet().stream().filter(row->row.getKey().definition()==target.getKey()).mapToLong(Map.Entry::getValue).sum();
-                if(sum<target.getValue().targetQuantity()) throw invalid("ALLOCATION_TOTAL_TOO_LOW","单位分配合计不得低于课题累计目标");
+                if(sum!=target.getValue().targetQuantity())
+                    throw invalid("ALLOCATION_STAGE_TOTAL_MISMATCH", context.node().name()+"的指标“"+
+                            definitions.get(target.getKey()).name()+"”要求分配"+target.getValue().targetQuantity()+"，当前已分配"+sum);
             }
-            for(var old:effective) if(old.nodeId()==context.node().id() && context.members().containsKey(old.unitId())) {
-                var next=values.get(new Dimension(old.unitId(),old.definitionId()));
-                if(next==null || next<old.quantity()) throw conflict("PUBLISHED_ALLOCATION_REDUCTION_UNSUPPORTED","当前不支持降低有效成员已生效分配，需先落实完成量与调整契约");
-            }
-        }
-    }
-
-    private void cumulative(List<UnitAllocationMapper.Quantity> existing,TopicIndicatorMapper.Node node,Map<Dimension,Integer> values) {
-        for(var old:existing) {
-            var next=values.get(new Dimension(old.unitId(),old.definitionId()));
-            if(next==null || old.nodeId()==node.id()) continue;
-            if((old.sortOrder()<node.sortOrder() && old.quantity()>next) || (old.sortOrder()>node.sortOrder() && old.quantity()<next))
-                throw invalid("ALLOCATION_CUMULATIVE_INVALID","每单位每指标的累计目标须前后节点不递减");
         }
     }
     private TopicIndicatorMapper.Node node(long id,long project,boolean writing) {

@@ -44,7 +44,7 @@ achievement 通过 indicator/topic 的公开服务取数，不跨模块引用 Ma
 
 | 响应字段 | 含义 |
 |---|---|
-| baseTotals | 五类生效数量，固定 PAPER/PATENT/COPYRIGHT/STANDARD/TALENT；排除历史单位和专项重复 |
+| baseTotals | 五类完成数量，固定 PAPER/PATENT/COPYRIGHT/STANDARD/TALENT；以 countsToIndicator 标记为准，排除历史单位和专项重复 |
 | baseStages | 当前有效成员可见成果的六个阶段汇总 |
 | rows | 基础指标明细，含 TOPIC/UNIT、目标、比例、阶段和 historical |
 | specialIndicators | 专项明细，结构同 rows，可能交叠，不能加入基础总量 |

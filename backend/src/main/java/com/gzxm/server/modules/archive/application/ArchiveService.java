@@ -51,6 +51,7 @@ public class ArchiveService {
         while (true) {
             var slice = topicService.list(page++, 200, null, null, true);
             for (var topic : slice.items()) {
+                if ("DRAFT".equals(topic.status())) continue;
                 long topicId = Long.parseLong(topic.id());
                 if (topicFilter != null && topicFilter != topicId) continue;
                 for (var member : topics.listMembers(topicId, false)) {
@@ -95,9 +96,14 @@ public class ArchiveService {
     @Transactional
     public void deleteFolder(long folderId) {
         var folder = folder(folderId, true);
-        if (!"TOPIC_NATIONAL".equals(folder.ownerType()))
-            throw BusinessException.forbidden("ARCHIVE_FOLDER_DELETE_DENIED", "只能删除课题国家材料中的自定义文件夹");
-        requireNationalFolderManagement(Long.parseLong(folder.topicId()), Long.parseLong(folder.unitId()));
+        if ("TOPIC_NATIONAL".equals(folder.ownerType())) {
+            requireNationalFolderManagement(Long.parseLong(folder.topicId()), Long.parseLong(folder.unitId()));
+        } else if ("SELF_FUNDED".equals(folder.ownerType())) {
+            project(Long.parseLong(folder.ownerId()));
+            requireFolderScope(Long.parseLong(folder.topicId()), Long.parseLong(folder.unitId()), "SELF_FUNDED", true);
+        } else {
+            throw BusinessException.forbidden("ARCHIVE_FOLDER_DELETE_DENIED", "只能删除自定义归档文件夹");
+        }
         if (!folder.canDelete()) throw BusinessException.forbidden("ARCHIVE_FOLDER_DELETE_DENIED", "无权删除该文件夹");
         if (folder.fileCount() > 0) throw BusinessException.conflict("ARCHIVE_FOLDER_NOT_EMPTY", "请先移除文件");
         db.update("UPDATE archive_folder SET deleted_at=NOW(3) WHERE id=? AND deleted_at IS NULL", folderId);
@@ -207,6 +213,22 @@ public class ArchiveService {
         return queryFolders("owner_type='SELF_FUNDED' AND owner_id=?", projectId);
     }
 
+    @Transactional
+    public Folder addProjectFolder(long projectId, String name, Boolean required) {
+        Project project = project(projectId);
+        long topicId = Long.parseLong(project.topicId()), unitId = Long.parseLong(project.ownerUnitId());
+        requireFolderScope(topicId, unitId, "SELF_FUNDED", true);
+        name = name.trim();
+        if (name.isEmpty()) throw BusinessException.validation("ARCHIVE_FOLDER_NAME_REQUIRED", "文件夹名称不能为空");
+        if (db.queryForObject("SELECT COUNT(*) FROM archive_folder WHERE owner_type='SELF_FUNDED' AND owner_id=? " +
+                "AND unit_id=? AND name=? AND deleted_at IS NULL", Integer.class, projectId, unitId, name) > 0)
+            throw BusinessException.conflict("ARCHIVE_FOLDER_EXISTS", "文件夹名称已存在");
+        db.update("INSERT INTO archive_folder(owner_type,owner_id,topic_id,unit_id,name,required_flag,required_quantity," +
+                        "custom_flag,created_by) VALUES('SELF_FUNDED',?,?,?,?,?,1,1,?)",
+                projectId, topicId, unitId, name, required == null || required, security.requireCurrentUser().id());
+        return folder(lastId());
+    }
+
     public List<Progress> progress(Long topicFilter, Long unitFilter, String ownerType) {
         if (topicFilter != null) topics.getTopic(topicFilter);
         if (ownerType != null && !Set.of("TOPIC_NATIONAL", "SELF_FUNDED").contains(ownerType))
@@ -308,9 +330,9 @@ public class ArchiveService {
             throw BusinessException.notFound("TOPIC_UNIT_NOT_FOUND", "课题单位不存在");
         if (write) {
             var user = security.requireCurrentUser();
-            if (user.unitId() == null || user.unitId() != unitId ||
+            if (!user.isGlobalRole() && (user.unitId() == null || user.unitId() != unitId ||
                     (!user.isInternalUnit() && !user.isExternalUnit()) ||
-                    "SELF_FUNDED".equals(ownerType) && !user.isInternalUnit())
+                    "SELF_FUNDED".equals(ownerType) && !user.isInternalUnit()))
                 throw BusinessException.forbidden("ARCHIVE_OWNER_REQUIRED", "只能维护本单位材料");
             var topic = topics.lockTopic(topicId);
             if (!topic.enabled() || !"ACTIVE".equals(topic.status()))
@@ -321,6 +343,7 @@ public class ArchiveService {
         var user = security.requireCurrentUser();
         if ("SELF_FUNDED".equals(ownerType) && user.isExternalUnit()) return false;
         if (!topics.canReadTopic(topicId)) return false;
+        if (!topics.isBusinessVisibleTopic(topicId)) return false;
         if (user.isGlobalRole()) return true;
         if (user.unitId() == null) return false;
         return user.unitId() == unitId || topics.isLeadUnit(topicId, user.unitId());
