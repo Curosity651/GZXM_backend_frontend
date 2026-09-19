@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
-import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
+import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../api/http-client';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
 import { reportApi, type ApiApproval, type ApiReport, type ReportContent, type ReportRule } from '../../api/report-api';
@@ -231,7 +231,7 @@ export function ReportManagementPage() {
         <Space className="report-filter-field" size={8}><Text>年度</Text><InputNumber placeholder="全部年度" value={filters.year} onChange={(value) => setFilters({ ...filters, year: value ?? undefined })} /></Space>
         <Space className="report-filter-field" size={8}><Text>期次</Text><InputNumber placeholder="全部期次" value={filters.period} onChange={(value) => setFilters({ ...filters, period: value ?? undefined })} /></Space>
       </>}
-      <Space className="report-filter-actions" size={10}><Button type="primary" icon={<SearchOutlined />}>查询</Button><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
+      <Space className="report-filter-actions" size={10}><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
     </div></Card>
     <Card title="月季报进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
       {[["已发起报告", stats.total], ['草稿', stats.draft], ['审核中', stats.reviewing], ['已通过', stats.approved], ['退回修改', stats.returned], ['逾期', stats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
