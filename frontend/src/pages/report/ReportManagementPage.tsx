@@ -222,7 +222,7 @@ export function ReportManagementPage() {
   const ruleStatusColor = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? 'success' : topicId && ruleStatuses[topicId] === false ? 'default' : 'processing';
 
   return <>
-    <Card className="report-filter-card" style={{ marginBottom: 16 }}><div className={`report-filter-grid${expanded ? ' is-expanded' : ''}`}>
+    <Card className="report-filter-card" style={{ marginBottom: 16 }}><div className={`report-filter-grid${expanded ? ' is-expanded' : ''}${canReview ? ' has-review-scope' : ''}`}>
       {canReview && <Space className="report-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingOnly} onChange={(value) => setFilters({ ...filters, pendingOnly: value })} options={[{ label: '待我处理', value: true }, { label: '全部报告', value: false }]} /></Space>}
       <Space className="report-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部课题" value={filters.topicId} onChange={(value) => setFilters({ ...filters, topicId: value })} options={topics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>
       <Space className="report-filter-field" size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).filter(([value]) => visibleStatusCodes.has(value as ApiReport['status'])).map(([value, label]) => ({ value, label }))} /></Space>
