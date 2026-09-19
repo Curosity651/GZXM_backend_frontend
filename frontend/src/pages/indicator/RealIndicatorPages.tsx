@@ -275,11 +275,13 @@ export function RealTopicIndicatorConfigPage() {
         .filter((member) => member.enabled && member.membershipType === 'PARTICIPANT'
           && units.some((unit) => unit.id === member.unitId && unit.enabled && unit.topicUnitEligible))
         .map((member) => member.unitId).sort();
+      const hasIneligibleActiveParticipant = (topic?.members ?? []).some((member) => member.enabled
+        && member.membershipType === 'PARTICIPANT' && !eligibleUnitIds.has(member.unitId));
       const nextParticipants = [...data.participantUnitIds].sort();
       const topicChanged = !topic || topic.code !== data.code || topic.name !== data.name
         || (topic.summary ?? '') !== (data.summary ?? '') || topic.leadUnitId !== data.leadUnitId
         || (topic.startDate ?? '') !== (data.startDate ?? '') || (topic.endDate ?? '') !== (data.endDate ?? '')
-        || currentParticipants.join(',') !== nextParticipants.join(',');
+        || currentParticipants.join(',') !== nextParticipants.join(',') || hasIneligibleActiveParticipant;
       const saved = topic ? (topicChanged ? await topicApi.update(topic.id, data) : topic) : await topicApi.create(data);
       latestTopic = saved;
       const versions: VersionMap = {};

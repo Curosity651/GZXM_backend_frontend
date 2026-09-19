@@ -96,8 +96,17 @@ public class TopicService {
         participants.forEach(unit -> requireEligibleTopicUnit(unit, directory));
         try {
             if (topic.getLeadUnitId() != leadId) changeLead(topic, leadId, user.id());
+            Set<Long> requestedParticipants = new HashSet<>(participants);
+            for (var member : members.list(topicId)) {
+                if (!"PARTICIPANT".equals(member.getMembershipType())) continue;
+                boolean shouldEnable = requestedParticipants.contains(member.getUnitId());
+                if (member.isEnabled() != shouldEnable) {
+                    member.setEnabled(shouldEnable);
+                    member.setUpdatedBy(user.id());
+                    members.update(member);
+                }
+            }
             for (long unitId : participants) {
-                // Explicit additive semantics: existing and disabled relationships are preserved.
                 if (members.findUnit(topicId, unitId) == null) insertMember(topicId, unitId, "PARTICIPANT", user.id());
             }
             apply(request, topic, user);
