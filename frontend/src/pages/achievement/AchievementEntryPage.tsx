@@ -59,6 +59,8 @@ export function AchievementEntryPage() {
   const [opinion, setOpinion] = useState('');
   const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
   const [progress, setProgress] = useState<AchievementProgress>();
+  const [progressPagination, setProgressPagination] = useState({ current: 1, pageSize: 5 });
+  const [entryPagination, setEntryPagination] = useState({ current: 1, pageSize: 5 });
   const canSubmit = ['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT'].includes(user.roleCode) && user.actionPermissions.includes('achievement.submit');
   const canInitial = user.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('achievement.initial.approve');
   const canFinal = user.roleCode === 'PROJECT_TECH_LEADER' && user.actionPermissions.includes('achievement.final.approve');
@@ -92,8 +94,14 @@ export function AchievementEntryPage() {
   const selectedType = editing?.achievementType ?? (selectedAllocation ? definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.achievementType as ApiAchievement['achievementType'] : undefined);
   const visibleRows = rows.filter((item) => (!filters.keyword || item.title.toLowerCase().includes(filters.keyword.toLowerCase()))
     && (!filters.unitId || item.unitId === filters.unitId));
-  const baseTotals = progress?.baseTotals ?? {};
-  const targetTotal = Object.values(baseTotals).reduce((sum, value) => sum + value, 0);
+  const targetTotal = useMemo(() => {
+    if (!progress) return 0;
+    // 有课题汇总行时使用课题目标，避免再累加单位行造成重复统计；
+    // 普通课题单位仅能看到自己的单位行，因此直接汇总其单位目标。
+    const topicRows = progress.rows.filter((row) => row.scope === 'TOPIC');
+    const targetRows = topicRows.length > 0 ? topicRows : progress.rows.filter((row) => row.scope === 'UNIT');
+    return targetRows.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0);
+  }, [progress]);
   const completionRate = targetTotal > 0 ? Math.round(((progress?.baseStages.effective ?? 0) / targetTotal) * 100) : 0;
 
   const openCreate = () => { setEditing(undefined); setPendingFiles({}); form.resetFields(); setFormOpen(true); };
@@ -176,7 +184,14 @@ export function AchievementEntryPage() {
       ].map(([label, value]) => <Col flex="1 1 125px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
       <Col flex="1 1 220px"><Text type="secondary">完成率</Text><Progress percent={Math.min(completionRate, 100)} status={completionRate >= 100 ? 'success' : 'active'} format={() => `${completionRate}%`} /></Col>
     </Row>
-      <Table size="small" rowKey={(row) => `${row.scope}-${row.topicId ?? ''}-${row.unitId ?? ''}-${row.indicatorDefinitionId ?? ''}`} style={{ marginTop: 16 }} dataSource={progress.rows} pagination={{ pageSize: 5 }} scroll={{ x: 1100 }} columns={[
+      <Table size="small" rowKey={(row) => `${row.scope}-${row.topicId ?? ''}-${row.unitId ?? ''}-${row.indicatorDefinitionId ?? ''}`} style={{ marginTop: 16 }} dataSource={progress.rows} pagination={{
+        current: progressPagination.current,
+        pageSize: progressPagination.pageSize,
+        showSizeChanger: true,
+        pageSizeOptions: [5, 10, 20],
+        showTotal: (total) => `共 ${total} 条`,
+        onChange: (page, pageSize) => setProgressPagination((current) => ({ current: pageSize !== current.pageSize ? 1 : page, pageSize })),
+      }} scroll={{ x: 1100 }} columns={[
         { title: '课题', dataIndex: 'topicId', width: 190, render: (value: string) => topicMap[value]?.name ?? '全部课题' },
         { title: '单位', dataIndex: 'unitId', width: 160, render: (value: string) => unitMap[value] ?? '全部单位' },
         { title: '成果指标', dataIndex: 'indicatorDefinitionId', width: 160, render: (value: string) => definitionMap[value]?.name ?? '综合统计' },
@@ -188,7 +203,14 @@ export function AchievementEntryPage() {
         { title: '完成率', dataIndex: 'completionRate', width: 130, render: (value: number) => <Progress size="small" percent={Math.min(Math.round(value ?? 0), 100)} /> },
       ]} />
     </Card>}
-    <Card><Table loading={loading} rowKey="id" dataSource={visibleRows} scroll={{ x: 1150 }} columns={[
+    <Card><Table loading={loading} rowKey="id" dataSource={visibleRows} pagination={{
+      current: entryPagination.current,
+      pageSize: entryPagination.pageSize,
+      showSizeChanger: true,
+      pageSizeOptions: [5, 10, 20],
+      showTotal: (total) => `共 ${total} 条`,
+      onChange: (page, pageSize) => setEntryPagination((current) => ({ current: pageSize !== current.pageSize ? 1 : page, pageSize })),
+    }} scroll={{ x: 1150 }} columns={[
       { title: '成果名称', dataIndex: 'title', width: 260, fixed: 'left', render: (value, row) => <Space direction="vertical" size={0}><Text strong>{value}</Text><Text type="secondary">{definitionMap[row.indicatorDefinitionId]?.name ?? typeNames[row.achievementType]}</Text></Space> },
       { title: '课题', width: 180, render: (_, row) => topicMap[row.topicId]?.name ?? row.topicId },
       { title: '提交单位', width: 170, render: (_, row) => unitMap[row.unitId] ?? row.unitId },
