@@ -5,15 +5,15 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface TopicIndicatorMapper {
-    record Node(long id,long projectId,int sortOrder,boolean enabled) {}
-    record Definition(long id,String achievementType,String category,boolean enabled) {}
+    record Node(long id,long projectId,String name,int sortOrder,boolean enabled) {}
+    record Definition(long id,String name,String achievementType,String category,boolean enabled) {}
     record Draft(long id,int draftVersion,int publishedDraftVersion,int publishVersion) {}
     record Publication(long topicId,long nodeId,int draftVersion) {}
-    record Quantity(long definitionId,long nodeId,int sortOrder,int quantity) {}
+    record Quantity(long definitionId,String definitionName,long nodeId,String nodeName,int sortOrder,int quantity) {}
 
-    @Select("SELECT id,project_id,sort_order,enabled FROM time_node WHERE id=#{id}")
+    @Select("SELECT id,project_id,name,sort_order,enabled FROM time_node WHERE id=#{id}")
     Node node(long id);
-    @Select("SELECT id,achievement_type,category,enabled FROM indicator_definition ORDER BY id")
+    @Select("SELECT id,name,achievement_type,category,enabled FROM indicator_definition ORDER BY id")
     List<Definition> definitions();
     @Select("SELECT id,draft_version,published_draft_version,publish_version FROM topic_indicator_draft WHERE topic_id=#{topic} AND node_id=#{node}")
     Draft draft(@Param("topic") long topic,@Param("node") long node);
@@ -29,9 +29,9 @@ public interface TopicIndicatorMapper {
     List<TargetView> draftTargets(@Param("topic") long topic,@Param("node") long node);
     @Select("SELECT CAST(id AS CHAR) id,CAST(topic_id AS CHAR) topic_id,CAST(node_id AS CHAR) node_id,CAST(indicator_definition_id AS CHAR) indicator_definition_id,target_quantity,status,publish_version version FROM topic_indicator WHERE topic_id=#{topic} AND node_id=#{node} AND status='PUBLISHED' ORDER BY indicator_definition_id")
     List<TargetView> effective(@Param("topic") long topic,@Param("node") long node);
-    @Select("SELECT t.indicator_definition_id definition_id,t.node_id,n.sort_order,t.target_quantity quantity FROM topic_indicator t JOIN time_node n ON n.id=t.node_id WHERE t.topic_id=#{topic} AND t.status='PUBLISHED' ORDER BY n.sort_order")
+    @Select("SELECT t.indicator_definition_id definition_id,d.name definition_name,t.node_id,n.name node_name,n.sort_order,t.target_quantity quantity FROM topic_indicator t JOIN time_node n ON n.id=t.node_id JOIN indicator_definition d ON d.id=t.indicator_definition_id WHERE t.topic_id=#{topic} AND t.status='PUBLISHED' ORDER BY n.sort_order")
     List<Quantity> effectiveQuantities(long topic);
-    @Select("SELECT t.indicator_definition_id definition_id,d.node_id,n.sort_order,t.target_quantity quantity FROM topic_indicator_draft_target t JOIN topic_indicator_draft d ON d.id=t.draft_id JOIN time_node n ON n.id=d.node_id WHERE d.topic_id=#{topic} AND d.draft_version>d.published_draft_version ORDER BY n.sort_order")
+    @Select("SELECT t.indicator_definition_id definition_id,i.name definition_name,d.node_id,n.name node_name,n.sort_order,t.target_quantity quantity FROM topic_indicator_draft_target t JOIN topic_indicator_draft d ON d.id=t.draft_id JOIN time_node n ON n.id=d.node_id JOIN indicator_definition i ON i.id=t.indicator_definition_id WHERE d.topic_id=#{topic} AND d.draft_version>d.published_draft_version ORDER BY n.sort_order")
     List<Quantity> pendingQuantities(long topic);
     @Select("SELECT topic_id,node_id,draft_version FROM topic_indicator_publication WHERE published_by=#{actor} AND request_key=#{key}")
     Publication publication(@Param("actor") long actor,@Param("key") String key);

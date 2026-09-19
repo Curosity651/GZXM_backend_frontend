@@ -244,7 +244,11 @@ export function RealTopicIndicatorConfigPage() {
       let previous = 0;
       for (const node of nodes) {
         const value = targetsByNode[node.id]?.[definition.id] ?? 0;
-        if (value < previous) { message.warning(`${node.name}的“${definition.name}”累计目标不能低于前序时间节点`); return false; }
+        if (value < previous) {
+          const previousNode = nodes[nodes.indexOf(node) - 1];
+          message.warning(`${node.name}的“${definition.name}”为 ${value}，不能低于前序节点“${previousNode?.name ?? ''}”的 ${previous}`);
+          return false;
+        }
         previous = value;
       }
     }
@@ -252,7 +256,7 @@ export function RealTopicIndicatorConfigPage() {
       for (const special of definitions.filter((item) => item.category === 'SPECIAL')) {
         const base = definitions.find((item) => item.category === 'BASE' && item.achievementType === special.achievementType);
         if (base && (targetsByNode[node.id]?.[special.id] ?? 0) > (targetsByNode[node.id]?.[base.id] ?? 0)) {
-          message.warning(`${node.name}的“${special.name}”不能超过同类型总目标`); return false;
+          message.warning(`${node.name}的“${special.name}”为 ${targetsByNode[node.id]?.[special.id] ?? 0}，不能超过“${base.name}总数”的 ${targetsByNode[node.id]?.[base.id] ?? 0}`); return false;
         }
       }
     }
@@ -286,7 +290,8 @@ export function RealTopicIndicatorConfigPage() {
         setTargetDraftVersions((current) => ({ ...current, [node.id]: draft.draftVersion }));
       }
       if (submit) {
-        for (const node of nodes) await indicatorApi.publishTargets(saved.id, node.id, versions[node.id]);
+        for (const node of [...nodes].sort((left, right) => right.sortOrder - left.sortOrder))
+          await indicatorApi.publishTargets(saved.id, node.id, versions[node.id]);
         await topicApi.setStatus(saved.id, true, 'ACTIVE');
       }
       message.success(submit ? (topic?.status === 'ACTIVE' ? '课题配置修改已提交' : '课题已提交并进入实施中') : (topic?.status === 'ACTIVE' ? '课题修改草稿已保存' : '课题草稿已保存'));

@@ -123,25 +123,38 @@ public class TopicIndicatorService {
                     var d=definitions.get(candidate.getKey());
                     return d!=null && d.enabled() && "BASE".equals(d.category()) && d.achievementType().equals(definition.achievementType());
                 }).toList();
-                if (base.size()!=1 || base.getFirst().getValue()<entry.getValue())
-                    throw invalid("SPECIAL_TARGET_EXCEEDS_BASE","每个专项指标必须分别不超过对应成果总数；同一成果可同时满足多个专项条件");
+                if (base.size()!=1)
+                    throw invalid("SPECIAL_TARGET_EXCEEDS_BASE",node.name()+"的“"+definition.name()+"”缺少唯一对应的成果总数");
+                if (base.getFirst().getValue()<entry.getValue()) {
+                    var baseDefinition=definitions.get(base.getFirst().getKey());
+                    throw invalid("SPECIAL_TARGET_EXCEEDS_BASE",node.name()+"的“"+definition.name()+"”为"+entry.getValue()+
+                            "，不能超过“"+baseDefinition.name()+"总数”的"+base.getFirst().getValue());
+                }
             }
         }
         var effective=mapper.effectiveQuantities(topic);
         // Until completed-achievement adjustment contracts exist, do not invalidate published obligations.
-        for (var old:effective) if (!includeDrafts && old.nodeId()==node.id() && (!values.containsKey(old.definitionId()) || values.get(old.definitionId())<old.quantity()))
-            throw conflict("PUBLISHED_TARGET_REDUCTION_UNSUPPORTED","已发布指标暂不支持删除或降额，请保留原下发要求");
+        for (var old:effective) if (!includeDrafts && old.nodeId()==node.id() && (!values.containsKey(old.definitionId()) || values.get(old.definitionId())<old.quantity())) {
+            int next=values.getOrDefault(old.definitionId(),0);
+            throw conflict("PUBLISHED_TARGET_REDUCTION_UNSUPPORTED",node.name()+"的“"+old.definitionName()+"”已下发"+old.quantity()+
+                    "，当前填写"+next+"，不能删除或降低已下发要求");
+        }
         checkCumulative(effective,node,values);
-        if (includeDrafts) checkCumulative(mapper.pendingQuantities(topic),node,values);
+        // Other node drafts may still contain their old values while the browser saves a complete
+        // multi-node form one request at a time. Cross-node draft validation would reject that
+        // harmless intermediate state; the final relation is enforced again during publication.
     }
 
     private void checkCumulative(List<Quantity> existing,Node node,Map<Long,Integer> values) {
         for (var row:existing) {
             var value=values.get(row.definitionId());
             if (value==null || row.nodeId()==node.id()) continue;
-            if ((row.sortOrder()<node.sortOrder() && row.quantity()>value)
-                    || (row.sortOrder()>node.sortOrder() && row.quantity()<value))
-                throw invalid("INDICATOR_CUMULATIVE_INVALID","累计目标不能低于前序节点或高于后续节点");
+            if (row.sortOrder()<node.sortOrder() && row.quantity()>value)
+                throw invalid("INDICATOR_CUMULATIVE_INVALID",node.name()+"的“"+row.definitionName()+"”为"+value+
+                        "，不能低于前序节点“"+row.nodeName()+"”的"+row.quantity());
+            if (row.sortOrder()>node.sortOrder() && row.quantity()<value)
+                throw invalid("INDICATOR_CUMULATIVE_INVALID",node.name()+"的“"+row.definitionName()+"”为"+value+
+                        "，不能高于后续节点“"+row.nodeName()+"”的"+row.quantity());
         }
     }
 
