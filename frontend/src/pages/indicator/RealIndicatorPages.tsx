@@ -262,14 +262,28 @@ export function RealTopicIndicatorConfigPage() {
   const saveConfiguration = async (submit: boolean) => {
     if (!canManageTopic || !canManageTargets || !validateTargets()) return;
     const values = await form.validateFields(); setSaving(true);
+    let latestTopic = topic;
     try {
-      const data: TopicWrite = { ...values, participantUnitIds: (values.participantUnitIds ?? []).filter((unitId) => unitId !== values.leadUnitId), recordVersion: topic?.recordVersion };
-      const saved = topic ? await topicApi.update(topic.id, data) : await topicApi.create(data);
+      const eligibleUnitIds = new Set(units.filter((unit) => unit.enabled && unit.topicUnitEligible).map((unit) => unit.id));
+      const data: TopicWrite = { ...values, participantUnitIds: (values.participantUnitIds ?? [])
+        .filter((unitId) => unitId !== values.leadUnitId && eligibleUnitIds.has(unitId)), recordVersion: topic?.recordVersion };
+      const currentParticipants = (topic?.members ?? [])
+        .filter((member) => member.enabled && member.membershipType === 'PARTICIPANT'
+          && units.some((unit) => unit.id === member.unitId && unit.enabled && unit.topicUnitEligible))
+        .map((member) => member.unitId).sort();
+      const nextParticipants = [...data.participantUnitIds].sort();
+      const topicChanged = !topic || topic.code !== data.code || topic.name !== data.name
+        || (topic.summary ?? '') !== (data.summary ?? '') || topic.leadUnitId !== data.leadUnitId
+        || (topic.startDate ?? '') !== (data.startDate ?? '') || (topic.endDate ?? '') !== (data.endDate ?? '')
+        || currentParticipants.join(',') !== nextParticipants.join(',');
+      const saved = topic ? (topicChanged ? await topicApi.update(topic.id, data) : topic) : await topicApi.create(data);
+      latestTopic = saved;
       const versions: VersionMap = {};
       for (const node of nodes) {
         const draft = await indicatorApi.saveTargets(saved.id, node.id, targetDraftVersions[node.id] ?? 0,
           definitions.map((definition) => ({ indicatorDefinitionId: definition.id, targetQuantity: targetsByNode[node.id]?.[definition.id] ?? 0 })));
         versions[node.id] = draft.draftVersion;
+        setTargetDraftVersions((current) => ({ ...current, [node.id]: draft.draftVersion }));
       }
       if (submit) {
         for (const node of nodes) await indicatorApi.publishTargets(saved.id, node.id, versions[node.id]);
@@ -277,7 +291,12 @@ export function RealTopicIndicatorConfigPage() {
       }
       message.success(submit ? (topic?.status === 'ACTIVE' ? '课题配置修改已提交' : '课题已提交并进入实施中') : (topic?.status === 'ACTIVE' ? '课题修改草稿已保存' : '课题草稿已保存'));
       navigate('/indicator');
-    } catch (error) { message.error(error instanceof Error ? error.message : '课题配置保存失败'); }
+    } catch (error) {
+      // Topic and node drafts are separate versioned resources. Keep every successful version
+      // locally so a later-node failure does not leave all subsequent retries permanently stale.
+      if (latestTopic) setTopic(latestTopic);
+      message.error(error instanceof Error ? error.message : '课题配置保存失败');
+    }
     finally { setSaving(false); }
   };
 
