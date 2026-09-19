@@ -56,8 +56,8 @@ export function AchievementEntryPage() {
   const canFinal = user.roleCode === 'PROJECT_TECH_LEADER' && user.actionPermissions.includes('achievement.final.approve');
 
   const loadBase = useCallback(async () => {
-    const [topicPage, unitRows, nodeRows, definitionRows] = await Promise.all([topicApi.list(), systemApi.units(), indicatorApi.nodes(), indicatorApi.definitions()]);
-    setTopics(topicPage.items); setUnits(unitRows); setNodes(nodeRows.filter((node) => node.enabled)); setDefinitions(definitionRows.filter((item) => item.enabled));
+    const [topicPage, unitRows, nodeRows, definitionRows] = await Promise.all([topicApi.list(), systemApi.units(), indicatorApi.nodes(true), indicatorApi.definitions()]);
+    setTopics(topicPage.items); setUnits(unitRows); setNodes(nodeRows); setDefinitions(definitionRows.filter((item) => item.enabled));
     if (!filters.nodeId) setFilters((current) => ({ ...current, nodeId: [...nodeRows].filter((node) => node.enabled).sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id ?? '' }));
     if (canSubmit && user.unitId) {
       const calls = topicPage.items.flatMap((topic) => nodeRows.filter((node) => node.enabled).map((node) => indicatorApi.allocations(topic.id, node.id)));
@@ -68,7 +68,8 @@ export function AchievementEntryPage() {
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
-      const page = await achievementApi.list({ topicId: filters.topicId, nodeId: filters.nodeId, status: filters.status, indicatorDefinitionId: filters.indicatorDefinitionId, pendingForMe: filters.pendingForMe || undefined });
+      // 成果列表按所选考核节点累计展示，不能让后端按 nodeId 精确过滤掉历史节点成果。
+      const page = await achievementApi.list({ topicId: filters.topicId, status: filters.status, indicatorDefinitionId: filters.indicatorDefinitionId, pendingForMe: filters.pendingForMe || undefined });
       setRows(page.items);
       if (filters.nodeId) setProgress(await achievementApi.progress(filters.nodeId, filters.topicId || undefined));
     } catch (error) { message.error(error instanceof Error ? error.message : '成果数据加载失败'); }
@@ -80,10 +81,13 @@ export function AchievementEntryPage() {
   const definitionMap = useMemo(() => Object.fromEntries(definitions.map((item) => [item.id, item])), [definitions]);
   const topicMap = useMemo(() => Object.fromEntries(topics.map((item) => [item.id, item])), [topics]);
   const unitMap = useMemo(() => Object.fromEntries(units.map((item) => [item.id, item.name])), [units]);
+  const nodeOrder = useMemo(() => Object.fromEntries(nodes.map((item) => [item.id, item.sortOrder])), [nodes]);
+  const selectedNodeOrder = filters.nodeId ? nodeOrder[filters.nodeId] : undefined;
   const selectedAllocation = allocations.find((item) => item.id === allocationId);
   const selectedType = editing?.achievementType ?? (selectedAllocation ? definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.achievementType as ApiAchievement['achievementType'] : undefined);
   const visibleRows = rows.filter((item) => (!filters.keyword || item.title.toLowerCase().includes(filters.keyword.toLowerCase()))
-    && (!filters.unitId || item.unitId === filters.unitId));
+    && (!filters.unitId || item.unitId === filters.unitId)
+    && (selectedNodeOrder === undefined || (nodeOrder[item.nodeId] ?? Number.MAX_SAFE_INTEGER) <= selectedNodeOrder));
   const targetTotal = useMemo(() => {
     if (!progress) return 0;
     // 有课题汇总行时使用课题目标，避免再累加单位行造成重复统计；
@@ -163,7 +167,7 @@ export function AchievementEntryPage() {
     <Card className="achievement-filter-card" style={{ marginBottom: 16 }}>
       <div className={`achievement-filter-grid${filterExpanded ? ' is-expanded' : ''}`}>
         {(canInitial || canFinal) && <Space className="achievement-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingForMe} onChange={(value) => setFilters({ ...filters, pendingForMe: value })} options={[{ value: true, label: '待我处理' }, { value: false, label: '全部成果' }]} /></Space>}
-        <Space className="achievement-filter-field" size={8}><Text>考核节点</Text><Select value={filters.nodeId || undefined} onChange={(value) => setFilters({ ...filters, nodeId: value })} options={nodes.map((item) => ({ value: item.id, label: item.name }))} /></Space>
+        <Space className="achievement-filter-field" size={8}><Text>考核节点</Text><Select value={filters.nodeId || undefined} onChange={(value) => setFilters({ ...filters, nodeId: value })} options={nodes.filter((item) => item.enabled).map((item) => ({ value: item.id, label: item.name }))} /></Space>
         <Space className="achievement-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部相关课题" value={filters.topicId || undefined} onChange={(value) => setFilters({ ...filters, topicId: value ?? '' })} options={topics.map((item) => ({ value: item.id, label: `${item.code} ${item.name}` }))} /></Space>
         <Space className="achievement-filter-field" size={8}><Text>成果状态</Text><Select allowClear placeholder="全部状态" value={filters.status || undefined} onChange={(value) => setFilters({ ...filters, status: value ?? '' })} options={Object.entries(statusNames).map(([value, label]) => ({ value, label }))} /></Space>
         {filterExpanded && <>
