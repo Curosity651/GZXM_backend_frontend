@@ -126,16 +126,16 @@ export function ReportManagementPage() {
   };
 
   return <>
-    <Card style={{ marginBottom: 16 }} styles={{ body: { overflowX: 'auto' } }}><div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'nowrap', minWidth: 'max-content' }}>
-      {canReview && <Space size={8}><Text>处理范围</Text><Select style={{ width: 130 }} value={filters.pendingOnly} onChange={(value) => setFilters({ ...filters, pendingOnly: value })} options={[{ label: '待我处理', value: true }, { label: '全部报告', value: false }]} /></Space>}
-      <Space size={8}><Text>所属课题</Text><Select allowClear placeholder="全部课题" style={{ width: 220 }} value={filters.topicId} onChange={(value) => setFilters({ ...filters, topicId: value })} options={topics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>
-      <Space size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" style={{ width: 150 }} value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).map(([value, label]) => ({ value, label }))} /></Space>
+    <Card className="report-filter-card" style={{ marginBottom: 16 }}><div className={`report-filter-grid${expanded ? ' is-expanded' : ''}`}>
+      {canReview && <Space className="report-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingOnly} onChange={(value) => setFilters({ ...filters, pendingOnly: value })} options={[{ label: '待我处理', value: true }, { label: '全部报告', value: false }]} /></Space>}
+      <Space className="report-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部课题" value={filters.topicId} onChange={(value) => setFilters({ ...filters, topicId: value })} options={topics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>
+      <Space className="report-filter-field" size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).map(([value, label]) => ({ value, label }))} /></Space>
       {expanded && <>
-        <Space size={8}><Text>报告类型</Text><Select allowClear placeholder="全部类型" style={{ width: 130 }} value={filters.reportType} onChange={(value) => setFilters({ ...filters, reportType: value })} options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Space>
-        <Space size={8}><Text>年度</Text><InputNumber placeholder="全部年度" style={{ width: 120 }} value={filters.year} onChange={(value) => setFilters({ ...filters, year: value ?? undefined })} /></Space>
-        <Space size={8}><Text>期次</Text><InputNumber placeholder="全部期次" style={{ width: 110 }} value={filters.period} onChange={(value) => setFilters({ ...filters, period: value ?? undefined })} /></Space>
+        <Space className="report-filter-field" size={8}><Text>报告类型</Text><Select allowClear placeholder="全部类型" value={filters.reportType} onChange={(value) => setFilters({ ...filters, reportType: value })} options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Space>
+        <Space className="report-filter-field" size={8}><Text>年度</Text><InputNumber placeholder="全部年度" value={filters.year} onChange={(value) => setFilters({ ...filters, year: value ?? undefined })} /></Space>
+        <Space className="report-filter-field" size={8}><Text>期次</Text><InputNumber placeholder="全部期次" value={filters.period} onChange={(value) => setFilters({ ...filters, period: value ?? undefined })} /></Space>
       </>}
-      <Space size={10} style={{ marginLeft: 'auto' }}><Button type="primary" icon={<SearchOutlined />}>查询</Button><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
+      <Space className="report-filter-actions" size={10}><Button type="primary" icon={<SearchOutlined />}>查询</Button><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
     </div></Card>
     <Card title="月季报进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
       {[["已发起报告", stats.total], ['草稿', stats.draft], ['审核中', stats.reviewing], ['已通过', stats.approved], ['退回修改', stats.returned], ['逾期', stats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
