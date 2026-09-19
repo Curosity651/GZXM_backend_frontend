@@ -3,9 +3,11 @@ import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Progress, R
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../api/http-client';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
-import { reportApi, type ApiReport, type ReportContent, type ReportRule } from '../../api/report-api';
+import { reportApi, type ApiApproval, type ApiReport, type ReportContent, type ReportRule } from '../../api/report-api';
 import { validDemonstrationProgress } from './report-validation';
 import { ReportForm, type ReportFormValues } from '../../components/report/ReportForm';
+import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
+import type { ApprovalRecord } from '../../types';
 
 interface Topic { id: string; code: string; name: string; enabled: boolean; status: string; leadUnitId: string }
 interface TopicPage { items: Topic[] }
@@ -22,12 +24,17 @@ export function ReportManagementPage() {
   const [creating, setCreating] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [ruleTopic, setRuleTopic] = useState<string>();
+  const [createRule, setCreateRule] = useState<ReportRule>();
+  const [approvals, setApprovals] = useState<ApiApproval[]>([]);
+  const [decision, setDecision] = useState<'APPROVE' | 'RETURN'>();
+  const [opinion, setOpinion] = useState('');
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [filters, setFilters] = useState<{ topicId?: string; reportType?: ApiReport['reportType']; year?: number; period?: number; status?: ApiReport['status']; pendingOnly: boolean }>({ pendingOnly: false });
   const [createForm] = Form.useForm();
   const [contentForm] = Form.useForm<ReportFormValues>();
   const [ruleForm] = Form.useForm<ReportRule>();
+  const createValues = Form.useWatch([], createForm) as { topicId?: string; reportType?: ApiReport['reportType']; year?: number; period?: number } | undefined;
 
   const refresh = useCallback(async () => {
     try {
@@ -63,7 +70,12 @@ export function ReportManagementPage() {
   const submittedCount = filteredReports.filter((item) => item.status !== 'DRAFT').length;
   const passRate = submittedCount ? Math.round((stats.approved / submittedCount) * 100) : 0;
 
-  const open = (report: ApiReport) => { setSelected(report); contentForm.setFieldsValue(report); };
+  const open = async (report: ApiReport) => {
+    setSelected(report);
+    contentForm.setFieldsValue(report);
+    try { setApprovals(await reportApi.approvals(report.id)); }
+    catch { setApprovals([]); }
+  };
   const execute = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true);
     try { await action(); message.success(success); setSelected(undefined); await refresh(); }
@@ -75,7 +87,7 @@ export function ReportManagementPage() {
     setBusy(true);
     try {
       const item = await reportApi.create(values);
-      setCreating(false); open(item); await refresh(); message.success('报告已创建');
+      setCreating(false); await open(item); await refresh(); message.success('报告已创建');
     } catch (error) { message.error(error instanceof Error ? error.message : '报告创建失败'); }
     finally { setBusy(false); }
   };
@@ -101,16 +113,41 @@ export function ReportManagementPage() {
       await reportApi.submit(saved.id);
     }, '已提交初审');
   };
-  const review = (decision: 'APPROVE' | 'RETURN') => {
-    if (!selected) return;
-    Modal.confirm({ title: decision === 'APPROVE' ? '确认通过报告？' : '退回报告',
-      content: <Input.TextArea id="report-review-opinion" placeholder={decision === 'RETURN' ? '请填写退回意见' : '审批意见（可选）'} />,
-      onOk: async () => {
-        const opinion = (document.getElementById('report-review-opinion') as HTMLTextAreaElement)?.value;
-        await execute(() => reportApi.review(selected.id, { decision, opinion, submittedVersion: selected.submittedVersion }), '审批已完成');
-      },
-    });
+  const confirmReview = async () => {
+    if (!selected || !decision) return;
+    if (decision === 'RETURN' && !opinion.trim()) { message.warning('退回时必须填写审批意见'); return; }
+    await execute(() => reportApi.review(selected.id, { decision, opinion: opinion.trim() || undefined, submittedVersion: selected.submittedVersion }), decision === 'APPROVE' ? '审批已通过' : '已退回修改');
+    setDecision(undefined); setOpinion('');
   };
+  const loadCreateRule = async (topicId?: string) => {
+    setCreateRule(undefined);
+    if (!topicId) return;
+    try { setCreateRule(await reportApi.rule(topicId)); }
+    catch { message.warning('该课题尚未配置月季报规则'); }
+  };
+  const prepareNew = () => {
+    const now = new Date();
+    const topicId = leadTopics[0]?.id;
+    createForm.resetFields();
+    createForm.setFieldsValue({ topicId, reportType: 'MONTHLY', year: now.getFullYear(), period: now.getMonth() + 1 });
+    void loadCreateRule(topicId);
+    setCreating(true);
+  };
+  const createWindow = (() => {
+    if (!createRule || !createValues?.reportType || !createValues.year || !createValues.period) return undefined;
+    const monthly = createValues.reportType === 'MONTHLY';
+    if ((monthly && !createRule.monthlyEnabled) || (!monthly && !createRule.quarterlyEnabled)) return undefined;
+    const month = monthly ? createValues.period : createRule.quarterlyMonths[createValues.period - 1];
+    if (!month) return undefined;
+    const lastDay = new Date(createValues.year, month, 0).getDate();
+    const date = (day: number) => `${createValues.year}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDay)).padStart(2, '0')}`;
+    return { openDate: date(monthly ? createRule.monthlyOpenDay : createRule.quarterlyOpenDay), deadline: date(monthly ? createRule.monthlyDeadlineDay : createRule.quarterlyDeadlineDay) };
+  })();
+  const approvalRecords: ApprovalRecord[] = approvals.map((item) => ({
+    id: item.id, businessType: 'REPORT', businessId: selected?.id ?? '', stage: 'REPORT',
+    level: item.level === 'INITIAL' ? 'INITIAL' : 'FINAL', decision: item.decision === 'APPROVED' ? 'APPROVED' : 'RETURNED',
+    opinion: item.opinion ?? '', operatorId: item.operatorId, operatedAt: item.operatedAt, submittedVersion: item.submittedVersion,
+  }));
   const openRule = async (topicId: string) => {
     setRuleTopic(topicId);
     try { ruleForm.setFieldsValue(await reportApi.rule(topicId)); }
@@ -144,9 +181,7 @@ export function ReportManagementPage() {
     <Card title={`月季报列表（${filteredReports.length}）`} extra={<Space>
       <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button>
       {canConfigure && <Button onClick={() => { if (topics[0]) void openRule(topics[0].id); }}>配置填报规则</Button>}
-      {canSubmit && <Button type="primary" icon={<FileAddOutlined />} disabled={leadTopics.length === 0} onClick={() => {
-        createForm.setFieldsValue({ topicId: leadTopics[0]?.id, reportType: 'MONTHLY', year: new Date().getFullYear(), period: new Date().getMonth() + 1 }); setCreating(true);
-      }}>新建月季报</Button>}
+      {canSubmit && <Button type="primary" icon={<FileAddOutlined />} disabled={leadTopics.length === 0} onClick={prepareNew}>新建月季报</Button>}
     </Space>}>
       <Table rowKey="id" dataSource={filteredReports} columns={[
         { title: '课题', render: (_, item) => topics.find(t => t.id === item.topicId)?.name ?? item.topicId },
@@ -160,18 +195,36 @@ export function ReportManagementPage() {
         { title: '操作', width: 120, render: (_, item) => <Button type="link" icon={['DRAFT', 'RETURNED'].includes(item.status) ? <EditOutlined /> : <EyeOutlined />} onClick={() => open(item)}>{(item.status === 'INITIAL_REVIEW' && user?.roleCode === 'RESEARCH_ASSISTANT') || (item.status === 'FINAL_REVIEW' && user?.roleCode === 'PROJECT_TECH_LEADER') ? '审批' : ['DRAFT', 'RETURNED'].includes(item.status) && leadTopics.some((topic) => topic.id === item.topicId) ? '编辑' : '详情'}</Button> },
       ]} />
     </Card>
-    <Modal title="新建月季报" open={creating} onCancel={() => setCreating(false)} onOk={() => void create()} confirmLoading={busy}>
-      <Form form={createForm} layout="vertical"><Form.Item name="topicId" label="课题" rules={[{ required: true }]}><Select options={leadTopics.map(t => ({ value: t.id, label: `${t.code} ${t.name}` }))} /></Form.Item>
-        <Form.Item name="reportType" label="类型" rules={[{ required: true }]}><Select options={[{ value: 'MONTHLY', label: '月报' }, { value: 'QUARTERLY', label: '季报' }]} /></Form.Item>
-        <Form.Item name="year" label="年度" rules={[{ required: true }]}><InputNumber min={2000} max={2100} /></Form.Item>
-        <Form.Item name="period" label="期次" rules={[{ required: true }]}><InputNumber min={1} max={12} /></Form.Item></Form>
+    <Modal title="新建月季报" open={creating} onCancel={() => setCreating(false)} onOk={() => void create()} okText="开始填报" confirmLoading={busy}>
+      <Form form={createForm} layout="vertical">
+        <Form.Item name="topicId" label="所属课题" rules={[{ required: true }]}><Select onChange={(value) => void loadCreateRule(value)} options={leadTopics.map(t => ({ value: t.id, label: `${t.code} ${t.name}` }))} /></Form.Item>
+        <Row gutter={12}>
+          <Col span={8}><Form.Item name="reportType" label="报告类型" rules={[{ required: true }]}><Select options={[{ value: 'MONTHLY', label: '月报' }, { value: 'QUARTERLY', label: '季报' }]} /></Form.Item></Col>
+          <Col span={8}><Form.Item name="year" label="年度" rules={[{ required: true }]}><InputNumber min={2020} max={2100} style={{ width: '100%' }} /></Form.Item></Col>
+          <Col span={8}><Form.Item name="period" label="期次" rules={[{ required: true }]}><InputNumber min={1} max={createValues?.reportType === 'QUARTERLY' ? createRule?.quarterlyMonths.length ?? 4 : 12} style={{ width: '100%' }} /></Form.Item></Col>
+        </Row>
+        <Row gutter={12}>
+          <Col span={12}><Form.Item label="开放日期"><Input value={createWindow?.openDate} placeholder="选择完整信息后自动计算" readOnly /></Form.Item></Col>
+          <Col span={12}><Form.Item label="截止日期"><Input value={createWindow?.deadline} placeholder="选择完整信息后自动计算" readOnly /></Form.Item></Col>
+        </Row>
+      </Form>
     </Modal>
-    <Drawer width={760} open={Boolean(selected)} title={selected ? `${selected.year} 年${selected.reportType === 'MONTHLY' ? '月报' : '季报'} · ${statusNames[selected.status]}` : ''}
+    <Drawer width={780} open={Boolean(selected)} title={selected?.reportType === 'MONTHLY' ? '课题月报' : '课题季报'}
       onClose={() => setSelected(undefined)} extra={<Space>{editable && <><Button loading={busy} onClick={() => void save()}>保存草稿</Button><Button type="primary" icon={<SendOutlined />} loading={busy} onClick={() => void submit()}>提交初审</Button></>}
-        {reviewable && <><Button loading={busy} danger icon={<RollbackOutlined />} onClick={() => review('RETURN')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} loading={busy} onClick={() => review('APPROVE')}>审批通过</Button></>}</Space>}>
-      {selected && <><p>开放：{selected.openDate}　截止：{selected.deadline}</p>
-        <ReportForm form={contentForm} disabled={!editable} /></>}
+        {reviewable && <><Button loading={busy} danger icon={<RollbackOutlined />} onClick={() => setDecision('RETURN')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} loading={busy} onClick={() => setDecision('APPROVE')}>审批通过</Button></>}</Space>}>
+      {selected && <>
+        <Space wrap style={{ marginBottom: 16 }}>
+          <Text strong>{topics.find((topic) => topic.id === selected.topicId)?.name ?? selected.topicId}</Text>
+          <Tag>{selected.deadline} 截止</Tag><Tag>{statusNames[selected.status]}</Tag>
+          <Tag>记录 V{selected.recordVersion}</Tag><Tag color="blue">提交 V{selected.submittedVersion}</Tag>
+        </Space>
+        <ReportForm form={contentForm} disabled={!editable} />
+        <Card title="审批记录" size="small" style={{ marginTop: 16 }}><ApprovalTimeline records={approvalRecords} users={[]} /></Card>
+      </>}
     </Drawer>
+    <Modal title={decision === 'APPROVE' ? '确认审批通过' : '退回修改'} open={Boolean(decision)} onCancel={() => { setDecision(undefined); setOpinion(''); }} onOk={() => void confirmReview()} confirmLoading={busy}>
+      <Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'RETURN' ? '请填写明确的退回原因' : '审批意见（选填）'} />
+    </Modal>
     <Modal title="课题填报规则" open={configuring} onCancel={() => setConfiguring(false)} onOk={() => void saveRule()} confirmLoading={busy}>
       <Select style={{ width: '100%', marginBottom: 16 }} value={ruleTopic} onChange={value => void openRule(value)} options={topics.map(t => ({ value: t.id, label: t.name }))} />
       <Form form={ruleForm} layout="vertical"><Form.Item name="effectiveYear" label="生效年度"><InputNumber min={2000} max={2100} /></Form.Item>

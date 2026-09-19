@@ -218,6 +218,12 @@ public class ReportService {
                         String.valueOf(rs.getLong("submitter_id")), decode(rs.getString("payload_json"))), reportId);
     }
 
+    public List<Approval> approvals(long reportId) {
+        get(reportId);
+        return db.query("SELECT * FROM approval_record WHERE business_type='REPORT' AND business_id=? ORDER BY id",
+                (rs, n) -> approval(rs), reportId);
+    }
+
     public Map<String, Object> progress(Long topicId, Integer year) {
         if (topicId != null) topics.getTopic(topicId);
         var first = list(1, 200, topicId, null, year, null, null, false);

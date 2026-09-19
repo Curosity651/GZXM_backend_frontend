@@ -73,6 +73,12 @@ public class ReportController {
         audit.success("report.review", "REPORT", reportId); return result;
     }
 
+    @GetMapping("/reports/{reportId}/reviews") @PreAuthorize("isAuthenticated()")
+    @Operation(operationId = "listReportReviews")
+    public List<Approval> reviews(@PathVariable String reportId) {
+        return service.approvals(TopicService.id(reportId));
+    }
+
     @GetMapping("/reports/{reportId}/snapshots") @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "listReportSnapshots")
     public List<Snapshot> snapshots(@PathVariable String reportId) { return service.snapshots(TopicService.id(reportId)); }
