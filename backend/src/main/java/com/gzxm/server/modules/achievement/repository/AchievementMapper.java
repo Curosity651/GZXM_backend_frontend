@@ -4,7 +4,8 @@ import org.apache.ibatis.annotations.*;
 import java.util.List;
 
 public interface AchievementMapper {
-    record Filter(Long unit,List<Long> memberTopics,List<Long> leadTopics,Long topic,Long node,Long requestedUnit,Long definition,String status,List<String> pendingStates,long offset,long size) {}
+    record Filter(Long unit,List<Long> memberTopics,List<Long> leadTopics,Long topic,Long node,Long requestedUnit,Long definition,String status,
+                  List<String> visibleStates,List<String> pendingStates,long offset,long size) {}
     String FILTER="""
         <where>
         <if test='unit != null'>
@@ -16,6 +17,7 @@ public interface AchievementMapper {
         <if test='requestedUnit != null'>AND unit_id=#{requestedUnit}</if>
         <if test='definition != null'>AND indicator_definition_id=#{definition}</if>
         <if test='status != null'>AND status=#{status}</if>
+        <if test='visibleStates != null'>AND status IN <foreach collection='visibleStates' item='s' open='(' close=')' separator=','>#{s}</foreach></if>
         <if test='pendingStates != null'>AND status IN <foreach collection='pendingStates' item='s' open='(' close=')' separator=','>#{s}</foreach></if>
         </where>
         """;

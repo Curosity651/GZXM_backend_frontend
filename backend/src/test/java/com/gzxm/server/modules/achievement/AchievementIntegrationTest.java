@@ -124,6 +124,14 @@ class AchievementIntegrationTest {
         call(get("/api/v1/achievements/"+id),"EXTERNAL_TOPIC_UNIT",3L).andExpect(status().isForbidden());
         call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",1L).andExpect(status().isOk());
         call(get("/api/v1/achievements"),"SYSTEM_ADMIN",null).andExpect(jsonPath("$.total").value(2));
+        call(get("/api/v1/achievements"),"RESEARCH_ASSISTANT",null).andExpect(jsonPath("$.total").value(0));
+        call(get("/api/v1/achievements"),"PROJECT_TECH_LEADER",null).andExpect(jsonPath("$.total").value(0));
+        call(get("/api/v1/achievements/"+id),"RESEARCH_ASSISTANT",null).andExpect(status().isForbidden());
+        jdbc.update("UPDATE achievement SET status='PRE_INITIAL' WHERE id=?",Long.valueOf(id));
+        call(get("/api/v1/achievements"),"RESEARCH_ASSISTANT",null).andExpect(jsonPath("$.total").value(1));
+        call(get("/api/v1/achievements"),"PROJECT_TECH_LEADER",null).andExpect(jsonPath("$.total").value(0));
+        jdbc.update("UPDATE achievement SET status='PRE_FINAL' WHERE id=?",Long.valueOf(id));
+        call(get("/api/v1/achievements"),"PROJECT_TECH_LEADER",null).andExpect(jsonPath("$.total").value(1));
         call(get("/api/v1/achievements?pendingForMe=true"),"RESEARCH_ASSISTANT",null).andExpect(jsonPath("$.total").value(0));
         jdbc.update("UPDATE biz_topic_unit_membership SET enabled=0 WHERE unit_id=2");
         call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isForbidden());

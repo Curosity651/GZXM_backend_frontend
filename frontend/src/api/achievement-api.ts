@@ -2,7 +2,7 @@ import { apiRequest } from './http-client';
 import type { ApiFile } from './file-api';
 
 export interface AchievementApproval {
-  id: string; stage: string; level: string; decision: 'APPROVE' | 'RETURN'; opinion?: string;
+  id: string; stage: string; level: string; decision: 'APPROVED' | 'RETURNED'; opinion?: string;
   operatorId: string; operatedAt: string; submittedVersion: number;
 }
 

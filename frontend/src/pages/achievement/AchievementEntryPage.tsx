@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, Descriptions, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined, SendOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
 import { achievementApi, type ApiAchievement, type AchievementProgress, type AchievementWrite } from '../../api/achievement-api';
 import { indicatorApi, type IndicatorDefinition, type TimeNode, type UnitAllocation } from '../../api/indicator-api';
@@ -8,6 +8,7 @@ import { systemApi, type ApiUnit } from '../../api/system-api';
 import { fileApi } from '../../api/file-api';
 import { useSessionStore } from '../../store/session';
 import { AchievementForm } from '../../components/achievement/AchievementForm';
+import { ApiAchievementDetail } from '../../components/achievement/ApiAchievementDetail';
 import { formalMaterialRequirements, supplementMaterialRequirements } from '../../domain/achievement-materials';
 import type { Achievement, AchievementType } from '../../types';
 
@@ -222,7 +223,6 @@ export function AchievementEntryPage() {
       { title: '成果类型', width: 110, render: (_, row) => <Tag color="blue">{typeNames[row.achievementType]}</Tag> },
       { title: '负责人', dataIndex: 'responsiblePerson', width: 110 },
       { title: '状态', width: 130, render: (_, row) => <Tag color={statusColor(row.status)}>{statusNames[row.status] ?? row.status}</Tag> },
-      { title: '版本', width: 110, render: (_, row) => `记录 V${row.recordVersion} / 提交 V${row.submittedVersion}` },
       { title: '操作', width: 310, fixed: 'right', render: (_, row) => actionButtons(row) },
     ]} title={() => <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Space><Button icon={<ReloadOutlined />} onClick={() => void loadRows()}>刷新</Button>{canSubmit && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增成果</Button>}</Space></div>} /></Card>
 
@@ -236,14 +236,9 @@ export function AchievementEntryPage() {
       </Form>
     </Drawer>
 
-    <Drawer width={900} title="成果详情" open={Boolean(detail)} onClose={() => setDetail(undefined)} extra={detail && reviewable(detail) && <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('RETURN')}>退回</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('APPROVE')}>通过</Button></Space>}>
-      {detail && <Space direction="vertical" style={{ width: '100%' }} size={14}><Descriptions bordered column={2} items={[
-        { key: 'title', label: '成果名称', children: detail.title, span: 2 }, { key: 'topic', label: '课题', children: topicMap[detail.topicId]?.name ?? detail.topicId }, { key: 'unit', label: '提交单位', children: unitMap[detail.unitId] ?? detail.unitId },
-        { key: 'type', label: '成果类型', children: typeNames[detail.achievementType] }, { key: 'status', label: '状态', children: statusNames[detail.status] ?? detail.status }, { key: 'owner', label: '负责人', children: detail.responsiblePerson }, { key: 'version', label: '版本', children: `记录 V${detail.recordVersion} / 提交 V${detail.submittedVersion}` },
-      ]} /><Card size="small" title="详细信息"><Descriptions bordered size="small" column={2} items={Object.entries(detail.detail).map(([key, value]) => ({ key, label: key, children: typeof value === 'boolean' ? value ? '是' : '否' : String(value) }))} /></Card>
-        <Card size="small" title="附件"><Table pagination={false} rowKey="id" dataSource={detail.materialLinks.filter((item) => item.active)} columns={[{ title: '材料类型', dataIndex: 'materialType' }, { title: '文件', render: (_, link) => detail.materials.find((file) => file.id === link.fileId)?.originalName ?? link.fileId }, { title: '状态', dataIndex: 'status' }, { title: '操作', render: (_, link) => { const file = detail.materials.find((item) => item.id === link.fileId); return file && <Space><Button type="link" onClick={() => void fileApi.download(file, true)}>查看</Button><Button type="link" onClick={() => void fileApi.download(file)}>下载</Button></Space>; } }]} /></Card>
-        <Card size="small" title="审批记录"><Table pagination={false} rowKey="id" dataSource={detail.approvals} columns={[{ title: '阶段', dataIndex: 'stage' }, { title: '级别', dataIndex: 'level' }, { title: '结论', render: (_, row) => row.decision === 'APPROVE' ? '通过' : '退回' }, { title: '意见', dataIndex: 'opinion' }, { title: '时间', dataIndex: 'operatedAt' }]} /></Card>
-      </Space>}
+    <Drawer width={860} title="成果详情" open={Boolean(detail)} onClose={() => setDetail(undefined)} extra={detail && reviewable(detail) && <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('RETURN')}>退回修改</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('APPROVE')}>审批通过</Button></Space>}>
+      {detail && <><Alert style={{ marginBottom: 16 }} type="info" showIcon message={reviewable(detail) ? (detail.status.endsWith('_FINAL') ? '当前为终审环节' : '当前为初审环节') : '成果详情'} />
+        <ApiAchievementDetail achievement={detail} topics={topics} units={units} /></>}
     </Drawer>
     <Modal title={decision === 'APPROVE' ? '确认审批通过' : '退回修改'} open={Boolean(decision)} onCancel={() => setDecision(undefined)} onOk={() => void review()}><Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'RETURN' ? '请填写退回原因' : '审批意见（选填）'} /></Modal>
     <Modal title="登记投稿/申请" open={Boolean(external)} onCancel={() => setExternal(undefined)} onOk={() => void externalForm.validateFields().then((values) => external && act(external, 'REGISTER_EXTERNAL_SUBMISSION', values))}><Form form={externalForm} layout="vertical"><Form.Item name="externalSubmissionDate" label="投稿/申请日期" rules={[{ required: true }]}><Input type="date" /></Form.Item><Form.Item name="externalSubmissionNumber" label="投稿/申请编号"><Input /></Form.Item></Form></Modal>

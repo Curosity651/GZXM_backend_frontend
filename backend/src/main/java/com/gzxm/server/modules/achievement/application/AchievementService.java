@@ -19,6 +19,11 @@ import java.util.*;
 
 @Service
 public class AchievementService {
+    private static final List<String> ASSISTANT_VISIBLE_STATES=List.of(
+            "PRE_INITIAL","PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_INITIAL","FORMAL_FINAL",
+            "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
+    private static final List<String> LEADER_VISIBLE_STATES=List.of(
+            "PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_FINAL","EFFECTIVE");
     private final AchievementMapper records;
     private final AchievementMaterialMapper materials;
     private final TopicQueryService topics;
@@ -54,7 +59,8 @@ public class AchievementService {
         if(pending) pendingStates="RESEARCH_ASSISTANT".equals(user.roleCode()) && user.authorities().contains("achievement.initial.approve")
                 ?List.copyOf(AchievementWorkflow.INITIAL):"PROJECT_TECH_LEADER".equals(user.roleCode()) && user.authorities().contains("achievement.final.approve")
                 ?List.copyOf(AchievementWorkflow.FINAL):List.of("__NONE__");
-        var filter=new AchievementMapper.Filter(user.isGlobalRole()?null:user.unitId(),memberTopics,leadTopics,topic,node,unit,definition,status,pendingStates,(page-1)*size,size);
+        var filter=new AchievementMapper.Filter(user.isGlobalRole()?null:user.unitId(),memberTopics,leadTopics,topic,node,unit,definition,status,
+                visibleStates(user),pendingStates,(page-1)*size,size);
         return PageResult.of(records.list(filter).stream().map(this::view).toList(),page,size,records.count(filter));
     }
 
@@ -170,8 +176,16 @@ public class AchievementService {
     }
     private boolean canRead(AchievementEntity row) {
         var user=reader();
-        return topics.canReadTopic(row.getTopicId()) && (user.isGlobalRole() || Objects.equals(row.getUnitId(),user.unitId())
+        var states=visibleStates(user);
+        return (states==null || states.contains(row.getStatus())) && topics.canReadTopic(row.getTopicId()) && (user.isGlobalRole() || Objects.equals(row.getUnitId(),user.unitId())
                 || topics.isLeadUnit(row.getTopicId(),user.unitId()));
+    }
+    private List<String> visibleStates(CurrentUser user) {
+        return switch(user.roleCode()) {
+            case "RESEARCH_ASSISTANT" -> ASSISTANT_VISIBLE_STATES;
+            case "PROJECT_TECH_LEADER" -> LEADER_VISIBLE_STATES;
+            default -> null;
+        };
     }
     AchievementEntity require(long id) {
         TopicService.id(Long.toString(id));var row=records.find(id);
