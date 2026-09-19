@@ -24,7 +24,9 @@ public class ReportController {
 
     @GetMapping("/topics/{topicId}/report-rule") @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "getTopicReportRule")
-    public Rule rule(@PathVariable String topicId) { return service.rule(TopicService.id(topicId)); }
+    public Rule rule(@PathVariable String topicId, @RequestParam(required = false) Integer effectiveYear) {
+        return service.rule(TopicService.id(topicId), effectiveYear);
+    }
 
     @PutMapping("/topics/{topicId}/report-rule") @PreAuthorize("hasAuthority('report.rule.manage')")
     @Operation(operationId = "updateTopicReportRule")

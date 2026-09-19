@@ -41,9 +41,9 @@ public class ReportService {
         this.db = db; this.json = json; this.topics = topics; this.security = security;
     }
 
-    public Rule rule(long topicId) {
+    public Rule rule(long topicId, Integer effectiveYear) {
         topics.getTopic(topicId);
-        return latestRule(topicId);
+        return effectiveYear == null ? latestRule(topicId) : exactRule(topicId, effectiveYear);
     }
 
     @Transactional
@@ -72,7 +72,7 @@ public class ReportService {
                     request.quarterlyEnabled(), request.quarterlyOpenDay(), request.quarterlyDeadlineDay(), encode(request.quarterlyMonths()),
                     topicId, request.effectiveYear());
         }
-        return ruleForYear(topicId, request.effectiveYear());
+        return exactRule(topicId, request.effectiveYear());
     }
 
     @Transactional
@@ -258,6 +258,12 @@ public class ReportService {
         var rows = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? AND effective_year<=? ORDER BY effective_year DESC LIMIT 1",
                 (rs, n) -> rule(rs), topicId, year);
         if (rows.isEmpty()) throw BusinessException.validation("REPORT_RULE_NOT_FOUND", "该年度尚无有效报告规则");
+        return rows.getFirst();
+    }
+    private Rule exactRule(long topicId, int year) {
+        var rows = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? AND effective_year=?",
+                (rs, n) -> rule(rs), topicId, year);
+        if (rows.isEmpty()) throw BusinessException.notFound("REPORT_RULE_NOT_FOUND", "该年度尚未配置报告规则");
         return rows.getFirst();
     }
     private Rule rule(ResultSet rs) throws SQLException {

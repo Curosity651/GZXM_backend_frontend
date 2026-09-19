@@ -24,6 +24,8 @@ export function ReportManagementPage() {
   const [creating, setCreating] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [ruleTopic, setRuleTopic] = useState<string>();
+  const [ruleYear, setRuleYear] = useState(new Date().getFullYear());
+  const [ruleStatuses, setRuleStatuses] = useState<Record<string, boolean>>({});
   const [createRule, setCreateRule] = useState<ReportRule>();
   const [approvals, setApprovals] = useState<ApiApproval[]>([]);
   const [decision, setDecision] = useState<'APPROVE' | 'RETURN'>();
@@ -148,19 +150,52 @@ export function ReportManagementPage() {
     level: item.level === 'INITIAL' ? 'INITIAL' : 'FINAL', decision: item.decision === 'APPROVED' ? 'APPROVED' : 'RETURNED',
     opinion: item.opinion ?? '', operatorId: item.operatorId, operatedAt: item.operatedAt, submittedVersion: item.submittedVersion,
   }));
-  const openRule = async (topicId: string) => {
+  const loadRuleStatuses = async (effectiveYear: number) => {
+    setRuleStatuses({});
+    const entries = await Promise.all(topics.map(async (topic) => {
+      try { await reportApi.rule(topic.id, effectiveYear); return [topic.id, true] as const; }
+      catch { return [topic.id, false] as const; }
+    }));
+    setRuleStatuses(Object.fromEntries(entries));
+  };
+  const openRule = async (topicId: string, effectiveYear = ruleYear) => {
     setRuleTopic(topicId);
-    try { ruleForm.setFieldsValue(await reportApi.rule(topicId)); }
-    catch { ruleForm.setFieldsValue({ effectiveYear: new Date().getFullYear(), monthlyEnabled: true, monthlyOpenDay: 1,
+    try { ruleForm.setFieldsValue(await reportApi.rule(topicId, effectiveYear)); }
+    catch { ruleForm.setFieldsValue({ effectiveYear, monthlyEnabled: true, monthlyOpenDay: 1,
       monthlyDeadlineDay: 25, quarterlyEnabled: true, quarterlyOpenDay: 1, quarterlyDeadlineDay: 25,
       quarterlyMonths: [3, 6, 9, 12], recordVersion: 0 }); }
     setConfiguring(true);
   };
+  const openRulePanel = () => {
+    if (!topics[0]) return;
+    const effectiveYear = new Date().getFullYear();
+    setRuleYear(effectiveYear);
+    void loadRuleStatuses(effectiveYear);
+    void openRule(topics[0].id, effectiveYear);
+  };
+  const changeRuleYear = (effectiveYear: number | null) => {
+    if (!effectiveYear) return;
+    setRuleYear(effectiveYear);
+    void loadRuleStatuses(effectiveYear);
+    if (ruleTopic) void openRule(ruleTopic, effectiveYear);
+  };
   const saveRule = async () => {
     if (!ruleTopic) return;
     const values = await ruleForm.validateFields();
-    await execute(async () => { await reportApi.saveRule(ruleTopic, values); setConfiguring(false); }, '规则已保存');
+    setBusy(true);
+    try {
+      const saved = await reportApi.saveRule(ruleTopic, values);
+      ruleForm.setFieldsValue(saved);
+      setRuleYear(saved.effectiveYear);
+      setRuleStatuses((current) => ({ ...current, [ruleTopic]: true }));
+      message.success('规则已保存');
+      setConfiguring(false);
+      await refresh();
+    } catch (error) { message.error(error instanceof Error ? error.message : '规则保存失败'); }
+    finally { setBusy(false); }
   };
+  const ruleStatusText = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? '已配置' : topicId && ruleStatuses[topicId] === false ? '未配置' : '检查中';
+  const ruleStatusColor = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? 'success' : topicId && ruleStatuses[topicId] === false ? 'default' : 'processing';
 
   return <>
     <Card className="report-filter-card" style={{ marginBottom: 16 }}><div className={`report-filter-grid${expanded ? ' is-expanded' : ''}`}>
@@ -180,7 +215,7 @@ export function ReportManagementPage() {
     </Row></Card>
     <Card title={`月季报列表（${filteredReports.length}）`} extra={<Space>
       <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button>
-      {canConfigure && <Button onClick={() => { if (topics[0]) void openRule(topics[0].id); }}>配置填报规则</Button>}
+      {canConfigure && <Button disabled={topics.length === 0} onClick={openRulePanel}>配置填报规则</Button>}
       {canSubmit && <Button type="primary" icon={<FileAddOutlined />} disabled={leadTopics.length === 0} onClick={prepareNew}>新建月季报</Button>}
     </Space>}>
       <Table rowKey="id" dataSource={filteredReports} columns={[
@@ -226,8 +261,11 @@ export function ReportManagementPage() {
       <Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'RETURN' ? '请填写明确的退回原因' : '审批意见（选填）'} />
     </Modal>
     <Modal title="课题填报规则" open={configuring} onCancel={() => setConfiguring(false)} onOk={() => void saveRule()} confirmLoading={busy}>
-      <Select style={{ width: '100%', marginBottom: 16 }} value={ruleTopic} onChange={value => void openRule(value)} options={topics.map(t => ({ value: t.id, label: t.name }))} />
-      <Form form={ruleForm} layout="vertical"><Form.Item name="effectiveYear" label="生效年度"><InputNumber min={2000} max={2100} /></Form.Item>
+      <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+        <Select style={{ width: '100%' }} value={ruleTopic} onChange={value => void openRule(value, ruleYear)} options={topics.map(t => ({ value: t.id, label: <Space><span>{t.name}</span><Tag color={ruleStatusColor(t.id)}>{ruleStatusText(t.id)}</Tag></Space> }))} />
+        <Tag color={ruleStatusColor(ruleTopic)} style={{ display: 'flex', alignItems: 'center', marginInlineEnd: 0, paddingInline: 12 }}>{ruleStatusText(ruleTopic)}</Tag>
+      </Space.Compact>
+      <Form form={ruleForm} layout="vertical"><Form.Item name="effectiveYear" label="生效年度"><InputNumber min={2000} max={2100} style={{ width: '100%' }} onChange={changeRuleYear} /></Form.Item>
         <Form.Item name="monthlyEnabled" label="启用月报"><Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></Form.Item>
         <Space><Form.Item name="monthlyOpenDay" label="月报开放日"><InputNumber min={1} max={31} /></Form.Item><Form.Item name="monthlyDeadlineDay" label="月报截止日"><InputNumber min={1} max={31} /></Form.Item></Space>
         <Form.Item name="quarterlyEnabled" label="启用季报"><Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></Form.Item>

@@ -32,7 +32,7 @@ export const reportApi = {
     apiRequest<ApiApproval>(`/reports/${id}/reviews`, { method: 'POST', headers: { 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(data) }),
   approvals: (id: string) => apiRequest<ApiApproval[]>(`/reports/${id}/reviews`),
   snapshots: (id: string) => apiRequest<ApiSnapshot[]>(`/reports/${id}/snapshots`),
-  rule: (topicId: string) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule`),
+  rule: (topicId: string, effectiveYear?: number) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule${effectiveYear ? `?effectiveYear=${effectiveYear}` : ''}`),
   saveRule: (topicId: string, rule: ReportRule) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule`, { method: 'PUT', body: JSON.stringify(rule) }),
   progress: (topicId?: string) => apiRequest<{ total: number; submitted: number; approved: number; overdue: number }>(`/report-progress${topicId ? `?topicId=${topicId}` : ''}`),
 };
