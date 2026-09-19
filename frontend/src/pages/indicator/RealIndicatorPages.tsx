@@ -198,7 +198,16 @@ export function RealTopicIndicatorConfigPage() {
         const activeNodes = nodeRows.filter((node) => node.enabled).sort((a, b) => a.sortOrder - b.sortOrder);
         setUnits(unitRows.filter((unit) => unit.enabled)); setNodes(activeNodes); setDefinitions(definitionRows.filter((item) => item.enabled)); setTopic(topicRow); setNodeId(activeNodes[0]?.id);
         setTargetsByNode(Object.fromEntries(activeNodes.map((node) => [node.id, Object.fromEntries(definitionRows.filter((item) => item.enabled).map((definition) => [definition.id, 0]))])));
-        if (topicRow) form.setFieldsValue({ code: topicRow.code, name: topicRow.name, summary: topicRow.summary, leadUnitId: topicRow.leadUnitId, participantUnitIds: topicRow.members.filter((member) => member.enabled && member.membershipType === 'PARTICIPANT').map((member) => member.unitId), startDate: topicRow.startDate, endDate: topicRow.endDate });
+        if (topicRow) {
+          const eligibleUnitIds = new Set(unitRows.filter((unit) => unit.enabled && unit.topicUnitEligible).map((unit) => unit.id));
+          form.setFieldsValue({
+            code: topicRow.code, name: topicRow.name, summary: topicRow.summary, leadUnitId: topicRow.leadUnitId,
+            participantUnitIds: topicRow.members
+              .filter((member) => member.enabled && member.membershipType === 'PARTICIPANT' && eligibleUnitIds.has(member.unitId))
+              .map((member) => member.unitId),
+            startDate: topicRow.startDate, endDate: topicRow.endDate,
+          });
+        }
       } catch (error) { message.error(error instanceof Error ? error.message : '课题配置加载失败'); }
       finally { setLoading(false); }
     })();
