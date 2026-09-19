@@ -38,5 +38,6 @@ public final class SystemDtos {
     public record PermissionView(String code, String name, String type, String group,
                                  boolean lockedForExternal) {}
 
-    public record UnitView(String id, String code, String name, boolean internal, boolean enabled) {}
+    public record UnitView(String id, String code, String name, boolean internal, boolean enabled,
+                           boolean topicUnitEligible) {}
 }

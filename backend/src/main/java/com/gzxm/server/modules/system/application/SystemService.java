@@ -176,13 +176,15 @@ public class SystemService {
     }
 
     public List<UnitView> listUnits(String keyword, Boolean internal) {
+        Set<Long> eligibleTopicUnits = users.findEligibleTopicUnitIds();
         return units.selectList(new LambdaQueryWrapper<UnitEntity>()
                         .isNull(UnitEntity::getDeletedAt)
                         .like(StringUtils.hasText(keyword), UnitEntity::getName, keyword)
                         .eq(internal != null, UnitEntity::getInternalFlag, internal)
-                        .orderByAsc(UnitEntity::getName))
+                .orderByAsc(UnitEntity::getName))
                 .stream().map(u -> new UnitView(String.valueOf(u.getId()), u.getCode(), u.getName(),
-                        Boolean.TRUE.equals(u.getInternalFlag()), Boolean.TRUE.equals(u.getEnabled()))).toList();
+                        Boolean.TRUE.equals(u.getInternalFlag()), Boolean.TRUE.equals(u.getEnabled()),
+                        eligibleTopicUnits.contains(u.getId()))).toList();
     }
 
     private UserView toUserView(UserEntity user) {

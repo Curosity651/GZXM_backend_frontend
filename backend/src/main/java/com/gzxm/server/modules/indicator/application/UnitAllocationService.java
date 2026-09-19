@@ -152,7 +152,7 @@ public class UnitAllocationService {
                     var d=definitions.get(candidate.getKey().definition());
                     return candidate.getKey().unit()==dimension.unit() && d!=null && d.enabled() && "BASE".equals(d.category()) && d.achievementType().equals(definition.achievementType());
                 }).toList();
-                if(base.size()!=1 || base.getFirst().getValue()<row.getValue()) throw invalid("ALLOCATION_SPECIAL_EXCEEDS_BASE","每个单位的专项分配不能超过同类基础目标");
+                if(base.size()!=1 || base.getFirst().getValue()<row.getValue()) throw invalid("ALLOCATION_SPECIAL_EXCEEDS_BASE","每个单位的各专项分配必须分别不超过对应成果总数；专项之间允许重叠");
             }
         }
         var effective=mapper.effectiveQuantities(topic);

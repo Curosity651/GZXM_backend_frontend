@@ -124,7 +124,7 @@ public class TopicIndicatorService {
                     return d!=null && d.enabled() && "BASE".equals(d.category()) && d.achievementType().equals(definition.achievementType());
                 }).toList();
                 if (base.size()!=1 || base.getFirst().getValue()<entry.getValue())
-                    throw invalid("SPECIAL_TARGET_EXCEEDS_BASE","专项必须有唯一同类型基础指标，且数量不能超过基础总量");
+                    throw invalid("SPECIAL_TARGET_EXCEEDS_BASE","每个专项指标必须分别不超过对应成果总数；同一成果可同时满足多个专项条件");
             }
         }
         var effective=mapper.effectiveQuantities(topic);

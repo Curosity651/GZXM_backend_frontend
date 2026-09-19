@@ -45,6 +45,7 @@ export function RealIndicatorConfigPage() {
   useEffect(() => { void load(); }, [load]);
 
   const unitMap = useMemo(() => Object.fromEntries(units.map((unit) => [unit.id, unit.name])), [units]);
+  const eligibleTopicUnits = useMemo(() => units.filter((unit) => unit.enabled && unit.topicUnitEligible), [units]);
   const rows = topics.filter((topic) => {
     const statusMatches = !query.status || query.status === 'STOPPED' ? !query.status || !topic.enabled : topic.enabled && topic.status === query.status;
     return statusMatches && (!query.keyword || `${topic.code}${topic.name}`.toLowerCase().includes(query.keyword.toLowerCase()))
@@ -106,7 +107,7 @@ export function RealIndicatorConfigPage() {
       <Form.Item label="课题"><Input allowClear value={query.keyword} placeholder="编号或名称" onChange={(event) => setQuery({ ...query, keyword: event.target.value })} /></Form.Item>
       <Form.Item label="状态"><Select allowClear style={{ width: 160 }} value={query.status || undefined} onChange={(value) => setQuery({ ...query, status: value ?? '' })}
         options={[...Object.entries(statusLabel).map(([value, label]) => ({ value, label })), { value: 'STOPPED', label: '已停用' }]} /></Form.Item>
-      <Form.Item label="牵头单位"><Select allowClear showSearch optionFilterProp="label" style={{ width: 240 }} value={query.leadUnitId || undefined} onChange={(value) => setQuery({ ...query, leadUnitId: value ?? '' })} options={units.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
+      <Form.Item label="牵头单位"><Select allowClear showSearch optionFilterProp="label" style={{ width: 240 }} value={query.leadUnitId || undefined} onChange={(value) => setQuery({ ...query, leadUnitId: value ?? '' })} options={eligibleTopicUnits.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
       <Form.Item><Space><Button onClick={() => setQuery({ keyword: '', status: '', leadUnitId: '' })}>重置</Button><Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button></Space></Form.Item>
     </Form></Card>
     <Card title={<Space>课题列表<Typography.Text type="secondary">共 {rows.length} 个课题</Typography.Text></Space>} extra={<Space>
@@ -141,6 +142,22 @@ export function RealIndicatorConfigPage() {
 interface TopicFormValues { code: string; name: string; summary?: string; leadUnitId: string; participantUnitIds: string[]; startDate?: string; endDate?: string }
 type TargetMap = Record<string, Record<string, number>>;
 type VersionMap = Record<string, number>;
+
+const groupIndicatorDefinitions = (definitions: IndicatorDefinition[]) => {
+  const grouped: IndicatorDefinition[] = [];
+  const included = new Set<string>();
+  definitions.filter((item) => item.category === 'BASE').forEach((base) => {
+    grouped.push(base); included.add(base.id);
+    definitions.filter((item) => item.category === 'SPECIAL' && item.achievementType === base.achievementType)
+      .forEach((special) => { grouped.push(special); included.add(special.id); });
+  });
+  definitions.filter((item) => !included.has(item.id)).forEach((item) => grouped.push(item));
+  return grouped;
+};
+
+const indicatorName = (definition: IndicatorDefinition) => definition.category === 'SPECIAL'
+  ? <span style={{ paddingLeft: 24, color: '#595959' }}>其中：{definition.name}</span>
+  : <Typography.Text strong>{definition.name}总数</Typography.Text>;
 
 export function RealTopicIndicatorConfigPage() {
   const { topicId } = useParams<{ topicId: string }>();
@@ -256,6 +273,7 @@ export function RealTopicIndicatorConfigPage() {
   };
 
   const activeMembers = (topic?.members ?? []).filter((member) => member.enabled);
+  const eligibleTopicUnits = units.filter((unit) => unit.enabled && unit.topicUnitEligible);
   const confirmAllocations = () => {
     if (!topic || !nodeId || !canManageAllocations) return;
     const rows = activeMembers.flatMap((member) => definitions.map((definition) => ({ unitId: member.unitId, indicatorDefinitionId: definition.id, targetQuantity: allocations[`${member.unitId}:${definition.id}`] ?? 0 })));
@@ -280,7 +298,10 @@ export function RealTopicIndicatorConfigPage() {
   if (allocationMode && !topic) return null;
   const unitMap = Object.fromEntries(units.map((unit) => [unit.id, unit.name]));
   const currentTargets = nodeId ? targetsByNode[nodeId] ?? {} : {};
-  const allocationRows = allocationTargets.length ? allocationTargets : definitions.map((definition) => ({ indicatorDefinitionId: definition.id, targetQuantity: 0 } as IndicatorTarget));
+  const groupedDefinitions = groupIndicatorDefinitions(definitions);
+  const allocationTargetMap = Object.fromEntries(allocationTargets.map((target) => [target.indicatorDefinitionId, target]));
+  const allocationRows = groupedDefinitions.map((definition) => allocationTargetMap[definition.id]
+    ?? ({ indicatorDefinitionId: definition.id, targetQuantity: 0 } as IndicatorTarget));
 
   if (allocationMode) return <div className="topic-indicator-editor">
     <Button style={{ marginBottom: 16 }} icon={<ArrowLeftOutlined />} onClick={() => navigate('/indicator')}>返回课题列表</Button>
@@ -289,8 +310,12 @@ export function RealTopicIndicatorConfigPage() {
         {canManageAllocations && <Button type="primary" loading={saving} onClick={confirmAllocations}>提交分配</Button>}</Space>}>
         {!canManageAllocations && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="当前账号为只读查看，或课题已暂停、结题、停用。" />}
         {!nodes.length && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="科研助理尚未配置时间节点，暂时无法分配指标。" />}
+        <Alert type="info" showIcon style={{ marginBottom: 12 }} message="专项指标是对应成果总数的子集；同一成果可同时满足多个专项条件，但在成果总数中仅计算一次。" />
         <Table size="small" pagination={false} rowKey="indicatorDefinitionId" dataSource={allocationRows} scroll={{ x: 800 }} columns={[
-          { title: '指标', fixed: 'left', width: 220, render: (_: unknown, row: IndicatorTarget) => definitions.find((item) => item.id === row.indicatorDefinitionId)?.name },
+          { title: '成果指标', fixed: 'left', width: 300, render: (_: unknown, row: IndicatorTarget) => {
+            const definition = definitions.find((item) => item.id === row.indicatorDefinitionId);
+            return definition ? indicatorName(definition) : row.indicatorDefinitionId;
+          } },
           ...activeMembers.map((member: TopicMember) => ({ title: unitMap[member.unitId] ?? member.unitName, width: 150, render: (_: unknown, row: IndicatorTarget) => <InputNumber min={0} precision={0} disabled={!canManageAllocations} value={allocations[`${member.unitId}:${row.indicatorDefinitionId}`] ?? 0} onChange={(value) => setAllocations({ ...allocations, [`${member.unitId}:${row.indicatorDefinitionId}`]: value ?? 0 })} /> })),
           { title: '课题累计目标', dataIndex: 'targetQuantity', width: 120 },
         ]} />
@@ -311,17 +336,17 @@ export function RealTopicIndicatorConfigPage() {
       <Col span={10}><Card title={isNew ? '新建课题' : '课题基本信息'}>
         <Form form={form} layout="vertical" disabled={!canManageTopic} initialValues={{ participantUnitIds: [] }}>
           <Row gutter={12}><Col span={8}><Form.Item name="code" label="课题编号" rules={[{ required: true, message: '请输入课题编号' }]}><Input /></Form.Item></Col><Col span={16}><Form.Item name="name" label="课题名称" rules={[{ required: true, message: '请输入课题名称' }]}><Input /></Form.Item></Col></Row>
-          <Form.Item name="leadUnitId" label="牵头单位" rules={[{ required: true, message: '请选择牵头单位' }]}><Select showSearch optionFilterProp="label" options={units.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
-          <Form.Item name="participantUnitIds" label="承担单位"><Select mode="multiple" options={units.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
+          <Form.Item name="leadUnitId" label="牵头单位" rules={[{ required: true, message: '请选择牵头单位' }]}><Select showSearch optionFilterProp="label" options={eligibleTopicUnits.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
+          <Form.Item name="participantUnitIds" label="承担单位"><Select mode="multiple" options={eligibleTopicUnits.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
           <Row gutter={12}><Col span={12}><Form.Item name="startDate" label="开始日期"><Input type="date" /></Form.Item></Col><Col span={12}><Form.Item name="endDate" label="结束日期"><Input type="date" /></Form.Item></Col></Row>
           <Form.Item name="summary" label="研究内容摘要"><Input.TextArea rows={4} /></Form.Item>
         </Form>
       </Card></Col>
       <Col span={14}><Card title="课题总体指标" extra={<Space><span>累计时间节点</span><Select style={{ width: 180 }} value={nodeId} onChange={setNodeId} options={nodes.map((node) => ({ value: node.id, label: node.name }))} /></Space>}>
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} message="各时间节点填写累计完成要求，后续节点不得低于前序节点。" />
-        <Table size="small" pagination={false} rowKey="id" dataSource={definitions} columns={[
-          { title: '指标名称', dataIndex: 'name' },
-          { title: '类型', render: (_: unknown, row: IndicatorDefinition) => <Tag color={row.category === 'SPECIAL' ? 'purple' : 'blue'}>{row.category === 'SPECIAL' ? '专项' : '基础'}</Tag> },
+        <Alert type="info" showIcon style={{ marginBottom: 12 }} message="各时间节点填写累计完成要求，后续节点不得低于前序节点。专项指标是对应成果总数的子集，同一成果可同时满足多个专项条件。" />
+        <Table size="small" pagination={false} rowKey="id" dataSource={groupedDefinitions} columns={[
+          { title: '成果指标', render: (_: unknown, row: IndicatorDefinition) => indicatorName(row) },
+          { title: '口径', width: 90, render: (_: unknown, row: IndicatorDefinition) => <Tag color={row.category === 'SPECIAL' ? 'purple' : 'blue'}>{row.category === 'SPECIAL' ? '其中' : '总数'}</Tag> },
           { title: '单位', dataIndex: 'unit', width: 70 },
           { title: '累计目标', width: 130, render: (_: unknown, row: IndicatorDefinition) => <InputNumber min={0} precision={0} disabled={!canManageTargets || !nodeId} value={currentTargets[row.id] ?? 0}
             onChange={(value) => nodeId && setTargetsByNode({ ...targetsByNode, [nodeId]: { ...currentTargets, [row.id]: value ?? 0 } })} /> },

@@ -79,6 +79,8 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
     }
     private boolean matches(Fact fact,Definition definition,JsonNode detail) {
         if(!definition.achievementType().equals(fact.achievementType())) return false;
+        // A fact contributes once to its base total. Special rows are independent subsets, so the
+        // same fact may match several true conditions (for example core journal and first author).
         if("BASE".equals(definition.category())) return fact.definitionId()==definition.id();
         return detail!=null && detail.path(definition.matchField()).isBoolean() && detail.path(definition.matchField()).booleanValue();
     }

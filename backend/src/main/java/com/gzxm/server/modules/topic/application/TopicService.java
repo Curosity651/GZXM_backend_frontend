@@ -62,8 +62,8 @@ public class TopicService {
         long leadId = id(request.leadUnitId());
         List<Long> participants = participantIds(request.participantUnitIds(), leadId);
         var directory = units.snapshot();
-        requireEnabledUnit(leadId, directory);
-        participants.forEach(unit -> requireEnabledUnit(unit, directory));
+        requireEligibleTopicUnit(leadId, directory);
+        participants.forEach(unit -> requireEligibleTopicUnit(unit, directory));
         var projects = topics.activeProjects();
         if (projects.size() != 1)
             throw BusinessException.conflict("PROJECT_CONFIGURATION_REQUIRED", "必须先配置且仅配置一个有效重点项目");
@@ -92,8 +92,8 @@ public class TopicService {
         long leadId = id(request.leadUnitId());
         List<Long> participants = participantIds(request.participantUnitIds(), leadId);
         var directory = units.snapshot();
-        requireEnabledUnit(leadId, directory);
-        participants.forEach(unit -> requireEnabledUnit(unit, directory));
+        requireEligibleTopicUnit(leadId, directory);
+        participants.forEach(unit -> requireEligibleTopicUnit(unit, directory));
         try {
             if (topic.getLeadUnitId() != leadId) changeLead(topic, leadId, user.id());
             for (long unitId : participants) {
@@ -129,8 +129,8 @@ public class TopicService {
         requireLead(topic, user);
         long unitId = id(request.unitId());
         var directory = units.snapshot();
-        requireEnabledUnit(user.unitId(), directory);
-        requireEnabledUnit(unitId, directory);
+        requireEligibleTopicUnit(user.unitId(), directory);
+        requireEligibleTopicUnit(unitId, directory);
         if (members.findUnit(topicId, unitId) != null)
             throw BusinessException.conflict("TOPIC_MEMBER_CONFLICT", "该单位已存在成员关系，停用关系请使用启用接口恢复");
         try {
@@ -153,8 +153,8 @@ public class TopicService {
         if (!"PARTICIPANT".equals(member.getMembershipType()))
             throw BusinessException.conflict("TOPIC_LEAD_IMMUTABLE", "此接口只能启停承担关系，不能改变牵头关系");
         var directory = units.snapshot();
-        requireEnabledUnit(user.unitId(), directory);
-        if (request.enabled()) requireEnabledUnit(member.getUnitId(), directory);
+        requireEligibleTopicUnit(user.unitId(), directory);
+        if (request.enabled()) requireEligibleTopicUnit(member.getUnitId(), directory);
         member.setEnabled(request.enabled()); member.setUpdatedBy(user.id()); members.update(member);
         topic.setUpdatedBy(user.id()); persist(topic);
         return view(member, directory);
@@ -255,6 +255,12 @@ public class TopicService {
     private void requireEnabledUnit(long id, Map<Long, UnitView> directory) {
         var unit = directory.get(id);
         if (unit == null || !unit.enabled()) throw BusinessException.validation("INVALID_UNIT", "单位不存在或已停用");
+    }
+
+    private void requireEligibleTopicUnit(long id, Map<Long, UnitView> directory) {
+        requireEnabledUnit(id, directory);
+        if (!directory.get(id).topicUnitEligible())
+            throw BusinessException.validation("TOPIC_UNIT_ROLE_REQUIRED", "牵头单位和承担单位只能选择启用的内部课题单位或外部课题单位账号");
     }
 
     private void validateWrite(TopicWriteRequest request) {

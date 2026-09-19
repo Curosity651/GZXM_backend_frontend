@@ -35,7 +35,7 @@ export interface ApiPermission {
 }
 
 export interface CreateUserResponse { user: ApiUser }
-export interface ApiUnit { id: string; code: string; name: string; internal: boolean; enabled: boolean }
+export interface ApiUnit { id: string; code: string; name: string; internal: boolean; enabled: boolean; topicUnitEligible: boolean }
 
 export const systemApi = {
   users: (params: URLSearchParams) => apiRequest<ApiPage<ApiUser>>(`/users?${params.toString()}`),
