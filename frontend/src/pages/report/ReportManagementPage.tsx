@@ -238,7 +238,7 @@ export function ReportManagementPage() {
         <Space className="report-filter-actions" size={10}><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
       </div>
       <Divider style={{ margin: '20px 0' }} />
-      <Table rowKey="id" dataSource={filteredReports} columns={[
+      <Table rowKey="id" dataSource={filteredReports} pagination={{ defaultPageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50], showTotal: (total) => `共 ${total} 条` }} columns={[
         { title: '课题', render: (_, item) => topics.find(t => t.id === item.topicId)?.name ?? item.topicId },
         { title: '报告类型', width: 100, render: (_, item) => <Tag color={item.reportType === 'MONTHLY' ? 'blue' : 'purple'}>{item.reportType === 'MONTHLY' ? '月报' : '季报'}</Tag> },
         { title: '报告期次', render: (_, item) => `${item.year} 年${item.reportType === 'MONTHLY' ? `${item.period} 月` : `第 ${item.period} 季度`}` },
