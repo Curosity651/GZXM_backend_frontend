@@ -183,14 +183,14 @@ export function AchievementEntryPage() {
         </Space>
       </div>
     </Card>
-    {progress && <Card title="成果进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
+    <Card title="成果进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
       {[
-        ['分配指标', targetTotal], ['已发起', progress.baseStages.initiated], ['预审通过', progress.baseStages.preApproved],
-        ['已投稿/申请', progress.baseStages.external], ['正式成果', progress.baseStages.formal], ['进入补充阶段', progress.baseStages.supplement], ['已生效', progress.baseStages.effective],
+        ['分配指标', targetTotal], ['已发起', progress?.baseStages.initiated ?? 0], ['预审通过', progress?.baseStages.preApproved ?? 0],
+        ['已投稿/申请', progress?.baseStages.external ?? 0], ['正式成果', progress?.baseStages.formal ?? 0], ['进入补充阶段', progress?.baseStages.supplement ?? 0], ['已生效', progress?.baseStages.effective ?? 0],
       ].map(([label, value]) => <Col flex="1 1 125px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
       <Col flex="1 1 220px"><Text type="secondary">完成率</Text><Progress percent={Math.min(completionRate, 100)} status={completionRate >= 100 ? 'success' : 'active'} format={() => `${completionRate}%`} /></Col>
     </Row>
-      <Table size="small" rowKey={(row) => `${row.scope}-${row.topicId ?? ''}-${row.unitId ?? ''}-${row.indicatorDefinitionId ?? ''}`} style={{ marginTop: 16 }} dataSource={progress.rows} pagination={{
+      <Table size="small" rowKey={(row) => `${row.scope}-${row.topicId ?? ''}-${row.unitId ?? ''}-${row.indicatorDefinitionId ?? ''}`} style={{ marginTop: 16 }} dataSource={progress?.rows ?? []} pagination={{
         current: progressPagination.current,
         pageSize: progressPagination.pageSize,
         showSizeChanger: true,
@@ -208,7 +208,7 @@ export function AchievementEntryPage() {
         { title: '已生效', width: 80, render: (_: unknown, row) => row.stages.effective },
         { title: '完成率', dataIndex: 'completionRate', width: 130, render: (value: number) => <Progress size="small" percent={Math.min(Math.round(value ?? 0), 100)} /> },
       ]} />
-    </Card>}
+    </Card>
     <Card><Table loading={loading} rowKey="id" dataSource={visibleRows} pagination={{
       current: entryPagination.current,
       pageSize: entryPagination.pageSize,
