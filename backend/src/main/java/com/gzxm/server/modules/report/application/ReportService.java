@@ -229,10 +229,11 @@ public class ReportService {
 
     public Map<String, Object> progress(Long topicId, Integer year) {
         if (topicId != null) topics.getTopic(topicId);
-        var first = list(1, 200, topicId, null, year, null, null, false);
-        List<View> visible = new ArrayList<>(first.items());
-        for (int page = 2; (long) (page - 1) * 200 < first.total(); page++)
-            visible.addAll(list(page, 200, topicId, null, year, null, null, false).items());
+        List<View> visible = db.query("SELECT " + COLUMNS + FROM + "ORDER BY r.id DESC", viewMapper).stream()
+                .filter(this::canReadProgress)
+                .filter(report -> topicId == null || report.topicId().equals(String.valueOf(topicId)))
+                .filter(report -> year == null || report.year() == year)
+                .toList();
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", visible.size());
         long submitted = visible.stream().filter(v -> v.submittedVersion() > 0).count();
@@ -271,9 +272,16 @@ public class ReportService {
             case "RESEARCH_ASSISTANT" -> ASSISTANT_VISIBLE_STATES.contains(report.status());
             case "PROJECT_TECH_LEADER" -> LEADER_VISIBLE_STATES.contains(report.status());
             case "INTERNAL_TOPIC_UNIT", "EXTERNAL_TOPIC_UNIT" -> user.unitId() != null
-                    && (topics.isLeadUnit(topicId, user.unitId()) || SUBMITTED_STATES.contains(report.status()));
+                    && topics.isLeadUnit(topicId, user.unitId());
             default -> false;
         };
+    }
+    private boolean canReadProgress(View report) {
+        CurrentUser user = security.requireCurrentUser();
+        if (user.isGlobalRole()) return true;
+        long topicId = Long.parseLong(report.topicId());
+        return (user.isInternalUnit() || user.isExternalUnit()) && user.unitId() != null
+                && topics.canReadTopic(topicId) && topics.isLeadUnit(topicId, user.unitId());
     }
     private Rule latestRule(long topicId) {
         var rows = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? ORDER BY effective_year DESC LIMIT 1",
