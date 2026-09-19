@@ -26,6 +26,9 @@ import java.util.*;
 
 @Service
 public class ReportService {
+    private static final Set<String> SUBMITTED_STATES = Set.of("INITIAL_REVIEW", "FINAL_REVIEW", "APPROVED");
+    private static final Set<String> ASSISTANT_VISIBLE_STATES = SUBMITTED_STATES;
+    private static final Set<String> LEADER_VISIBLE_STATES = Set.of("FINAL_REVIEW", "APPROVED");
     private static final String COLUMNS = "r.id,r.topic_id,r.report_type,t.report_year,t.period_no,t.open_date,t.deadline," +
             "r.basic_information,r.milestone_progress,r.overall_progress,r.research_achievements," +
             "r.demonstration_progress,r.fund_usage,r.next_plan," +
@@ -102,7 +105,7 @@ public class ReportService {
 
     public View get(long reportId) {
         View result = load(reportId, false);
-        topics.getTopic(Long.parseLong(result.topicId()));
+        if (!canRead(result)) throw BusinessException.forbidden("REPORT_SCOPE_DENIED", "当前账号无权查看该报告");
         return result;
     }
 
@@ -112,7 +115,7 @@ public class ReportService {
         if (topicId != null) topics.getTopic(topicId);
         var user = security.requireCurrentUser();
         var all = db.query("SELECT " + COLUMNS + FROM + "ORDER BY r.id DESC", viewMapper).stream()
-                .filter(v -> topics.canReadTopic(Long.parseLong(v.topicId())))
+                .filter(this::canRead)
                 .filter(v -> topicId == null || v.topicId().equals(String.valueOf(topicId)))
                 .filter(v -> type == null || type.equals(v.reportType()))
                 .filter(v -> year == null || year == v.year())
@@ -247,6 +250,19 @@ public class ReportService {
     private void requireOperational(TopicQueryService.TopicSummary topic) {
         if (!topic.enabled() || !"ACTIVE".equals(topic.status()))
             throw BusinessException.conflict("TOPIC_NOT_OPERATIONAL", "课题当前不能办理业务");
+    }
+    private boolean canRead(View report) {
+        long topicId = Long.parseLong(report.topicId());
+        if (!topics.canReadTopic(topicId)) return false;
+        CurrentUser user = security.requireCurrentUser();
+        return switch (user.roleCode()) {
+            case "SYSTEM_ADMIN" -> true;
+            case "RESEARCH_ASSISTANT" -> ASSISTANT_VISIBLE_STATES.contains(report.status());
+            case "PROJECT_TECH_LEADER" -> LEADER_VISIBLE_STATES.contains(report.status());
+            case "INTERNAL_TOPIC_UNIT", "EXTERNAL_TOPIC_UNIT" -> user.unitId() != null
+                    && (topics.isLeadUnit(topicId, user.unitId()) || SUBMITTED_STATES.contains(report.status()));
+            default -> false;
+        };
     }
     private Rule latestRule(long topicId) {
         var rows = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? ORDER BY effective_year DESC LIMIT 1",

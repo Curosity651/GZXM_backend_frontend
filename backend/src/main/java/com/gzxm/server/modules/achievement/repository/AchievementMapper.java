@@ -10,7 +10,8 @@ public interface AchievementMapper {
         <where>
         <if test='unit != null'>
           AND ((unit_id=#{unit} AND topic_id IN <foreach collection='memberTopics' item='t' open='(' close=')' separator=','>#{t}</foreach>)
-          OR topic_id IN <foreach collection='leadTopics' item='t' open='(' close=')' separator=','>#{t}</foreach>)
+          OR (topic_id IN <foreach collection='leadTopics' item='t' open='(' close=')' separator=','>#{t}</foreach>
+              AND status NOT IN ('DRAFT','FORMAL_DRAFT')))
         </if>
         <if test='topic != null'>AND topic_id=#{topic}</if>
         <if test='node != null'>AND node_id=#{node}</if>

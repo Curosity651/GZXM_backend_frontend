@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, RollbackOutlined, SearchOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../api/http-client';
@@ -37,21 +37,45 @@ export function ReportManagementPage() {
   const [contentForm] = Form.useForm<ReportFormValues>();
   const [ruleForm] = Form.useForm<ReportRule>();
   const createValues = Form.useWatch([], createForm) as { topicId?: string; reportType?: ApiReport['reportType']; year?: number; period?: number } | undefined;
+  const pendingDefaultInitialized = useRef(false);
 
   const refresh = useCallback(async () => {
     try {
+      const params = new URLSearchParams({ page: '1', size: '200' });
+      if (filters.topicId) params.set('topicId', filters.topicId);
+      if (filters.reportType) params.set('reportType', filters.reportType);
+      if (filters.year) params.set('year', String(filters.year));
+      if (filters.period) params.set('period', String(filters.period));
+      if (filters.status) params.set('status', filters.status);
+      if (filters.pendingOnly) params.set('pendingForMe', 'true');
       const [who, topicPage, reportPage] = await Promise.all([
-        authApi.me(), apiRequest<TopicPage>('/topics?page=1&size=200'), reportApi.list(new URLSearchParams({ size: '200' })),
+        authApi.me(), apiRequest<TopicPage>('/topics?page=1&size=200'), reportApi.list(params),
       ]);
       setUser(who); setTopics(topicPage.items); setReports(reportPage.items);
+      if (!pendingDefaultInitialized.current) {
+        pendingDefaultInitialized.current = true;
+        const reviewer = who.actionPermissions.includes('report.initial.approve') || who.actionPermissions.includes('report.final.approve');
+        if (reviewer && !filters.pendingOnly) setFilters((current) => ({ ...current, pendingOnly: true }));
+      }
     } catch (error) { message.error(error instanceof Error ? error.message : '报告加载失败'); }
-  }, []);
+  }, [filters]);
   useEffect(() => { void refresh(); }, [refresh]);
   const canSubmit = Boolean(user && ['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT'].includes(user.roleCode) && user.actionPermissions.includes('report.submit'));
   const canConfigure = user?.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('report.rule.manage');
   const canReview = Boolean(user?.actionPermissions.includes('report.initial.approve') || user?.actionPermissions.includes('report.final.approve'));
-  const leadTopics = topics.filter(t => t.enabled && t.status === 'ACTIVE' &&
-    user?.unitId === t.leadUnitId && user.memberships.some(m => m.topicId === t.id && m.membershipType === 'LEAD' && m.enabled));
+  const leadTopicIds = new Set(topics.filter(t => user?.unitId === t.leadUnitId
+    && user.memberships.some(m => m.topicId === t.id && m.membershipType === 'LEAD' && m.enabled)).map((topic) => topic.id));
+  const leadTopics = topics.filter(t => t.enabled && t.status === 'ACTIVE' && leadTopicIds.has(t.id));
+  const canSeeEditableStatuses = user?.roleCode === 'SYSTEM_ADMIN' || (filters.topicId
+    ? leadTopicIds.has(filters.topicId)
+    : leadTopicIds.size > 0);
+  const visibleStatusCodes = user?.roleCode === 'RESEARCH_ASSISTANT'
+    ? new Set<ApiReport['status']>(['INITIAL_REVIEW', 'FINAL_REVIEW', 'APPROVED'])
+    : user?.roleCode === 'PROJECT_TECH_LEADER'
+      ? new Set<ApiReport['status']>(['FINAL_REVIEW', 'APPROVED'])
+      : canSeeEditableStatuses
+        ? new Set<ApiReport['status']>(Object.keys(statusNames) as ApiReport['status'][])
+        : new Set<ApiReport['status']>(['INITIAL_REVIEW', 'FINAL_REVIEW', 'APPROVED']);
   const editable = Boolean(selected && canSubmit && leadTopics.some(t => t.id === selected.topicId) && ['DRAFT', 'RETURNED'].includes(selected.status));
   const reviewable = Boolean(selected && ((selected.status === 'INITIAL_REVIEW' && user?.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('report.initial.approve')) ||
     (selected.status === 'FINAL_REVIEW' && user?.roleCode === 'PROJECT_TECH_LEADER' && user.actionPermissions.includes('report.final.approve'))));
@@ -201,7 +225,7 @@ export function ReportManagementPage() {
     <Card className="report-filter-card" style={{ marginBottom: 16 }}><div className={`report-filter-grid${expanded ? ' is-expanded' : ''}`}>
       {canReview && <Space className="report-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingOnly} onChange={(value) => setFilters({ ...filters, pendingOnly: value })} options={[{ label: '待我处理', value: true }, { label: '全部报告', value: false }]} /></Space>}
       <Space className="report-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部课题" value={filters.topicId} onChange={(value) => setFilters({ ...filters, topicId: value })} options={topics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>
-      <Space className="report-filter-field" size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).map(([value, label]) => ({ value, label }))} /></Space>
+      <Space className="report-filter-field" size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).filter(([value]) => visibleStatusCodes.has(value as ApiReport['status'])).map(([value, label]) => ({ value, label }))} /></Space>
       {expanded && <>
         <Space className="report-filter-field" size={8}><Text>报告类型</Text><Select allowClear placeholder="全部类型" value={filters.reportType} onChange={(value) => setFilters({ ...filters, reportType: value })} options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Space>
         <Space className="report-filter-field" size={8}><Text>年度</Text><InputNumber placeholder="全部年度" value={filters.year} onChange={(value) => setFilters({ ...filters, year: value ?? undefined })} /></Space>

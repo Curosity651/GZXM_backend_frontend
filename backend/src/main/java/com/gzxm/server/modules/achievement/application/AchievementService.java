@@ -178,7 +178,7 @@ public class AchievementService {
         var user=reader();
         var states=visibleStates(user);
         return (states==null || states.contains(row.getStatus())) && topics.canReadTopic(row.getTopicId()) && (user.isGlobalRole() || Objects.equals(row.getUnitId(),user.unitId())
-                || topics.isLeadUnit(row.getTopicId(),user.unitId()));
+                || topics.isLeadUnit(row.getTopicId(),user.unitId()) && !Set.of("DRAFT","FORMAL_DRAFT").contains(row.getStatus()));
     }
     private List<String> visibleStates(CurrentUser user) {
         return switch(user.roleCode()) {
