@@ -217,7 +217,7 @@ export function ReportManagementPage() {
   const ruleStatusColor = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? 'success' : topicId && ruleStatuses[topicId] === false ? 'default' : 'processing';
 
   return <>
-    <Card title="月季报进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
+    <Card title="月季报进度" extra={<Button icon={<ReloadOutlined />} onClick={() => void refreshProgress()}>刷新</Button>} style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
       {[["已发起报告", progressStats.total], ['草稿', progressStats.draft], ['审核中', progressStats.reviewing], ['已通过', progressStats.approved], ['退回修改', progressStats.returned], ['逾期', progressStats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
       <Col flex="1 1 220px"><Text type="secondary">审批通过率</Text><Progress percent={progressStats.passRate} status={progressStats.passRate >= 100 ? 'success' : 'active'} /></Col>
     </Row></Card>
