@@ -58,6 +58,16 @@ public class IndicatorCatalogService {
         return catalog.node(id);
     }
 
+    @Transactional
+    public void deleteNode(long id) {
+        requireManager();
+        long projectId = topics.currentProjectId();
+        TimeNodeView current = requireNode(id, projectId);
+        if (catalog.nodeUsage(id) > 0)
+            throw BusinessException.conflict("TIME_NODE_IN_USE", "时间节点“" + current.name() + "”已经产生指标、分配或成果数据，不能删除");
+        catalog.deleteNode(id);
+    }
+
     public List<DefinitionView> definitions() {
         requirePage();
         return catalog.definitions();

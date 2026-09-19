@@ -48,4 +48,14 @@ public class UnitAllocationController {
         if(service.publish(TopicService.id(topicId),request,key)) audit.success("allocation.publish","TOPIC",topicId);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/unit-allocations:confirm")
+    @PreAuthorize("hasAuthority('unit-allocation.manage') and hasAuthority('unit-allocation.publish')")
+    @Operation(operationId="confirmUnitAllocations")
+    public ResponseEntity<Void> confirm(@PathVariable String topicId,@Valid @RequestBody AllocationBatch request,
+                                        @RequestHeader(value="Idempotency-Key",required=false) String key) {
+        service.confirm(TopicService.id(topicId), request, key);
+        audit.success("allocation.confirm","TOPIC",topicId);
+        return ResponseEntity.noContent().build();
+    }
 }

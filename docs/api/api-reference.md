@@ -73,6 +73,9 @@
 | 方法 | 地址 | 接口用途 | 使用者/限制 |
 |---|---|---|---|
 | GET | `/time-nodes` | 查询项目考核时间节点 | 有指标页面权限的用户 |
+| POST | `/time-nodes` | 新增项目考核时间节点 | 科研助理 |
+| PUT | `/time-nodes/{nodeId}` | 编辑未锁定的时间节点 | 科研助理 |
+| DELETE | `/time-nodes/{nodeId}` | 删除未被指标、分配、发布历史或成果引用的时间节点 | 科研助理 |
 | GET | `/indicator-definitions` | 查询五类成果指标和专项指标定义 | 有指标页面权限的用户 |
 | GET | `/topics/{topicId}/indicator-targets` | 按时间节点查看课题累计指标 | 当前课题成员及管理角色 |
 | PUT | `/topics/{topicId}/indicator-targets` | 保存课题累计指标草稿 | 科研助理 |
@@ -80,6 +83,7 @@
 | GET | `/topics/{topicId}/unit-allocations` | 按时间节点查看单位指标分配 | 牵头单位看全课题，承担单位看本单位 |
 | PUT | `/topics/{topicId}/unit-allocations` | 保存各单位累计指标分配 | 当前课题牵头单位 |
 | POST | `/topics/{topicId}/unit-allocations:publish` | 正式下发单位指标 | 当前课题牵头单位；单位合计不得低于课题要求 |
+| PUT | `/topics/{topicId}/unit-allocations:confirm` | 一次确认单位指标并立即生效，失败整体回滚 | 当前课题牵头单位 |
 
 指标目录补充：`/time-nodes` 与 `/indicator-definitions` 检查 `page:topic-indicator` 权限，只返回启用目录项。节点取唯一有效项目并按 `sortOrder/id` 排序；项目配置不唯一返回 409。目录尚未初始化返回空数组，不自动创建业务配置。
 

@@ -3,6 +3,7 @@ import homeSource from './HomePage.tsx?raw';
 import achievementSource from './achievement/AchievementEntryPage.tsx?raw';
 import reportSource from './report/ReportManagementPage.tsx?raw';
 import archiveSource from './archive/ArchiveMonitoringPage.tsx?raw';
+import indicatorSource from './indicator/RealIndicatorPages.tsx?raw';
 
 describe('A branch page design on real API contracts', () => {
   it('keeps the dashboard overview and task layout while loading server data', () => {
@@ -39,5 +40,14 @@ describe('A branch page design on real API contracts', () => {
     expect(code).toContain('配套自筹项目归档');
     expect(code).toContain('archiveApi.progress()');
     expect(code).not.toContain('useAppStore');
+  });
+
+  it('uses direct unit allocation confirmation and configurable time-node deletion', () => {
+    expect(indicatorSource).not.toContain('title="承担单位维护"');
+    expect(indicatorSource).not.toContain('课题目标由科研助理下发，牵头单位按照时间节点分配至各参与单位。');
+    expect(indicatorSource).not.toContain('saveAllocations(false)');
+    expect(indicatorSource).toContain("allocationAssigned ? '已分配' : '未分配'");
+    expect(indicatorSource).toContain('indicatorApi.confirmAllocations');
+    expect(indicatorSource).toContain('indicatorApi.deleteNode');
   });
 });

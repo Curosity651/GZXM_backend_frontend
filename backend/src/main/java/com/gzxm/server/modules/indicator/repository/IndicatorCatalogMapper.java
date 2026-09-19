@@ -28,8 +28,18 @@ public interface IndicatorCatalogMapper {
     @Select("SELECT COUNT(*) FROM time_node WHERE project_id=#{projectId} AND sort_order=#{sortOrder} AND id<>#{excludeId}")
     int countSortOrder(@Param("projectId") long projectId, @Param("sortOrder") int sortOrder, @Param("excludeId") long excludeId);
 
-    @Select("SELECT (SELECT COUNT(*) FROM topic_indicator WHERE node_id=#{id})+(SELECT COUNT(*) FROM topic_indicator_draft WHERE node_id=#{id})+(SELECT COUNT(*) FROM unit_indicator_allocation WHERE node_id=#{id})+(SELECT COUNT(*) FROM unit_allocation_draft WHERE node_id=#{id})")
+    @Select("SELECT " +
+            "(SELECT COUNT(*) FROM topic_indicator WHERE node_id=#{id})+" +
+            "(SELECT COUNT(*) FROM topic_indicator_draft WHERE node_id=#{id})+" +
+            "(SELECT COUNT(*) FROM topic_indicator_publication WHERE node_id=#{id})+" +
+            "(SELECT COUNT(*) FROM unit_indicator_allocation WHERE node_id=#{id})+" +
+            "(SELECT COUNT(*) FROM unit_allocation_draft WHERE node_id=#{id})+" +
+            "(SELECT COUNT(*) FROM unit_allocation_publication WHERE node_id=#{id})+" +
+            "(SELECT COUNT(*) FROM achievement WHERE node_id=#{id})")
     int nodeUsage(long id);
+
+    @Delete("DELETE FROM time_node WHERE id=#{id}")
+    int deleteNode(long id);
 
     @Select("SELECT CAST(id AS CHAR) id,code,name,achievement_type,unit_name AS unit,category,enabled FROM indicator_definition WHERE enabled=1 ORDER BY id")
     List<DefinitionView> definitions();

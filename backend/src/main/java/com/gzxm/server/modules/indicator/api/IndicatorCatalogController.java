@@ -47,6 +47,15 @@ public class IndicatorCatalogController {
         var result = service.setNodeStatus(TopicService.id(nodeId), request.enabled()); audit.success("indicator.time-node.status", "TIME_NODE", result.id()); return result;
     }
 
+    @DeleteMapping("/time-nodes/{nodeId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAuthority('indicator.manage')")
+    @Operation(operationId = "deleteTimeNode")
+    public void deleteNode(@PathVariable String nodeId) {
+        service.deleteNode(TopicService.id(nodeId));
+        audit.success("indicator.time-node.delete", "TIME_NODE", nodeId);
+    }
+
     @GetMapping("/indicator-definitions")
     @Operation(operationId = "listIndicatorDefinitions")
     public List<DefinitionView> definitions() { return service.definitions(); }

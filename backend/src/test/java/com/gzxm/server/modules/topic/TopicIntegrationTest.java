@@ -173,6 +173,26 @@ class TopicIntegrationTest {
             call(get(path), "RESEARCH_ASSISTANT", null).andExpect(status().isForbidden());
         }
     }
+
+    @Test
+    void researchAssistantCanDeleteUnusedTimeNode() throws Exception {
+        jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order,enabled) VALUES(1,1,'TEMP','Temporary','2027-01-01',1,1)");
+        call(delete("/api/v1/time-nodes/1"), "RESEARCH_ASSISTANT", null)
+                .andExpect(status().isNoContent());
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM time_node WHERE id=1", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action_code='indicator.time-node.delete'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void deletingUsedTimeNodeIsRejectedWithoutChangingData() throws Exception {
+        long topic = create("NODE-USED", "1", List.of("2")).path("id").asLong();
+        jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order,enabled) VALUES(1,1,'USED','Used node','2027-01-01',1,1)");
+        jdbc.update("INSERT INTO topic_indicator_draft(topic_id,node_id,updated_by) VALUES(?,?,?)", topic, 1, 101);
+        call(delete("/api/v1/time-nodes/1"), "RESEARCH_ASSISTANT", null)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TIME_NODE_IN_USE"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM time_node WHERE id=1", Integer.class)).isEqualTo(1);
+    }
     @AfterAll static void stopContainer() { if (container != null) container.stop(); }
 
     @Test

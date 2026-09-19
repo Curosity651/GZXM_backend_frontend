@@ -111,6 +111,12 @@ public class UnitAllocationService {
         return true;
     }
 
+    @Transactional
+    public void confirm(long topicId, AllocationBatch request, String key) {
+        AllocationDraftResult saved = save(topicId, request);
+        publish(topicId, new PublishRequest(request.nodeId(), saved.draftVersion()), key);
+    }
+
     private Context context(TopicQueryService.TopicSummary topic,long nodeId) {
         var node=node(nodeId,topic.projectId(),true);
         var targets=indicators.effective(topic.id(),nodeId).stream().collect(Collectors.toMap(row->TopicService.id(row.indicatorDefinitionId()),row->row));

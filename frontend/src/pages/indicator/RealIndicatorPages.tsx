@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Result, Row, Select, Space, Spin, Table, Tag, Typography, message } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { topicApi, type ApiTopic, type TopicMember, type TopicWrite } from '../../api/topic-api';
 import { indicatorApi, type IndicatorDefinition, type IndicatorTarget, type TimeNode } from '../../api/indicator-api';
@@ -79,6 +79,15 @@ export function RealIndicatorConfigPage() {
     try { await indicatorApi.setNodeStatus(node.id, enabled); setNodes(await indicatorApi.nodes(true)); message.success(enabled ? '时间节点已启用' : '时间节点已停用'); }
     catch (error) { message.error(error instanceof Error ? error.message : '时间节点状态修改失败'); }
   };
+  const deleteNode = (node: TimeNode) => Modal.confirm({
+    title: '确认删除时间节点',
+    content: `确定删除“${node.name}”吗？删除后无法恢复。已经产生指标、分配或成果数据的节点不能删除。`,
+    okText: '删除', okType: 'danger', cancelText: '取消',
+    onOk: async () => {
+      try { await indicatorApi.deleteNode(node.id); setNodes(await indicatorApi.nodes(true)); message.success('时间节点已删除'); }
+      catch (error) { message.error(error instanceof Error ? error.message : '时间节点删除失败'); }
+    },
+  });
 
   const topicActions = (topic: ApiTopic) => {
     if (!canManage) return canAllocate(topic) ? <Button type="link" onClick={() => navigate(`/indicator/topic/${topic.id}?mode=allocation`)}>分配指标</Button> : null;
@@ -118,7 +127,7 @@ export function RealIndicatorConfigPage() {
       <Table rowKey="id" pagination={false} dataSource={nodes} columns={[
         { title: '顺序', dataIndex: 'sortOrder', width: 80 }, { title: '时间阶段', dataIndex: 'name' }, { title: '截止日期', dataIndex: 'deadline', width: 140 },
         { title: '状态', dataIndex: 'enabled', width: 100, render: (enabled: boolean) => <Tag color={enabled ? 'green' : 'default'}>{enabled ? '启用' : '停用'}</Tag> },
-        { title: '操作', width: 180, render: (_: unknown, node: TimeNode) => <Space><Button type="link" onClick={() => openNodeEditor(node)}>编辑</Button><Button type="link" danger={node.enabled} onClick={() => void setNodeStatus(node, !node.enabled)}>{node.enabled ? '停用' : '启用'}</Button></Space> },
+        { title: '操作', width: 240, render: (_: unknown, node: TimeNode) => <Space><Button type="link" onClick={() => openNodeEditor(node)}>编辑</Button><Button type="link" onClick={() => void setNodeStatus(node, !node.enabled)}>{node.enabled ? '停用' : '启用'}</Button><Button type="link" danger icon={<DeleteOutlined />} onClick={() => deleteNode(node)}>删除</Button></Space> },
       ]} />
     </Modal>
     <Modal title={editingNode ? '编辑时间节点' : '新增时间节点'} open={nodeEditorOpen} onCancel={() => { setNodeEditorOpen(false); setEditingNode(undefined); nodeForm.resetFields(); }} onOk={() => void saveNode()} confirmLoading={nodeSaving} okText="保存" cancelText="取消">
@@ -154,12 +163,12 @@ export function RealTopicIndicatorConfigPage() {
   const [allocationTargets, setAllocationTargets] = useState<IndicatorTarget[]>([]);
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [allocationDraftVersion, setAllocationDraftVersion] = useState(0);
+  const [allocationAssigned, setAllocationAssigned] = useState(false);
   const isResearchAssistant = user.roleCode === 'RESEARCH_ASSISTANT';
   const topicEditable = isNew || Boolean(topic?.enabled && (topic.status === 'DRAFT' || topic.status === 'ACTIVE'));
   const isCurrentTopicLead = Boolean(topic && user.memberships.some((membership) => membership.topicId === topic.id && membership.membershipType === 'LEAD' && membership.enabled));
   const canManageTopic = isResearchAssistant && has(user.actionPermissions, 'topic.manage') && topicEditable && !allocationMode;
   const canManageTargets = isResearchAssistant && has(user.actionPermissions, 'indicator.manage') && has(user.actionPermissions, 'topic-indicator.publish') && topicEditable && !allocationMode;
-  const canManageMembers = isCurrentTopicLead && has(user.actionPermissions, 'topic-unit.manage') && allocationMode && topic?.enabled && topic.status === 'ACTIVE';
   const canManageAllocations = isCurrentTopicLead && has(user.actionPermissions, 'unit-allocation.manage') && has(user.actionPermissions, 'unit-allocation.publish') && allocationMode && topic?.enabled && topic.status === 'ACTIVE';
 
   useEffect(() => {
@@ -197,9 +206,8 @@ export function RealTopicIndicatorConfigPage() {
     try {
       const [effective, allocationEffective] = await Promise.all([indicatorApi.targets(topic.id, nodeId), indicatorApi.allocations(topic.id, nodeId)]);
       const allocationDraft = canManageAllocations ? await indicatorApi.allocations(topic.id, nodeId, 'draft') : allocationEffective;
-      const rows = allocationDraft.rows.length ? allocationDraft.rows : allocationEffective.rows;
-      setAllocationTargets(effective.rows); setAllocationDraftVersion(allocationDraft.draftVersion);
-      setAllocations(Object.fromEntries(rows.map((row) => [`${row.unitId}:${row.indicatorDefinitionId}`, row.targetQuantity])));
+      setAllocationTargets(effective.rows); setAllocationDraftVersion(allocationDraft.draftVersion); setAllocationAssigned(allocationEffective.rows.length > 0);
+      setAllocations(Object.fromEntries(allocationEffective.rows.map((row) => [`${row.unitId}:${row.indicatorDefinitionId}`, row.targetQuantity])));
     } catch (error) { message.error(error instanceof Error ? error.message : '单位指标加载失败'); }
   }, [allocationMode, canManageAllocations, nodeId, topic]);
   useEffect(() => { void loadAllocationNode(); }, [loadAllocationNode]);
@@ -248,24 +256,23 @@ export function RealTopicIndicatorConfigPage() {
   };
 
   const activeMembers = (topic?.members ?? []).filter((member) => member.enabled);
-  const saveAllocations = async (submit: boolean) => {
+  const confirmAllocations = () => {
     if (!topic || !nodeId || !canManageAllocations) return;
     const rows = activeMembers.flatMap((member) => definitions.map((definition) => ({ unitId: member.unitId, indicatorDefinitionId: definition.id, targetQuantity: allocations[`${member.unitId}:${definition.id}`] ?? 0 })));
-    setSaving(true);
-    try {
-      const draft = await indicatorApi.saveAllocations(topic.id, nodeId, allocationDraftVersion, rows);
-      if (submit) await indicatorApi.publishAllocations(topic.id, nodeId, draft.draftVersion);
-      message.success(submit ? '单位指标分配已提交' : '单位指标分配草稿已保存'); await loadAllocationNode();
-    } catch (error) { message.error(error instanceof Error ? error.message : '单位指标保存失败'); }
-    finally { setSaving(false); }
-  };
-  const updateMember = async (unitId: string, enabled: boolean) => {
-    if (!topic) return;
-    try {
-      const existing = topic.members.find((member) => member.unitId === unitId && member.membershipType === 'PARTICIPANT');
-      if (existing) await topicApi.setMemberStatus(topic.id, existing.id, enabled); else await topicApi.addMember(topic.id, unitId);
-      const refreshed = await topicApi.get(topic.id); setTopic(refreshed); message.success('承担单位已更新');
-    } catch (error) { message.error(error instanceof Error ? error.message : '成员关系更新失败'); }
+    const selectedNode = nodes.find((node) => node.id === nodeId);
+    Modal.confirm({
+      title: allocationAssigned ? '确认更新指标分配' : '确认提交指标分配',
+      content: `确认提交“${selectedNode?.name ?? '当前时间节点'}”的单位指标分配吗？提交后立即生效。`,
+      okText: '确认分配', cancelText: '取消',
+      onOk: async () => {
+        setSaving(true);
+        try {
+          await indicatorApi.confirmAllocations(topic.id, nodeId, allocationDraftVersion, rows);
+          message.success('单位指标分配已确认并生效'); await loadAllocationNode();
+        } catch (error) { message.error(error instanceof Error ? error.message : '单位指标分配失败'); throw error; }
+        finally { setSaving(false); }
+      },
+    });
   };
 
   if (loading) return <Card><Spin /></Card>;
@@ -278,17 +285,10 @@ export function RealTopicIndicatorConfigPage() {
   if (allocationMode) return <div className="topic-indicator-editor">
     <Button style={{ marginBottom: 16 }} icon={<ArrowLeftOutlined />} onClick={() => navigate('/indicator')}>返回课题列表</Button>
     <Row gutter={[18, 18]}>
-      <Col span={24}><Card title={<Space><span>{topic!.code} {topic!.name}</span><Tag color="green">单位指标分配</Tag></Space>}>
-        <Typography.Text type="secondary">课题目标由科研助理下发，牵头单位按照时间节点分配至各参与单位。</Typography.Text>
-      </Card></Col>
-      <Col span={24}><Card title="承担单位维护">
-        {!canManageMembers && <Alert type="info" showIcon message="当前课题状态或账号权限不允许维护承担单位" />}
-        {canManageMembers && <Select mode="multiple" style={{ width: '100%' }} value={activeMembers.filter((member) => member.membershipType === 'PARTICIPANT').map((member) => member.unitId)}
-          options={units.filter((unit) => unit.id !== topic!.leadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} onSelect={(value) => void updateMember(value, true)} onDeselect={(value) => void updateMember(value, false)} />}
-      </Card></Col>
-      <Col span={24}><Card title="单位指标分配" extra={<Space><span>时间节点</span><Select style={{ width: 180 }} value={nodeId} onChange={setNodeId} options={nodes.map((node) => ({ value: node.id, label: node.name }))} />
-        {canManageAllocations && <><Button loading={saving} onClick={() => void saveAllocations(false)}>保存草稿</Button><Button type="primary" loading={saving} onClick={() => void saveAllocations(true)}>提交分配</Button></>}</Space>}>
+      <Col span={24}><Card extra={<Space><Tag color={allocationAssigned ? 'green' : 'default'}>{allocationAssigned ? '已分配' : '未分配'}</Tag><span>时间节点</span><Select style={{ width: 180 }} value={nodeId} onChange={setNodeId} options={nodes.map((node) => ({ value: node.id, label: node.name }))} />
+        {canManageAllocations && <Button type="primary" loading={saving} onClick={confirmAllocations}>提交分配</Button>}</Space>}>
         {!canManageAllocations && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="当前账号为只读查看，或课题已暂停、结题、停用。" />}
+        {!nodes.length && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="科研助理尚未配置时间节点，暂时无法分配指标。" />}
         <Table size="small" pagination={false} rowKey="indicatorDefinitionId" dataSource={allocationRows} scroll={{ x: 800 }} columns={[
           { title: '指标', fixed: 'left', width: 220, render: (_: unknown, row: IndicatorTarget) => definitions.find((item) => item.id === row.indicatorDefinitionId)?.name },
           ...activeMembers.map((member: TopicMember) => ({ title: unitMap[member.unitId] ?? member.unitName, width: 150, render: (_: unknown, row: IndicatorTarget) => <InputNumber min={0} precision={0} disabled={!canManageAllocations} value={allocations[`${member.unitId}:${row.indicatorDefinitionId}`] ?? 0} onChange={(value) => setAllocations({ ...allocations, [`${member.unitId}:${row.indicatorDefinitionId}`]: value ?? 0 })} /> })),
@@ -312,7 +312,7 @@ export function RealTopicIndicatorConfigPage() {
         <Form form={form} layout="vertical" disabled={!canManageTopic} initialValues={{ participantUnitIds: [] }}>
           <Row gutter={12}><Col span={8}><Form.Item name="code" label="课题编号" rules={[{ required: true, message: '请输入课题编号' }]}><Input /></Form.Item></Col><Col span={16}><Form.Item name="name" label="课题名称" rules={[{ required: true, message: '请输入课题名称' }]}><Input /></Form.Item></Col></Row>
           <Form.Item name="leadUnitId" label="牵头单位" rules={[{ required: true, message: '请选择牵头单位' }]}><Select showSearch optionFilterProp="label" options={units.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
-          {isNew && <Form.Item name="participantUnitIds" label="承担单位"><Select mode="multiple" options={units.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>}
+          <Form.Item name="participantUnitIds" label="承担单位"><Select mode="multiple" options={units.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
           <Row gutter={12}><Col span={12}><Form.Item name="startDate" label="开始日期"><Input type="date" /></Form.Item></Col><Col span={12}><Form.Item name="endDate" label="结束日期"><Input type="date" /></Form.Item></Col></Row>
           <Form.Item name="summary" label="研究内容摘要"><Input.TextArea rows={4} /></Form.Item>
         </Form>

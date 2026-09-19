@@ -14,6 +14,7 @@ export const indicatorApi = {
   createNode: (data: { name: string; deadline: string; sortOrder: number }) => apiRequest<TimeNode>('/time-nodes', { method: 'POST', body: JSON.stringify(data) }),
   updateNode: (id: string, data: { name: string; deadline: string; sortOrder: number }) => apiRequest<TimeNode>(`/time-nodes/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   setNodeStatus: (id: string, enabled: boolean) => apiRequest<TimeNode>(`/time-nodes/${id}/status`, { method: 'PUT', body: JSON.stringify({ enabled }) }),
+  deleteNode: (id: string) => apiRequest<void>(`/time-nodes/${id}`, { method: 'DELETE' }),
   definitions: () => apiRequest<IndicatorDefinition[]>('/indicator-definitions'),
   targets: async (topicId: string, nodeId: string, view: 'effective' | 'draft' = 'effective'): Promise<VersionedRows<IndicatorTarget>> => {
     const { data, response } = await apiRequestDetailed<IndicatorTarget[]>(`/topics/${topicId}/indicator-targets?nodeId=${nodeId}&view=${view}`);
@@ -33,4 +34,6 @@ export const indicatorApi = {
     return { rows: data, draftVersion: version(response, 'X-Draft-Version'), topicIndicatorVersion: version(response, 'X-Topic-Indicator-Version') };
   },
   publishAllocations: (topicId: string, nodeId: string, draftVersion: number) => apiRequest<void>(`/topics/${topicId}/unit-allocations:publish`, { method: 'POST', headers: { 'Idempotency-Key': key() }, body: JSON.stringify({ nodeId, draftVersion }) }),
+  confirmAllocations: (topicId: string, nodeId: string, draftVersion: number, allocations: Array<{ unitId: string; indicatorDefinitionId: string; targetQuantity: number }>) =>
+    apiRequest<void>(`/topics/${topicId}/unit-allocations:confirm`, { method: 'PUT', headers: { 'Idempotency-Key': key() }, body: JSON.stringify({ nodeId, draftVersion, allocations }) }),
 };
