@@ -57,7 +57,9 @@ export function AchievementEntryPage() {
   const canFinal = user.roleCode === 'PROJECT_TECH_LEADER' && user.actionPermissions.includes('achievement.final.approve');
 
   const loadBase = useCallback(async () => {
-    const [topicPage, unitRows, nodeRows, definitionRows] = await Promise.all([topicApi.list(), systemApi.units(), indicatorApi.nodes(true), indicatorApi.definitions()]);
+    const [topicPage, unitRows, nodeRows, definitionRows] = await Promise.all([
+      topicApi.list(), systemApi.units(), indicatorApi.nodes(user.roleCode === 'RESEARCH_ASSISTANT'), indicatorApi.definitions(),
+    ]);
     setTopics(topicPage.items); setUnits(unitRows); setNodes(nodeRows); setDefinitions(definitionRows.filter((item) => item.enabled));
     if (!filters.nodeId) setFilters((current) => ({ ...current, nodeId: [...nodeRows].filter((node) => node.enabled).sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id ?? '' }));
     if (canSubmit && user.unitId) {
@@ -65,7 +67,7 @@ export function AchievementEntryPage() {
       const settled = await Promise.allSettled(calls);
       setAllocations(settled.flatMap((result) => result.status === 'fulfilled' ? result.value.rows : []).filter((item) => item.unitId === user.unitId && item.targetQuantity > 0));
     }
-  }, [canSubmit, filters.nodeId, user.unitId]);
+  }, [canSubmit, filters.nodeId, user.roleCode, user.unitId]);
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
