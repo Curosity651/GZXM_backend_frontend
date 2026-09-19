@@ -20,6 +20,10 @@ export interface ApiApproval {
   decision: string; opinion?: string; operatorId: string; submittedVersion: number; operatedAt: string;
 }
 export interface ApiSnapshot { id: string; submittedVersion: number; submittedAt: string; payload: Record<string, unknown> }
+export interface ReportProgress {
+  total: number; draft: number; reviewing: number; approved: number; returned: number;
+  submitted: number; overdue: number; passRate: number;
+}
 
 export const reportApi = {
   list: (params: URLSearchParams = new URLSearchParams()) => apiRequest<ApiPage<ApiReport>>(`/reports?${params}`),
@@ -34,5 +38,5 @@ export const reportApi = {
   snapshots: (id: string) => apiRequest<ApiSnapshot[]>(`/reports/${id}/snapshots`),
   rule: (topicId: string, effectiveYear?: number) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule${effectiveYear ? `?effectiveYear=${effectiveYear}` : ''}`),
   saveRule: (topicId: string, rule: ReportRule) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule`, { method: 'PUT', body: JSON.stringify(rule) }),
-  progress: (topicId?: string) => apiRequest<{ total: number; submitted: number; approved: number; overdue: number }>(`/report-progress${topicId ? `?topicId=${topicId}` : ''}`),
+  progress: (topicId?: string) => apiRequest<ReportProgress>(`/report-progress${topicId ? `?topicId=${topicId}` : ''}`),
 };

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Col, Divider, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../api/http-client';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
@@ -20,6 +20,7 @@ export function ReportManagementPage() {
   const [user, setUser] = useState<ApiCurrentUser>();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [reports, setReports] = useState<ApiReport[]>([]);
+  const [progressStats, setProgressStats] = useState({ total: 0, draft: 0, reviewing: 0, approved: 0, returned: 0, submitted: 0, overdue: 0, passRate: 0 });
   const [selected, setSelected] = useState<ApiReport>();
   const [creating, setCreating] = useState(false);
   const [configuring, setConfiguring] = useState(false);
@@ -60,6 +61,11 @@ export function ReportManagementPage() {
     } catch (error) { message.error(error instanceof Error ? error.message : '报告加载失败'); }
   }, [filters]);
   useEffect(() => { void refresh(); }, [refresh]);
+  const refreshProgress = useCallback(async () => {
+    try { setProgressStats(await reportApi.progress()); }
+    catch (error) { message.error(error instanceof Error ? error.message : '进度统计加载失败'); }
+  }, []);
+  useEffect(() => { void refreshProgress(); }, [refreshProgress]);
   const canSubmit = Boolean(user && ['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT'].includes(user.roleCode) && user.actionPermissions.includes('report.submit'));
   const canConfigure = user?.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('report.rule.manage');
   const canReview = Boolean(user?.actionPermissions.includes('report.initial.approve') || user?.actionPermissions.includes('report.final.approve'));
@@ -85,17 +91,6 @@ export function ReportManagementPage() {
     && (!filters.period || report.period === filters.period)
     && (!filters.status || report.status === filters.status)
     && (!filters.pendingOnly || (user?.roleCode === 'RESEARCH_ASSISTANT' && report.status === 'INITIAL_REVIEW') || (user?.roleCode === 'PROJECT_TECH_LEADER' && report.status === 'FINAL_REVIEW')));
-  const stats = {
-    total: filteredReports.length,
-    draft: filteredReports.filter((item) => item.status === 'DRAFT').length,
-    reviewing: filteredReports.filter((item) => ['INITIAL_REVIEW', 'FINAL_REVIEW'].includes(item.status)).length,
-    approved: filteredReports.filter((item) => item.status === 'APPROVED').length,
-    returned: filteredReports.filter((item) => item.status === 'RETURNED').length,
-    overdue: filteredReports.filter((item) => item.overdue).length,
-  };
-  const submittedCount = filteredReports.filter((item) => item.status !== 'DRAFT').length;
-  const passRate = submittedCount ? Math.round((stats.approved / submittedCount) * 100) : 0;
-
   const open = async (report: ApiReport) => {
     setSelected(report);
     contentForm.setFieldsValue(report);
@@ -104,7 +99,7 @@ export function ReportManagementPage() {
   };
   const execute = async (action: () => Promise<unknown>, success: string) => {
     setBusy(true);
-    try { await action(); message.success(success); setSelected(undefined); await refresh(); }
+    try { await action(); message.success(success); setSelected(undefined); await Promise.all([refresh(), refreshProgress()]); }
     catch (error) { message.error(error instanceof Error ? error.message : '操作失败'); }
     finally { setBusy(false); }
   };
@@ -113,7 +108,7 @@ export function ReportManagementPage() {
     setBusy(true);
     try {
       const item = await reportApi.create(values);
-      setCreating(false); await open(item); await refresh(); message.success('报告已创建');
+      setCreating(false); await open(item); await Promise.all([refresh(), refreshProgress()]); message.success('报告已创建');
     } catch (error) { message.error(error instanceof Error ? error.message : '报告创建失败'); }
     finally { setBusy(false); }
   };
@@ -222,26 +217,27 @@ export function ReportManagementPage() {
   const ruleStatusColor = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? 'success' : topicId && ruleStatuses[topicId] === false ? 'default' : 'processing';
 
   return <>
-    <Card className="report-filter-card" style={{ marginBottom: 16 }}><div className={`report-filter-grid${expanded ? ' is-expanded' : ''}${canReview ? ' has-review-scope' : ''}`}>
-      {canReview && <Space className="report-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingOnly} onChange={(value) => setFilters({ ...filters, pendingOnly: value })} options={[{ label: '待我处理', value: true }, { label: '全部报告', value: false }]} /></Space>}
-      <Space className="report-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部课题" value={filters.topicId} onChange={(value) => setFilters({ ...filters, topicId: value })} options={topics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>
-      <Space className="report-filter-field" size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).filter(([value]) => visibleStatusCodes.has(value as ApiReport['status'])).map(([value, label]) => ({ value, label }))} /></Space>
-      {expanded && <>
-        <Space className="report-filter-field" size={8}><Text>报告类型</Text><Select allowClear placeholder="全部类型" value={filters.reportType} onChange={(value) => setFilters({ ...filters, reportType: value })} options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Space>
-        <Space className="report-filter-field" size={8}><Text>年度</Text><InputNumber placeholder="全部年度" value={filters.year} onChange={(value) => setFilters({ ...filters, year: value ?? undefined })} /></Space>
-        <Space className="report-filter-field" size={8}><Text>期次</Text><InputNumber placeholder="全部期次" value={filters.period} onChange={(value) => setFilters({ ...filters, period: value ?? undefined })} /></Space>
-      </>}
-      <Space className="report-filter-actions" size={10}><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
-    </div></Card>
     <Card title="月季报进度" style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
-      {[["已发起报告", stats.total], ['草稿', stats.draft], ['审核中', stats.reviewing], ['已通过', stats.approved], ['退回修改', stats.returned], ['逾期', stats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
-      <Col flex="1 1 220px"><Text type="secondary">审批通过率</Text><Progress percent={passRate} status={passRate >= 100 ? 'success' : 'active'} /></Col>
+      {[["已发起报告", progressStats.total], ['草稿', progressStats.draft], ['审核中', progressStats.reviewing], ['已通过', progressStats.approved], ['退回修改', progressStats.returned], ['逾期', progressStats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
+      <Col flex="1 1 220px"><Text type="secondary">审批通过率</Text><Progress percent={progressStats.passRate} status={progressStats.passRate >= 100 ? 'success' : 'active'} /></Col>
     </Row></Card>
     <Card title={`月季报列表（${filteredReports.length}）`} extra={<Space>
-      <Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button>
+      <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([refresh(), refreshProgress()])}>刷新</Button>
       {canConfigure && <Button disabled={topics.length === 0} onClick={openRulePanel}>配置填报规则</Button>}
       {canSubmit && <Button type="primary" icon={<FileAddOutlined />} disabled={leadTopics.length === 0} onClick={prepareNew}>新建月季报</Button>}
     </Space>}>
+      <div className={`report-filter-grid${expanded ? ' is-expanded' : ''}${canReview ? ' has-review-scope' : ''}`}>
+        {canReview && <Space className="report-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingOnly} onChange={(value) => setFilters({ ...filters, pendingOnly: value })} options={[{ label: '待我处理', value: true }, { label: '全部报告', value: false }]} /></Space>}
+        <Space className="report-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部课题" value={filters.topicId} onChange={(value) => setFilters({ ...filters, topicId: value })} options={topics.map((topic) => ({ label: `${topic.code} ${topic.name}`, value: topic.id }))} /></Space>
+        <Space className="report-filter-field" size={8}><Text>报告状态</Text><Select allowClear placeholder="全部状态" value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })} options={Object.entries(statusNames).filter(([value]) => visibleStatusCodes.has(value as ApiReport['status'])).map(([value, label]) => ({ value, label }))} /></Space>
+        {expanded && <>
+          <Space className="report-filter-field" size={8}><Text>报告类型</Text><Select allowClear placeholder="全部类型" value={filters.reportType} onChange={(value) => setFilters({ ...filters, reportType: value })} options={[{ label: '月报', value: 'MONTHLY' }, { label: '季报', value: 'QUARTERLY' }]} /></Space>
+          <Space className="report-filter-field" size={8}><Text>年度</Text><InputNumber placeholder="全部年度" value={filters.year} onChange={(value) => setFilters({ ...filters, year: value ?? undefined })} /></Space>
+          <Space className="report-filter-field" size={8}><Text>期次</Text><InputNumber placeholder="全部期次" value={filters.period} onChange={(value) => setFilters({ ...filters, period: value ?? undefined })} /></Space>
+        </>}
+        <Space className="report-filter-actions" size={10}><Button onClick={() => setFilters({ pendingOnly: canReview })}>重置</Button><Button type="link" icon={expanded ? <UpOutlined /> : <DownOutlined />} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '展开'}</Button></Space>
+      </div>
+      <Divider style={{ margin: '20px 0' }} />
       <Table rowKey="id" dataSource={filteredReports} columns={[
         { title: '课题', render: (_, item) => topics.find(t => t.id === item.topicId)?.name ?? item.topicId },
         { title: '报告类型', width: 100, render: (_, item) => <Tag color={item.reportType === 'MONTHLY' ? 'blue' : 'purple'}>{item.reportType === 'MONTHLY' ? '月报' : '季报'}</Tag> },

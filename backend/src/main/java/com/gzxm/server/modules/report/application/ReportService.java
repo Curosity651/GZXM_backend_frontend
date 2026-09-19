@@ -235,10 +235,21 @@ public class ReportService {
             visible.addAll(list(page, 200, topicId, null, year, null, null, false).items());
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("total", visible.size());
-        result.put("submitted", visible.stream().filter(v -> v.submittedVersion() > 0).count());
-        result.put("approved", visible.stream().filter(v -> "APPROVED".equals(v.status())).count());
-        result.put("overdue", visible.stream().filter(View::overdue).count());
+        long submitted = visible.stream().filter(v -> v.submittedVersion() > 0).count();
+        long approved = visible.stream().filter(v -> "APPROVED".equals(v.status())).count();
+        result.put("draft", visible.stream().filter(v -> "DRAFT".equals(v.status())).count());
+        result.put("reviewing", visible.stream().filter(v -> Set.of("INITIAL_REVIEW", "FINAL_REVIEW").contains(v.status())).count());
+        result.put("approved", approved);
+        result.put("returned", visible.stream().filter(v -> "RETURNED".equals(v.status())).count());
+        result.put("submitted", submitted);
+        result.put("overdue", visible.stream().filter(this::isOverdue).count());
+        result.put("passRate", submitted == 0 ? 0 : Math.round(approved * 100.0 / submitted));
         return result;
+    }
+
+    private boolean isOverdue(View report) {
+        return report.overdue() || (Set.of("DRAFT", "RETURNED").contains(report.status())
+                && LocalDate.now().isAfter(report.deadline()));
     }
 
     private void requireLead(long topicId) {
@@ -316,11 +327,15 @@ public class ReportService {
     }
     private View view(ResultSet rs) throws SQLException {
         var submitted = rs.getTimestamp("submitted_at");
+        var deadline = rs.getDate("deadline").toLocalDate();
+        var status = rs.getString("status");
+        boolean overdue = rs.getBoolean("overdue") || (Set.of("DRAFT", "RETURNED").contains(status)
+                && LocalDate.now().isAfter(deadline));
         return new View(String.valueOf(rs.getLong("id")), String.valueOf(rs.getLong("topic_id")), rs.getString("report_type"),
                 rs.getInt("report_year"), rs.getInt("period_no"), rs.getDate("open_date").toLocalDate(),
-                rs.getDate("deadline").toLocalDate(), rs.getString("basic_information"), rs.getString("milestone_progress"), rs.getString("overall_progress"),
+                deadline, rs.getString("basic_information"), rs.getString("milestone_progress"), rs.getString("overall_progress"),
                 rs.getString("research_achievements"), rs.getString("demonstration_progress"), rs.getString("fund_usage"), rs.getString("next_plan"),
-                rs.getString("problems_and_measures"), rs.getString("status"), rs.getBoolean("overdue"),
+                rs.getString("problems_and_measures"), status, overdue,
                 rs.getInt("record_version"), rs.getInt("submitted_version"), submitted == null ? null : submitted.toLocalDateTime());
     }
     private Approval approval(ResultSet rs) throws SQLException {
