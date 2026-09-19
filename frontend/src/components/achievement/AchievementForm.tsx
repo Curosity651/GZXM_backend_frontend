@@ -1,5 +1,8 @@
 import { Card, Col, Form, Input, Row, Select } from 'antd';
-import { type Achievement, type IndicatorDefinition, type Project, type TimeNode, type UnitIndicatorAllocation } from '../../types';
+import type { FormInstance } from 'antd';
+import type { ApiTopic } from '../../api/topic-api';
+import type { ApiUnit } from '../../api/system-api';
+import type { IndicatorDefinition, TimeNode, UnitAllocation } from '../../api/indicator-api';
 import { PaperFields } from './PaperFields';
 import { PatentFields } from './PatentFields';
 import { CopyrightFields } from './CopyrightFields';
@@ -9,23 +12,14 @@ import { TalentFields } from './TalentFields';
 const { Option } = Select;
 const { TextArea } = Input;
 
-interface TopicInfo {
-  id: string; name: string; leadingUnitId: string; participatingUnitIds: string[];
-}
-
-interface UnitInfo {
-  id: string; name: string;
-}
-
 interface AchievementFormProps {
-  form: any;
-  topics: TopicInfo[];
-  units: UnitInfo[];
-  achievement?: Achievement;
+  form: FormInstance;
+  topics: ApiTopic[];
+  units: ApiUnit[];
   lockOwnership?: boolean;
   definitions?: IndicatorDefinition[];
-  project: Project;
-  allocations: UnitIndicatorAllocation[];
+  project: { name: string; code: string };
+  allocations: UnitAllocation[];
   nodes: TimeNode[];
   currentUnitId?: string;
 }
@@ -35,10 +29,8 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
   const topicId = Form.useWatch('topicId', form);
   const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
   const unit = units.find((item) => item.id === currentUnitId);
-  const baseDefinitionIds = new Set(definitions
-    .filter((item) => item.enabled && item.name === item.achievementType)
-    .map((item) => item.id));
-  const availableAllocations = allocations.filter((item) => item.status === '已下发'
+  const baseDefinitionIds = new Set(definitions.filter((item) => item.enabled && item.category === 'BASE').map((item) => item.id));
+  const availableAllocations = allocations.filter((item) => item.status === 'PUBLISHED'
     && item.targetQuantity > 0
     && item.unitId === currentUnitId
     && item.topicId === topicId
@@ -62,7 +54,7 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
                 disabled={lockOwnership}
                 onChange={() => form.setFieldsValue({ unitIndicatorAllocationId: undefined, indicatorDefinitionId: undefined, achievementType: undefined, nodeId: undefined })}
               >
-                {topics.filter((item) => allocations.some((allocation) => allocation.status === '已下发'
+                {topics.filter((item) => allocations.some((allocation) => allocation.status === 'PUBLISHED'
                   && allocation.targetQuantity > 0
                   && allocation.unitId === currentUnitId
                   && allocation.topicId === item.id
@@ -85,16 +77,17 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
                 disabled={!topicId || lockOwnership}
                 onChange={(id) => {
                   const allocation = allocations.find((item) => item.id === id);
+                  const definition = definitions.find((item) => item.id === allocation?.indicatorDefinitionId);
                   form.setFieldsValue({
                     indicatorDefinitionId: allocation?.indicatorDefinitionId,
-                    achievementType: allocation?.achievementType,
+                    achievementType: definition?.achievementType,
                     nodeId: allocation?.nodeId,
                   });
                 }}
                 options={availableAllocations.map((allocation) => {
                   const definition = definitions.find((item) => item.id === allocation.indicatorDefinitionId);
                   const node = nodes.find((item) => item.id === allocation.nodeId);
-                  return { label: `${definition?.name ?? allocation.achievementType} · ${node?.name ?? allocation.nodeId}（目标 ${allocation.targetQuantity}）`, value: allocation.id };
+                  return { label: `${definition?.name ?? definition?.achievementType ?? '成果指标'} · ${node?.name ?? allocation.nodeId}（目标 ${allocation.targetQuantity}）`, value: allocation.id };
                 })}
               />
             </Form.Item>
@@ -131,12 +124,12 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
       </Card>
 
       {achievementType && (
-        <Card title={achievementType === '学术论文' ? '论文信息与作者' : achievementType === '发明专利' ? '提案信息、发明人与申请人' : achievementType === '软件著作权' ? '软件信息、著作权人与技术特点' : `${achievementType}详细信息`} size="small" style={{ marginBottom: 16 }}>
-          {achievementType === '学术论文' && <PaperFields />}
-          {achievementType === '发明专利' && <PatentFields />}
-          {achievementType === '软件著作权' && <CopyrightFields />}
-          {achievementType === '标准规范' && <StandardFields />}
-          {achievementType === '人才培养' && <TalentFields />}
+        <Card title={achievementType === 'PAPER' ? '论文信息与作者' : achievementType === 'PATENT' ? '提案信息、发明人与申请人' : achievementType === 'COPYRIGHT' ? '软件信息、著作权人与技术特点' : achievementType === 'STANDARD' ? '标准规范详细信息' : '人才培养详细信息'} size="small" style={{ marginBottom: 16 }}>
+          {achievementType === 'PAPER' && <PaperFields />}
+          {achievementType === 'PATENT' && <PatentFields />}
+          {achievementType === 'COPYRIGHT' && <CopyrightFields />}
+          {achievementType === 'STANDARD' && <StandardFields />}
+          {achievementType === 'TALENT' && <TalentFields />}
         </Card>
       )}
     </div>

@@ -7,11 +7,7 @@ import { topicApi, type ApiTopic } from '../../api/topic-api';
 import { systemApi, type ApiUnit } from '../../api/system-api';
 import { fileApi } from '../../api/file-api';
 import { useSessionStore } from '../../store/session';
-import { PaperFields } from '../../components/achievement/PaperFields';
-import { PatentFields } from '../../components/achievement/PatentFields';
-import { CopyrightFields } from '../../components/achievement/CopyrightFields';
-import { StandardFields } from '../../components/achievement/StandardFields';
-import { TalentFields } from '../../components/achievement/TalentFields';
+import { AchievementForm } from '../../components/achievement/AchievementForm';
 import { formalMaterialRequirements, supplementMaterialRequirements } from '../../domain/achievement-materials';
 import type { Achievement, AchievementType } from '../../types';
 
@@ -24,23 +20,17 @@ const statusNames: Record<string, string> = {
 };
 const statusColor = (status: string) => status === 'EFFECTIVE' ? 'green' : status.includes('RETURNED') ? 'red' : status.includes('INITIAL') || status.includes('FINAL') ? 'processing' : 'default';
 const editableStatuses = new Set(['DRAFT', 'PRE_RETURNED', 'FORMAL_DRAFT', 'FORMAL_RETURNED', 'WAIT_PUBLICATION', 'WAIT_GRANT', 'SUPPLEMENT_RETURNED']);
-const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'firstSigningUnit', 'submissionDate', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'intendedJournal', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstApplicant', 'inventorList', 'applicationNumber', 'receiptNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'legalStatus', 'technicalField', 'applicationCountry', 'ownershipDescription', 'isPowerGridFirstApplicant', 'shortName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'firstCompleter', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'certificateDate', 'firstPublicationDate', 'developmentMode', 'rightsScope', 'softwareCategory', 'operatingPlatform', 'developmentLanguage', 'technicalFeatures', 'isPowerGridFirstCompleter', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
+const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'firstSigningUnit', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'intendedJournal', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstApplicant', 'inventorList', 'applicationNumber', 'receiptNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'legalStatus', 'technicalField', 'applicationCountry', 'ownershipDescription', 'isPowerGridFirstApplicant', 'shortName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'firstCompleter', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'certificateDate', 'firstPublicationDate', 'developmentMode', 'rightsScope', 'softwareCategory', 'operatingPlatform', 'developmentLanguage', 'technicalFeatures', 'isPowerGridFirstCompleter', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
 
-interface FormValues extends Record<string, unknown> { allocationKey: string; title: string; responsiblePerson: string }
-
-function TypeFields({ type }: { type?: ApiAchievement['achievementType'] }) {
-  if (type === 'PAPER') return <PaperFields />;
-  if (type === 'PATENT') return <PatentFields />;
-  if (type === 'COPYRIGHT') return <CopyrightFields />;
-  if (type === 'STANDARD') return <StandardFields />;
-  if (type === 'TALENT') return <TalentFields />;
-  return null;
+interface FormValues extends Record<string, unknown> {
+  unitIndicatorAllocationId: string; topicId: string; unitId: string; nodeId: string;
+  achievementType: ApiAchievement['achievementType']; title: string; responsiblePerson: string;
 }
 
 export function AchievementEntryPage() {
   const user = useSessionStore((state) => state.user)!;
   const [form] = Form.useForm<FormValues>();
-  const allocationKey = Form.useWatch('allocationKey', form);
+  const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
   const [topics, setTopics] = useState<ApiTopic[]>([]);
   const [units, setUnits] = useState<ApiUnit[]>([]);
   const [nodes, setNodes] = useState<TimeNode[]>([]);
@@ -90,7 +80,7 @@ export function AchievementEntryPage() {
   const definitionMap = useMemo(() => Object.fromEntries(definitions.map((item) => [item.id, item])), [definitions]);
   const topicMap = useMemo(() => Object.fromEntries(topics.map((item) => [item.id, item])), [topics]);
   const unitMap = useMemo(() => Object.fromEntries(units.map((item) => [item.id, item.name])), [units]);
-  const selectedAllocation = allocations.find((item) => `${item.topicId}:${item.nodeId}:${item.indicatorDefinitionId}` === allocationKey);
+  const selectedAllocation = allocations.find((item) => item.id === allocationId);
   const selectedType = editing?.achievementType ?? (selectedAllocation ? definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.achievementType as ApiAchievement['achievementType'] : undefined);
   const visibleRows = rows.filter((item) => (!filters.keyword || item.title.toLowerCase().includes(filters.keyword.toLowerCase()))
     && (!filters.unitId || item.unitId === filters.unitId));
@@ -104,10 +94,21 @@ export function AchievementEntryPage() {
   }, [progress]);
   const completionRate = targetTotal > 0 ? Math.round(((progress?.baseStages.effective ?? 0) / targetTotal) * 100) : 0;
 
-  const openCreate = () => { setEditing(undefined); setPendingFiles({}); form.resetFields(); setFormOpen(true); };
+  const openCreate = () => {
+    setEditing(undefined); setPendingFiles({}); form.resetFields();
+    form.setFieldsValue({
+      unitId: user.unitId,
+      responsiblePerson: user.username,
+      projectLabeling: `${import.meta.env.VITE_PROJECT_NAME ?? '国家科技重大专项示范'}（${import.meta.env.VITE_PROJECT_CODE ?? 'GZ-2025-001'}）`,
+    });
+    setFormOpen(true);
+  };
   const openEdit = (row: ApiAchievement) => {
     setEditing(row); setPendingFiles({});
-    form.setFieldsValue({ allocationKey: `${row.topicId}:${row.nodeId}:${row.indicatorDefinitionId}`, title: row.title, responsiblePerson: row.responsiblePerson, ...row.detail });
+    const allocation = allocations.find((item) => item.topicId === row.topicId && item.unitId === row.unitId
+      && item.nodeId === row.nodeId && item.indicatorDefinitionId === row.indicatorDefinitionId);
+    form.setFieldsValue({ unitIndicatorAllocationId: allocation?.id, topicId: row.topicId, unitId: row.unitId, nodeId: row.nodeId,
+      achievementType: row.achievementType, title: row.title, responsiblePerson: row.responsiblePerson, ...row.detail });
     setFormOpen(true);
   };
   const materialRequirements = useMemo(() => {
@@ -221,16 +222,15 @@ export function AchievementEntryPage() {
       { title: '操作', width: 310, fixed: 'right', render: (_, row) => actionButtons(row) },
     ]} title={() => <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Space><Button icon={<ReloadOutlined />} onClick={() => void loadRows()}>刷新</Button>{canSubmit && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增成果</Button>}</Space></div>} /></Card>
 
-    <Modal width={1000} title={editing ? '编辑成果' : '新增成果'} open={formOpen} onCancel={() => setFormOpen(false)} onOk={() => void save()} okText="保存" destroyOnHidden>
-      <Form form={form} layout="vertical"><Card size="small" title="基本信息" style={{ marginBottom: 14 }}><Row gutter={14}>
-        <Col span={24}><Form.Item name="allocationKey" label="对应已下发成果指标" rules={[{ required: true }]}><Select disabled={Boolean(editing)} showSearch optionFilterProp="label" options={allocations.filter((item) => definitionMap[item.indicatorDefinitionId]?.category === 'BASE').map((item) => ({ value: `${item.topicId}:${item.nodeId}:${item.indicatorDefinitionId}`, label: `${topicMap[item.topicId]?.name ?? item.topicId} · ${definitionMap[item.indicatorDefinitionId]?.name ?? item.indicatorDefinitionId} · ${nodes.find((node) => node.id === item.nodeId)?.name ?? item.nodeId}（目标 ${item.targetQuantity}）` }))} /></Form.Item></Col>
-        <Col span={12}><Form.Item name="title" label="成果名称/题目" rules={[{ required: true }]}><Input /></Form.Item></Col>
-        <Col span={12}><Form.Item name="responsiblePerson" label="填报负责人" rules={[{ required: true }]}><Input /></Form.Item></Col>
-      </Row></Card>
-      {selectedType && <Card size="small" title={`${typeNames[selectedType]}信息`} style={{ marginBottom: 14 }}><TypeFields type={selectedType} /></Card>}
+    <Drawer width={980} title={editing ? '编辑成果' : '新建成果'} open={formOpen} onClose={() => setFormOpen(false)} destroyOnHidden
+      extra={<Space><Button onClick={() => setFormOpen(false)}>取消</Button><Button type="primary" onClick={() => void save()}>保存草稿</Button></Space>}>
+      <Form form={form} layout="vertical">
+      <AchievementForm form={form} topics={topics} units={units} lockOwnership={Boolean(editing)} definitions={definitions}
+        project={{ name: import.meta.env.VITE_PROJECT_NAME ?? '国家科技重大专项示范', code: import.meta.env.VITE_PROJECT_CODE ?? 'GZ-2025-001' }}
+        allocations={allocations} nodes={nodes} currentUnitId={editing?.unitId ?? user.unitId} />
       {materialRequirements.length > 0 && <Card size="small" title="本阶段材料"><Space direction="vertical" style={{ width: '100%' }}>{materialRequirements.map((requirement) => <Row key={requirement.materialType} align="middle" gutter={12}><Col span={7}><b>{requirement.materialType}</b></Col><Col span={9}><Text type="secondary">{requirement.description}</Text></Col><Col span={8}><label className="ant-btn"><UploadOutlined /> {pendingFiles[requirement.materialType]?.name ?? (editing?.materialLinks.some((item) => item.active && item.materialType === requirement.materialType) ? '已上传（点击替换）' : '选择文件')}<input hidden type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) setPendingFiles({ ...pendingFiles, [requirement.materialType]: file }); }} /></label></Col></Row>)}</Space></Card>}
       </Form>
-    </Modal>
+    </Drawer>
 
     <Drawer width={900} title="成果详情" open={Boolean(detail)} onClose={() => setDetail(undefined)} extra={detail && reviewable(detail) && <Space><Button danger icon={<RollbackOutlined />} onClick={() => setDecision('RETURN')}>退回</Button><Button type="primary" icon={<CheckOutlined />} onClick={() => setDecision('APPROVE')}>通过</Button></Space>}>
       {detail && <Space direction="vertical" style={{ width: '100%' }} size={14}><Descriptions bordered column={2} items={[
