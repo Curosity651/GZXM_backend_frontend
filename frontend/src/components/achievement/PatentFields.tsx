@@ -36,13 +36,10 @@ export function PatentFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' 
       <Col span={12}>
         <Form.Item label="技术领域" name="technicalField"><Input /></Form.Item>
       </Col>
-      <Col span={12}>
-        <Form.Item label="申请国家/地区" name="applicationCountry"><Input /></Form.Item>
-      </Col>
       <Col span={24}><Form.Item label="专利摘要" name="abstract"><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={24}><Form.Item label="权利归属说明" name="ownershipDescription"><Input.TextArea rows={2} /></Form.Item></Col>
       <Col span={12}>
-        <Form.Item label="第一申请人" name="firstApplicant" rules={[{ required: true, message: '请填写第一申请人' }]}>
+        <Form.Item label="第一发明人" name="firstInventor" rules={[{ required: true, message: '请填写第一发明人' }]}>
           <Input />
         </Form.Item>
       </Col>
@@ -51,14 +48,9 @@ export function PatentFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' 
           <Input />
         </Form.Item>
       </Col>
-      <Col span={24}><Form.Item label="申请人及排序" name="applicantList" rules={[{ required: true, message: '请填写申请人及排序' }]}><Input /></Form.Item></Col>
+      <Col span={24}><Form.Item label="申请人" name="applicantList" rules={[{ required: true, message: '请填写申请人' }]}><Input /></Form.Item></Col>
       <Col span={12}>
         <Form.Item label="申请号" name="applicationNumber">
-          <Input />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item label="受理号" name="receiptNumber">
           <Input />
         </Form.Item>
       </Col>
@@ -80,11 +72,6 @@ export function PatentFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' 
       </Col>
       <Col span={12}>
         <Form.Item label="授权公告号" name="grantPublicationNumber">
-          <Input />
-        </Form.Item>
-      </Col>
-      <Col span={24}>
-        <Form.Item label="当前法律状态" name="legalStatus">
           <Input />
         </Form.Item>
       </Col>

@@ -11,7 +11,7 @@ const typeNames: Record<ApiAchievement['achievementType'], string> = {
 const statusNames: Record<string, string> = {
   DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回',
   FORMAL_DRAFT: '第二轮材料草稿', FORMAL_INITIAL: '第二轮初审中', FORMAL_FINAL: '第二轮终审中', FORMAL_RETURNED: '第二轮退回',
-  WAIT_PUBLICATION: '待补充正式刊出材料', WAIT_GRANT: '待补充授权材料', WAIT_CERTIFICATE: '待补充登记证书', SUPPLEMENT_INITIAL: '第三轮初审中', SUPPLEMENT_FINAL: '第三轮终审中', SUPPLEMENT_RETURNED: '第三轮退回', EFFECTIVE: '已完成',
+  WAIT_PUBLICATION: '待补充正式刊出材料', WAIT_GRANT: '待补充授权材料', WAIT_CERTIFICATE: '待补充予以发布材料', SUPPLEMENT_INITIAL: '第三轮初审中', SUPPLEMENT_FINAL: '第三轮终审中', SUPPLEMENT_RETURNED: '第三轮退回', EFFECTIVE: '已完成',
 };
 
 function stage(achievement: ApiAchievement) {
@@ -46,11 +46,11 @@ export function ApiAchievementDetail({ achievement, topics, units }: { achieveme
     { key: 'core', label: '中文核心期刊', children: value(detail, 'isChineseCoreJournal') },
     { key: 'paper-type', label: '收录类别', children: value(detail, 'paperType') },
   ] : achievement.achievementType === 'PATENT' ? [
-    { key: 'first-person', label: '第一申请人', children: value(detail, 'firstApplicant') },
+    { key: 'first-person', label: '第一发明人', children: value(detail, 'firstInventor') },
     { key: 'grid-first', label: '广西电网第一申请人', children: value(detail, 'isPowerGridFirstApplicant') },
   ] : achievement.achievementType === 'COPYRIGHT' ? [
-    { key: 'first-person', label: '第一完成人', children: value(detail, 'firstCompleter') },
-    { key: 'grid-first', label: '广西电网第一完成人', children: value(detail, 'isPowerGridFirstCompleter') },
+    { key: 'first-person', label: '第一著作权人', children: value(detail, 'firstCopyrightOwner') },
+    { key: 'grid-first', label: '广西电网第一著作权人', children: value(detail, 'isPowerGridFirstCopyrightOwner') },
   ] : [];
   const materialRows = achievement.materialLinks.filter((item) => item.active).map((link) => ({
     ...link, file: achievement.materials.find((item) => item.id === link.fileId),

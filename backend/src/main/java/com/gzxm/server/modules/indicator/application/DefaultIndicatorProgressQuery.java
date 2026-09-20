@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly=true)
 public class DefaultIndicatorProgressQuery implements IndicatorProgressQuery {
     private static final Map<String,String> MATCH_FIELDS=Map.of("isChineseCoreJournal","PAPER","isPowerGridFirstAuthor","PAPER",
-            "isPowerGridFirstApplicant","PATENT","isPowerGridFirstCompleter","COPYRIGHT");
+            "isPowerGridFirstApplicant","PATENT","isPowerGridFirstCopyrightOwner","COPYRIGHT");
     private final IndicatorProgressMapper mapper;
     private final TopicQueryService topics;
     private final SecurityContextFacade security;

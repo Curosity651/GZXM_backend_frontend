@@ -122,9 +122,9 @@ class AchievementWorkflowIntegrationTest {
             assertThat(current(id).path("countsToIndicator").asBoolean()).isTrue();
             assertThat(current(id).path("status").asText()).isEqualTo(definition==1?"WAIT_PUBLICATION":definition==2?"WAIT_GRANT":"WAIT_CERTIFICATE");
             String supplement=definition==1?"{\"paperStatus\":\"已正式刊出\",\"publicationDate\":\"2026-03-01\",\"paperType\":\"SCI\",\"isChineseCoreJournal\":true}"
-                    :definition==2?"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-03-01\"}":"{\"copyrightStatus\":\"已取得登记证书\",\"certificateDate\":\"2026-03-01\"}";
+                    :definition==2?"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-03-01\"}":"{\"copyrightStatus\":\"已予以发布\",\"copyrightPublicationDate\":\"2026-03-01\"}";
             var supplementTypes=definition==1?List.of("正式刊出论文全文","期刊封面、目录及见刊页","项目标注页","检索证明","中文核心期刊认定证明")
-                    :definition==2?List.of("专利授权证书","授权公告文本","法律状态证明","专利权属证明"):List.of("软件著作权登记证书","登记信息证明","著作权人证明");
+                    :definition==2?List.of("专利授权证书","授权公告文本","法律状态证明","专利权属证明"):List.of("软件著作权予以发布证明","登记信息证明","著作权人证明");
             setMaterials(id,definition,supplement,supplementTypes);action(id,"SUBMIT_SUPPLEMENT");review(id,"RESEARCH_ASSISTANT","APPROVE");
             var request=reviewBody(id,"APPROVE");String retryKey=key();
             var first=reviewCall(id,"PROJECT_TECH_LEADER",request,retryKey).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

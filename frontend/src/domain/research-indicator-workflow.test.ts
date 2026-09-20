@@ -36,7 +36,7 @@ describe('科研指标模块权限流程', () => {
     expect(MOCK_INDICATOR_DEFINITIONS).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: '第一作者是广西电网的论文数量', achievementType: '学术论文', unit: '篇', enabled: true }),
       expect.objectContaining({ name: '第一申请人是广西电网的专利数量', achievementType: '发明专利', unit: '项', enabled: true }),
-      expect.objectContaining({ name: '第一完成人是广西电网的软著数量', achievementType: '软件著作权', unit: '项', enabled: true }),
+      expect.objectContaining({ name: '第一著作权人是广西电网的软著数量', achievementType: '软件著作权', unit: '项', enabled: true }),
       expect.objectContaining({ name: '中文核心期刊的数量', unit: '篇', enabled: true }),
     ]));
     expect(MOCK_INDICATOR_DEFINITIONS).not.toEqual(expect.arrayContaining([
@@ -93,7 +93,7 @@ describe('科研指标模块权限流程', () => {
     expect(migrated.indicatorDefinitions.map((item) => item.name)).toEqual(expect.arrayContaining([
       '第一作者是广西电网的论文数量',
       '第一申请人是广西电网的专利数量',
-      '第一完成人是广西电网的软著数量',
+      '第一著作权人是广西电网的软著数量',
     ]));
     expect(migrated.roles.find((role) => role.name === '项目技术负责人')?.actionPermissions)
       .toEqual(expect.arrayContaining(['topic.manage', 'indicator.manage', 'topic-indicator.publish']));

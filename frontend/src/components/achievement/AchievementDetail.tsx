@@ -17,11 +17,11 @@ export function AchievementDetail({ achievement, topics, units, records, users }
     { key: 'core', label: '中文核心期刊', children: yesNo(achievement.isChineseCoreJournal) },
     { key: 'paper-type', label: '收录类别', children: achievement.paperType || '—' },
   ] : achievement.achievementType === '发明专利' ? [
-    { key: 'first-person', label: '第一申请人', children: achievement.firstApplicant || achievement.applicant || '—' },
+    { key: 'first-person', label: '第一发明人', children: achievement.firstInventor || '—' },
     { key: 'grid-first', label: '广西电网第一申请人', children: yesNo(achievement.isPowerGridFirstApplicant) },
   ] : achievement.achievementType === '软件著作权' ? [
-    { key: 'first-person', label: '第一完成人', children: achievement.firstCompleter || '—' },
-    { key: 'grid-first', label: '广西电网第一完成人', children: yesNo(achievement.isPowerGridFirstCompleter) },
+    { key: 'first-person', label: '第一著作权人', children: achievement.firstCopyrightOwner || '—' },
+    { key: 'grid-first', label: '广西电网第一著作权人', children: yesNo(achievement.isPowerGridFirstCopyrightOwner) },
   ] : [];
   return <Space direction="vertical" size={16} style={{ width: '100%' }}>
     <Card size="small"><AchievementStageBar achievement={achievement} /></Card>

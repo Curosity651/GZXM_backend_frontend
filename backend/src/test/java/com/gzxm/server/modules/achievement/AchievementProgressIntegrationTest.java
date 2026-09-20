@@ -121,10 +121,10 @@ class AchievementProgressIntegrationTest {
         assertThat(statistics("INTERNAL_TOPIC_UNIT",2L,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
     }
     @Test void overlappingSpecialsDoNotInflateBaseAndBooleanStringsDoNotMatch() throws Exception {
-        special(6,"PAPER","isChineseCoreJournal");special(7,"PAPER","isPowerGridFirstAuthor");special(8,"PATENT","isPowerGridFirstApplicant");special(9,"COPYRIGHT","isPowerGridFirstCompleter");
+        special(6,"PAPER","isChineseCoreJournal");special(7,"PAPER","isPowerGridFirstAuthor");special(8,"PATENT","isPowerGridFirstApplicant");special(9,"COPYRIGHT","isPowerGridFirstCopyrightOwner");
         fact(1,2,1,1,"EFFECTIVE",true,"{\"isChineseCoreJournal\":true,\"isPowerGridFirstAuthor\":true}");
         fact(2,2,1,1,"EFFECTIVE",true,"{\"isChineseCoreJournal\":\"true\"}");
-        fact(3,2,1,2,"EFFECTIVE",true,"{\"isPowerGridFirstApplicant\":true}");fact(4,2,1,3,"EFFECTIVE",true,"{\"isPowerGridFirstCompleter\":true}");
+        fact(3,2,1,2,"EFFECTIVE",true,"{\"isPowerGridFirstApplicant\":true}");fact(4,2,1,3,"EFFECTIVE",true,"{\"isPowerGridFirstCopyrightOwner\":true}");
         var result=statistics("INTERNAL_TOPIC_UNIT",2L,"topicId=1&nodeId=1");
         assertThat(result.path("baseTotals").path("PAPER").asLong()).isEqualTo(2);
         assertThat(result.path("baseStages").path("effective").asLong()).isEqualTo(4);

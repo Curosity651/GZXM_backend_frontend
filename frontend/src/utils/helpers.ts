@@ -19,7 +19,7 @@ export const educationLevelOptions: Array<'博士' | '硕士'> = ['博士', '硕
 
 export const PAPER_STATUS_OPTIONS = ['撰写/投稿准备', '已录用', '已正式刊出'] as const;
 export const PATENT_STATUS_OPTIONS = ['申请材料准备/已申请', '已受理', '已授权'] as const;
-export const COPYRIGHT_STATUS_OPTIONS = ['申请材料准备/已申请', '已受理', '已取得登记证书'] as const;
+export const COPYRIGHT_STATUS_OPTIONS = ['申请材料准备/已申请', '已受理', '已予以发布'] as const;
 
 // Re-export from services
 export { mockFileService } from '../services/fileService';

@@ -50,9 +50,6 @@ export function PaperFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' |
         <Form.Item label="研究方向" name="researchDirection"><Input /></Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="拟投期刊/会议" name="intendedJournal"><Input /></Form.Item>
-      </Col>
-      <Col span={12}>
         <Form.Item label="期刊级别" name="journalLevel"><Input placeholder="如：SCI 一区、中文核心" /></Form.Item>
       </Col>
       <Col span={12}>
@@ -91,7 +88,6 @@ export function PaperFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' |
         </Form.Item>
       </Col>
       <Col span={24}><Form.Item label="作者及署名单位排序" name="signingUnitList" rules={[{ required: true, message: '请填写作者及署名单位排序' }]}><Input.TextArea rows={2} /></Form.Item></Col>
-      <Col span={12}><Form.Item label="第一署名单位" name="firstSigningUnit"><Input /></Form.Item></Col>
       <Col span={24}><Form.Item label="摘要" name="abstract"><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={24}><Form.Item label="关键词" name="keywords"><Input placeholder="多个关键词使用顿号分隔" /></Form.Item></Col>
       <Col span={12}>

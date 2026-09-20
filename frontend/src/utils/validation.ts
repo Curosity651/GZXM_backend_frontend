@@ -184,9 +184,9 @@ export const validateAchievementForApproval = (
       }
       break;
     case '软件著作权':
-      if (!achievement.certificateDate) {
+      if (!achievement.copyrightPublicationDate) {
         recognitionMet = false;
-        recognitionDetail = '需填写证书日期';
+        recognitionDetail = '需填写予以发布日期';
       }
       break;
     case '标准规范':

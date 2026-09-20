@@ -22,7 +22,7 @@ interface TaskRow { id: string; title: string; status: string; type: string }
 const achievementStatusLabels: Record<string, string> = {
   DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回',
   FORMAL_DRAFT: '第二轮材料草稿', FORMAL_INITIAL: '第二轮初审中', FORMAL_FINAL: '第二轮终审中', FORMAL_RETURNED: '第二轮退回',
-  WAIT_PUBLICATION: '等待正式刊出材料', WAIT_GRANT: '等待授权材料', WAIT_CERTIFICATE: '等待登记证书', SUPPLEMENT_INITIAL: '第三轮初审中',
+  WAIT_PUBLICATION: '等待正式刊出材料', WAIT_GRANT: '等待授权材料', WAIT_CERTIFICATE: '等待予以发布材料', SUPPLEMENT_INITIAL: '第三轮初审中',
   SUPPLEMENT_FINAL: '补充材料终审中', SUPPLEMENT_RETURNED: '补充材料退回', EFFECTIVE: '已生效',
 };
 const reportStatusLabels: Record<string, string> = {

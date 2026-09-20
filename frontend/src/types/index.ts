@@ -140,7 +140,7 @@ export interface Achievement {
   // 状态字段（替代旧认定类型）
   paperStatus?: string;  // 撰写/投稿准备 | 已录用 | 已正式刊出
   patentStatus?: string; // 申请材料准备/已申请 | 已受理 | 已授权
-  copyrightStatus?: string; // 申请材料准备/已申请 | 已受理 | 已取得登记证书
+  copyrightStatus?: string; // 申请材料准备/已申请 | 已受理 | 已予以发布
 
   standardNumber?: string; publishDate?: string; implementDate?: string; // 标准已发布补充
 
@@ -170,15 +170,18 @@ export interface Achievement {
 
   // 软著特有
   firstCompleter?: string; isPowerGridFirstCompleter?: boolean;
+  isPowerGridFirstCopyrightOwner?: boolean;
   shortName?: string; version?: string; softwareFullName?: string;
   copyrightOwner?: string; copyrightOwnerList?: string; firstCopyrightOwner?: string;
   developers?: string; mainDevelopers?: string; firstDeveloper?: string;
   firstDeveloperUnit?: string; softwareMainFunctions?: string;
   completionDate?: string; registrationApplicationDate?: string;
-  registrationNumber?: string; certificateDate?: string;
+  registrationNumber?: string; certificateDate?: string; copyrightPublicationDate?: string;
   firstPublicationDate?: string; developmentMode?: string; rightsScope?: string;
   softwareCategory?: string; operatingPlatform?: string; developmentLanguage?: string;
-  technicalFeatures?: string;
+  technicalFeatures?: string; hardwareEnvironment?: string; developmentOperatingSystem?: string;
+  softwareDevelopmentEnvironment?: string; softwareSupportEnvironment?: string;
+  sourceCodeQuantity?: string; developmentPurpose?: string; industryField?: string;
 
   // 标准特有
   standardLevel?: string; leadingUnit?: string; participatingUnits?: string;

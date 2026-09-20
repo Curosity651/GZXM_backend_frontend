@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Col, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
 import { achievementApi, type ApiAchievement, type AchievementProgress, type AchievementProgressRow, type AchievementWrite } from '../../api/achievement-api';
 import { indicatorApi, type IndicatorDefinition, type TimeNode, type UnitAllocation } from '../../api/indicator-api';
@@ -18,7 +18,7 @@ const { Text } = Typography;
 const typeNames: Record<ApiAchievement['achievementType'], AchievementType> = { PAPER: '学术论文', PATENT: '发明专利', COPYRIGHT: '软件著作权', STANDARD: '标准规范', TALENT: '人才培养' };
 const statusColor = (status: string) => status === 'EFFECTIVE' ? 'green' : status.includes('RETURNED') ? 'red' : status.includes('INITIAL') || status.includes('FINAL') ? 'processing' : 'default';
 const editableStatuses = new Set(['DRAFT', 'PRE_RETURNED', 'FORMAL_DRAFT', 'FORMAL_RETURNED', 'WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED']);
-const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'firstSigningUnit', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'intendedJournal', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstApplicant', 'inventorList', 'applicationNumber', 'receiptNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'legalStatus', 'technicalField', 'applicationCountry', 'ownershipDescription', 'isPowerGridFirstApplicant', 'copyrightStatus', 'shortName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'firstCompleter', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'certificateDate', 'firstPublicationDate', 'developmentMode', 'rightsScope', 'softwareCategory', 'operatingPlatform', 'developmentLanguage', 'technicalFeatures', 'isPowerGridFirstCompleter', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
+const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstInventor', 'inventorList', 'applicationNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'technicalField', 'ownershipDescription', 'isPowerGridFirstApplicant', 'copyrightStatus', 'softwareFullName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'copyrightPublicationDate', 'firstPublicationDate', 'developmentMode', 'softwareCategory', 'hardwareEnvironment', 'developmentOperatingSystem', 'softwareDevelopmentEnvironment', 'operatingPlatform', 'softwareSupportEnvironment', 'developmentLanguage', 'sourceCodeQuantity', 'developmentPurpose', 'industryField', 'technicalFeatures', 'isPowerGridFirstCopyrightOwner', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
 
 interface FormValues extends Record<string, unknown> {
   unitIndicatorAllocationId: string; topicId: string; unitId: string; nodeId: string;
@@ -165,18 +165,6 @@ export function AchievementEntryPage() {
       };
     }).filter((summary) => summary.target > 0 || summary.stages.submitted > 0);
   }, [progress]);
-  const progressTotals = useMemo(() => topicProgress.reduce((total, row) => {
-    total.target += row.target; addStages(total.stages, row.stages); return total;
-  }, { target: 0, stages: emptyStages() }), [topicProgress]);
-  const unitProgressTotals = useMemo(() => {
-    const all = topicProgress.flatMap((topic) => topic.units);
-    return {
-      total: all.length,
-      complete: all.filter((unit) => classifyUnitProgress(unit.allocated, unit.target, unit.stages.submitted) === 'COMPLETE').length,
-      partial: all.filter((unit) => classifyUnitProgress(unit.allocated, unit.target, unit.stages.submitted) === 'PARTIAL').length,
-      missing: all.filter((unit) => unit.stages.submitted === 0).length,
-    };
-  }, [topicProgress]);
   const renderIndicatorProgress = (details: TopicProgressSummary['details']) => <Table size="small"
     rowKey={(row) => `${row.scope}-${row.unitId ?? ''}-${row.indicatorDefinitionId}-${row.special}`}
     dataSource={details} pagination={false} columns={[
@@ -197,10 +185,6 @@ export function AchievementEntryPage() {
         : <Alert type="warning" showIcon message="牵头单位尚未提交该单位的指标分配方案" /> }}
       columns={[
         { title: '单位', dataIndex: 'unitId', render: (value: string) => <Text strong>{unitMap[value] ?? value}</Text> },
-        { title: '累计目标', dataIndex: 'target', width: 100, render: (value: number, unit) => unit.allocated ? value : '—' },
-        { title: '已提交', width: 90, render: (_: unknown, unit) => unit.stages.submitted },
-        { title: '正式成果', width: 100, render: (_: unknown, unit) => unit.stages.formal },
-        { title: '已生效', width: 90, render: (_: unknown, unit) => unit.stages.effective },
         { title: '提交状态', width: 120, render: (_: unknown, unit) => {
           const state = classifyUnitProgress(unit.allocated, unit.target, unit.stages.submitted);
           if (state === 'UNALLOCATED') return <Tag>指标未分配</Tag>;
@@ -294,14 +278,6 @@ export function AchievementEntryPage() {
         options={nodes.filter((item) => item.enabled).sort((a, b) => a.sortOrder - b.sortOrder).map((item) => ({ value: item.id, label: item.name }))} />
       <Button icon={<ReloadOutlined />} loading={progressLoading} onClick={() => void loadProgress()}>刷新</Button>
     </Space>}>
-      <div className="achievement-progress-summary">
-        {[
-          ['累计分配指标', progressTotals.target, 'default'], ['成果已提交', progressTotals.stages.submitted, 'default'],
-          ['成果已生效', progressTotals.stages.effective, 'default'], ['参与单位', unitProgressTotals.total, 'default'],
-          ['全部提交单位', unitProgressTotals.complete, 'default'], ['部分提交单位', unitProgressTotals.partial, 'warning'],
-          ['尚未提交单位', unitProgressTotals.missing, 'danger'],
-        ].map(([label, value, tone]) => <div className={`achievement-progress-metric${tone === 'warning' ? ' is-warning' : ''}${tone === 'danger' ? ' is-danger' : ''}`} key={String(label)}><Statistic title={label} value={value} suffix={String(label).includes('单位') ? '个' : '项'} /></div>)}
-      </div>
       <Table<TopicProgressSummary> loading={progressLoading} size="small" rowKey="topicId" dataSource={topicProgress} pagination={false}
         locale={{ emptyText: '当前课题和时间节点暂无已配置的成果指标' }}
         expandable={{ expandRowByClick: true, expandedRowRender: (summary) => <Tabs defaultActiveKey="units" items={[
@@ -310,9 +286,6 @@ export function AchievementEntryPage() {
         ]} /> }}
         columns={[
           { title: '课题汇总', dataIndex: 'topicId', render: (value: string) => <Space><Text strong>{topicMap[value]?.name ?? value}</Text>{topicMap[value]?.code && <Tag color="blue">{topicMap[value].code}</Tag>}{topicMap[value] && !topicMap[value].enabled && <Tag>已停用 · 只读</Tag>}</Space> },
-          { title: '累计目标', dataIndex: 'target', width: 100 },
-          { title: '成果已提交', width: 110, render: (_: unknown, row) => row.stages.submitted },
-          { title: '已生效', width: 90, render: (_: unknown, row) => row.stages.effective },
           { title: '单位提交情况', width: 230, render: (_: unknown, row) => {
             const complete = row.units.filter((unit) => unit.target > 0 && unit.stages.submitted >= unit.target).length;
             const rate = row.units.length > 0 ? Math.round(complete * 100 / row.units.length) : 0;

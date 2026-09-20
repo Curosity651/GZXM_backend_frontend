@@ -164,7 +164,8 @@ export const MOCK_ACHIEVEMENTS: Achievement[] = [
     copyrightOwner: '中科院计算所', developers: '王五, 赵六',
     mainDevelopers: '王五, 赵六', firstDeveloper: '王五', firstDeveloperUnit: '中科院计算所',
     softwareMainFunctions: '实现项目数据的集中管理、查询、统计与分析功能',
-    completionDate: '2025-01-31', registrationNumber: '2025SR0000001', certificateDate: '2025-05-01',
+    completionDate: '2025-01-31', registrationNumber: '2025SR0000001', copyrightPublicationDate: '2025-05-01',
+    isPowerGridFirstCopyrightOwner: true,
     materials: createMaterials('ach-4', [{ name: '软件著作权证书', status: '审核通过', materialType: '软件著作权证书' }]),
   },
   // 课题5 华中大 标准 — 审批通过
@@ -208,7 +209,7 @@ export const MOCK_WORKFLOW_ACHIEVEMENTS: Achievement[] = [
 export const MOCK_INDICATOR_DEFINITIONS: IndicatorDefinition[] = [
   ['power-grid-first-author-paper', 'POWER_GRID_FIRST_AUTHOR_PAPER', '第一作者是广西电网的论文数量', '学术论文', '篇'],
   ['power-grid-first-applicant-patent', 'POWER_GRID_FIRST_APPLICANT_PATENT', '第一申请人是广西电网的专利数量', '发明专利', '项'],
-  ['power-grid-first-completer-copyright', 'POWER_GRID_FIRST_COMPLETER_COPYRIGHT', '第一完成人是广西电网的软著数量', '软件著作权', '项'],
+  ['power-grid-first-completer-copyright', 'POWER_GRID_FIRST_COMPLETER_COPYRIGHT', '第一著作权人是广西电网的软著数量', '软件著作权', '项'],
   ['chinese-core-journal', 'CHINESE_CORE_JOURNAL', '中文核心期刊的数量', '学术论文', '篇'],
   ['paper', 'PAPER', '学术论文', '学术论文', '篇'], ['patent', 'PATENT', '发明专利', '发明专利', '项'], ['copyright', 'COPYRIGHT', '软件著作权', '软件著作权', '项'],
   ['standard', 'STANDARD', '标准规范', '标准规范', '项'], ['talent', 'TALENT', '人才培养', '人才培养', '人'],

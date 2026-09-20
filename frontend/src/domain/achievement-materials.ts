@@ -60,8 +60,8 @@ export function supplementMaterialRequirements(achievement: Pick<Achievement, 'a
   }
   if (achievement.achievementType === '软件著作权') {
     return [
-      { materialType: '软件著作权登记证书', description: '登记机构颁发的软件著作权登记证书', required: true },
-      { materialType: '登记信息证明', description: '用于核验登记号、发证日期和软件信息', required: true },
+      { materialType: '软件著作权予以发布证明', description: '能够核验软件著作权已予以发布', required: true },
+      { materialType: '登记信息证明', description: '用于核验登记号、发布日期和软件信息', required: true },
       { materialType: '著作权人证明', description: '用于核验著作权归属及排序', required: true },
     ];
   }

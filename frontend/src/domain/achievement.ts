@@ -91,6 +91,6 @@ export function achievementMatchesIndicator(achievement: Achievement, indicatorD
   if (indicatorDefinitionId === 'indicator-chinese-core-journal') return achievement.isChineseCoreJournal === true || achievement.paperType === '中文核心';
   if (indicatorDefinitionId === 'indicator-power-grid-first-author-paper') return achievement.isPowerGridFirstAuthor === true;
   if (indicatorDefinitionId === 'indicator-power-grid-first-applicant-patent') return achievement.isPowerGridFirstApplicant === true;
-  if (indicatorDefinitionId === 'indicator-power-grid-first-completer-copyright') return achievement.isPowerGridFirstCompleter === true;
+  if (indicatorDefinitionId === 'indicator-power-grid-first-completer-copyright') return achievement.isPowerGridFirstCopyrightOwner === true;
   return achievement.indicatorDefinitionId ? achievement.indicatorDefinitionId === indicatorDefinitionId : achievement.achievementType === achievementType;
 }

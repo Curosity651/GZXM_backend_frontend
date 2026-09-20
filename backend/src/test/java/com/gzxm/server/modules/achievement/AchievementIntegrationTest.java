@@ -98,7 +98,7 @@ class AchievementIntegrationTest {
     }
     @Test void mapsRemainingFormTypesAndDoesNotRequireFormalFieldsInDrafts() throws Exception {
         var values=Map.of(2,"{\"patentScope\":\"国内\",\"applicationDate\":\"2026-01-01\"}",
-                3,"{\"version\":\"1.0\",\"isPowerGridFirstCompleter\":true}",4,"{\"standardLevel\":\"行业标准\"}",5,"{\"educationLevel\":\"硕士\",\"studentName\":\"Synthetic student\"}");
+                3,"{\"version\":\"1.0\",\"isPowerGridFirstCopyrightOwner\":true}",4,"{\"standardLevel\":\"行业标准\"}",5,"{\"educationLevel\":\"硕士\",\"studentName\":\"Synthetic student\"}");
         for(var pair:values.entrySet()) {
             var request=body(pair.getKey());request.set("detail",json.readTree(pair.getValue()));
             call(post("/api/v1/achievements").content(request.toString()),"EXTERNAL_TOPIC_UNIT",3L).andExpect(status().isCreated());

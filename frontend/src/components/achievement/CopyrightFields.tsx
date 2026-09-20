@@ -14,17 +14,12 @@ export function CopyrightFields({ workflowStage = 'PRE' }: { workflowStage?: 'PR
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="软件简称" name="shortName">
+        <Form.Item label="软件全称" name="softwareFullName" rules={[{ required: true, message: '请填写软件全称' }]}>
           <Input />
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="第一完成人" name="firstCompleter" rules={[{ required: true, message: '请填写第一完成人' }]}>
-          <Input />
-        </Form.Item>
-      </Col>
-      <Col span={12}>
-        <Form.Item label="是否为广西电网第一完成人" name="isPowerGridFirstCompleter" rules={[{ required: true, message: '请选择是否为广西电网第一完成人' }]}>
+        <Form.Item label="是否为广西电网第一著作权人" name="isPowerGridFirstCopyrightOwner" rules={[{ required: true, message: '请选择是否为广西电网第一著作权人' }]}>
           <Select placeholder="请选择" options={[{ label: '是', value: true }, { label: '否', value: false }]} />
         </Form.Item>
       </Col>
@@ -51,10 +46,16 @@ export function CopyrightFields({ workflowStage = 'PRE' }: { workflowStage?: 'PR
       </Col>
       <Col span={12}><Form.Item label="首次发表日期" name="firstPublicationDate"><Input type="date" /></Form.Item></Col>
       <Col span={12}><Form.Item label="开发方式" name="developmentMode"><Input placeholder="独立开发/合作开发" /></Form.Item></Col>
-      <Col span={12}><Form.Item label="权利范围" name="rightsScope"><Input /></Form.Item></Col>
       <Col span={12}><Form.Item label="软件分类" name="softwareCategory"><Input /></Form.Item></Col>
-      <Col span={12}><Form.Item label="运行平台" name="operatingPlatform"><Input /></Form.Item></Col>
-      <Col span={12}><Form.Item label="开发语言" name="developmentLanguage"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="运行的硬件环境" name="hardwareEnvironment"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="开发的操作系统" name="developmentOperatingSystem"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="软件开发环境" name="softwareDevelopmentEnvironment"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="软件运行平台" name="operatingPlatform"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="软件运行支撑环境" name="softwareSupportEnvironment"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="编程语言" name="developmentLanguage"><Input /></Form.Item></Col>
+      <Col span={12}><Form.Item label="源程序量" name="sourceCodeQuantity"><Input /></Form.Item></Col>
+      <Col span={24}><Form.Item label="开发的目的" name="developmentPurpose"><Input.TextArea rows={2} /></Form.Item></Col>
+      <Col span={12}><Form.Item label="面向领域/行业" name="industryField"><Input /></Form.Item></Col>
       <Col span={24}><Form.Item label="主要功能" name="softwareMainFunctions" rules={[{ required: true, message: '请填写软件主要功能' }]}><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={24}><Form.Item label="技术特点" name="technicalFeatures"><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={12}>
@@ -68,7 +69,7 @@ export function CopyrightFields({ workflowStage = 'PRE' }: { workflowStage?: 'PR
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="发证日期" name="certificateDate" rules={workflowStage === 'SUPPLEMENT' ? [{ required: true, message: '请选择软件著作权发证日期' }] : undefined}>
+        <Form.Item label="予以发布日期" name="copyrightPublicationDate" rules={workflowStage === 'SUPPLEMENT' ? [{ required: true, message: '请选择软件著作权予以发布日期' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>

@@ -14,7 +14,7 @@ public class AchievementSubmissionRules {
         Map.entry("acceptanceDate","论文录用时间"),
         Map.entry("publicationDate","论文正式刊出时间"),
         Map.entry("grantDate","专利授权时间"),
-        Map.entry("certificateDate","软件著作权发证日期"),
+        Map.entry("copyrightPublicationDate","软件著作权予以发布日期"),
         Map.entry("draftCommitDate","送审稿提交时间"),
         Map.entry("actualGraduationDate","实际毕业时间"),
         Map.entry("paperStatus","论文状态"),
@@ -62,8 +62,8 @@ public class AchievementSubmissionRules {
             requireText(detail,"grantDate");requireValue(detail,"patentStatus",Set.of("已授权"));
             required.addAll(List.of("专利授权证书","授权公告文本","法律状态证明","专利权属证明"));
         } else if("SUPPLEMENT".equals(stage) && "COPYRIGHT".equals(type)) {
-            requireText(detail,"certificateDate");requireValue(detail,"copyrightStatus",Set.of("已取得登记证书"));
-            required.addAll(List.of("软件著作权登记证书","登记信息证明","著作权人证明"));
+            requireText(detail,"copyrightPublicationDate");requireValue(detail,"copyrightStatus",Set.of("已予以发布"));
+            required.addAll(List.of("软件著作权予以发布证明","登记信息证明","著作权人证明"));
         } else throw BusinessException.conflict("INVALID_ACHIEVEMENT_STAGE","成果不支持此提交阶段");
         var current=materials.list(row.getId()).stream().filter(AchievementMaterialMapper.Material::active).toList();
         var present=new HashSet<String>();
@@ -87,7 +87,7 @@ public class AchievementSubmissionRules {
         switch(type) {
             case "PAPER" -> requireValue(detail,"paperStatus",Set.of(switch(stage) {case "PRE_REVIEW"->"撰写/投稿准备";case "FORMAL"->"已录用";default->"已正式刊出";}));
             case "PATENT" -> requireValue(detail,"patentStatus",Set.of(switch(stage) {case "PRE_REVIEW"->"申请材料准备/已申请";case "FORMAL"->"已受理";default->"已授权";}));
-            case "COPYRIGHT" -> requireValue(detail,"copyrightStatus",Set.of(switch(stage) {case "PRE_REVIEW"->"申请材料准备/已申请";case "FORMAL"->"已受理";default->"已取得登记证书";}));
+            case "COPYRIGHT" -> requireValue(detail,"copyrightStatus",Set.of(switch(stage) {case "PRE_REVIEW"->"申请材料准备/已申请";case "FORMAL"->"已受理";default->"已予以发布";}));
             default -> { }
         }
     }

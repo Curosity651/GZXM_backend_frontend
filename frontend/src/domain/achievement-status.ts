@@ -43,7 +43,7 @@ export function achievementPhaseLabel(status: string): string {
     FORMAL_RETURNED: '第二轮审批退回',
     WAIT_PUBLICATION: '待补充正式刊出材料',
     WAIT_GRANT: '待补充授权材料',
-    WAIT_CERTIFICATE: '待补充登记证书',
+    WAIT_CERTIFICATE: '待补充予以发布材料',
     SUPPLEMENT_RETURNED: '第三轮审批退回',
     EFFECTIVE: '已完成',
   };
