@@ -6,6 +6,7 @@ import com.gzxm.server.modules.auth.api.AuthDtos.TokenResponse;
 import com.gzxm.server.modules.system.domain.UserEntity;
 import com.gzxm.server.modules.system.repository.SystemRelationMapper;
 import com.gzxm.server.modules.system.repository.UserMapper;
+import com.gzxm.server.modules.system.repository.UnitMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,14 +21,16 @@ import static com.gzxm.server.modules.auth.api.AuthDtos.CurrentUserView;
 @Service
 public class AuthService {
     private final UserMapper users;
+    private final UnitMapper units;
     private final SystemRelationMapper relations;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final RefreshTokenStore refreshTokens;
 
-    public AuthService(UserMapper users, SystemRelationMapper relations, PasswordEncoder encoder,
+    public AuthService(UserMapper users, UnitMapper units, SystemRelationMapper relations, PasswordEncoder encoder,
                        JwtService jwt, RefreshTokenStore refreshTokens) {
         this.users = users;
+        this.units = units;
         this.relations = relations;
         this.encoder = encoder;
         this.jwt = jwt;
@@ -63,8 +66,10 @@ public class AuthService {
         if (roleCode == null) throw unauthorized("ROLE_UNAVAILABLE", "账号角色不存在或已停用");
         Set<String> authorities = new HashSet<>(relations.findPermissionCodes(userId));
         authorities.add("ROLE_" + roleCode);
-        List<CurrentUser.TopicMembership> memberships = user.getUnitId() == null ? List.of() : relations.findMemberships(user.getUnitId());
-        return new CurrentUser(user.getId(), user.getUsername(), user.getUnitId(), roleCode,
+        List<CurrentUser.TopicMembership> memberships = user.getUnitId() == null ? List.of() : relations.findMemberships(user.getId());
+        var unit = user.getUnitId() == null ? null : units.selectById(user.getUnitId());
+        return new CurrentUser(user.getId(), user.getUsername(), user.getContactName(), user.getUnitId(),
+                unit == null ? null : unit.getName(), roleCode,
                 Set.copyOf(authorities), List.copyOf(memberships), user.getTokenVersion());
     }
 

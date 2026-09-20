@@ -49,7 +49,7 @@ public class ArchiveService {
         List<Directory> result = new ArrayList<>();
         long page = 1;
         while (true) {
-            var slice = topicService.list(page++, 200, null, null, true);
+            var slice = topicService.list(page++, 200, null, null, null);
             for (var topic : slice.items()) {
                 if ("DRAFT".equals(topic.status())) continue;
                 long topicId = Long.parseLong(topic.id());
@@ -243,14 +243,14 @@ public class ArchiveService {
             if (topicFilter != null && topicFilter != topicId || unitFilter != null && unitFilter != unitId ||
                     ownerType != null && !ownerType.equals(folder.ownerType()) || !canSee(topicId, unitId, folder.ownerType())) continue;
             if (!folder.required()) continue;
-            String key = folder.topicId() + ":" + folder.unitId() + ":" + folder.ownerType();
+            String key = folder.topicId() + ":" + folder.unitId() + ":" + folder.ownerType() + ":" + folder.ownerId();
             int[] counts = grouped.computeIfAbsent(key, unused -> new int[2]);
             counts[0]++;
             if (folder.completed()) counts[1]++;
         }
         return grouped.entrySet().stream().map(entry -> {
             String[] parts = entry.getKey().split(":"); int[] counts = entry.getValue();
-            return new Progress(parts[0], parts[1], parts[2], counts[0], counts[1], rate(counts[0], counts[1]));
+            return new Progress(parts[0], parts[1], parts[2], parts[3], counts[0], counts[1], rate(counts[0], counts[1]));
         }).toList();
     }
 
@@ -288,7 +288,7 @@ public class ArchiveService {
     private Folder folder(ResultSet rs) throws SQLException {
         int fileCount = rs.getInt("file_count"), quantity = rs.getInt("required_quantity");
         CurrentUser user = security.requireCurrentUser();
-        boolean canDelete = ArchiveFolderPolicy.canDelete(user, rs.getLong("unit_id"), rs.getBoolean("custom_flag"),
+        boolean canDelete = ArchiveFolderPolicy.canDelete(user, rs.getLong("unit_id"), rs.getString("owner_type"), rs.getBoolean("custom_flag"),
                 rs.getLong("created_by"), rs.getString("creator_role"));
         return new Folder(String.valueOf(rs.getLong("id")), String.valueOf(rs.getLong("topic_id")),
                 String.valueOf(rs.getLong("unit_id")), rs.getString("owner_type"), String.valueOf(rs.getLong("owner_id")),
@@ -316,8 +316,9 @@ public class ArchiveService {
             throw BusinessException.validation("INVALID_PROJECT_DATES", "结束日期不能早于开始日期");
     }
     private void requireNationalFolderManagement(long topicId, long unitId) {
+        requireAuthority("archive.topic.submit", "没有维护国家材料的权限");
         requireFolderScope(topicId, unitId, "TOPIC_NATIONAL", false);
-        if (!ArchiveFolderPolicy.canManage(security.requireCurrentUser(), unitId))
+        if (!ArchiveFolderPolicy.canManage(security.requireCurrentUser(), unitId, "TOPIC_NATIONAL"))
             throw BusinessException.forbidden("ARCHIVE_FOLDER_SCOPE_DENIED", "只能维护有权访问的单位目录");
         var topic = topics.lockTopic(topicId);
         if (!topic.enabled() || !"ACTIVE".equals(topic.status()))
@@ -330,6 +331,8 @@ public class ArchiveService {
             throw BusinessException.notFound("TOPIC_UNIT_NOT_FOUND", "课题单位不存在");
         if (write) {
             var user = security.requireCurrentUser();
+            requireAuthority("SELF_FUNDED".equals(ownerType) ? "self-funded.manage" : "archive.topic.submit",
+                    "没有维护该类归档材料的权限");
             if (!user.isGlobalRole() && (user.unitId() == null || user.unitId() != unitId ||
                     (!user.isInternalUnit() && !user.isExternalUnit()) ||
                     "SELF_FUNDED".equals(ownerType) && !user.isInternalUnit()))
@@ -338,6 +341,10 @@ public class ArchiveService {
             if (!topic.enabled() || !"ACTIVE".equals(topic.status()))
                 throw BusinessException.conflict("TOPIC_NOT_OPERATIONAL", "课题当前不能办理业务");
         }
+    }
+    private void requireAuthority(String authority, String message) {
+        if (!security.requireCurrentUser().authorities().contains(authority))
+            throw BusinessException.forbidden("ARCHIVE_ACTION_DENIED", message);
     }
     boolean canSee(long topicId, long unitId, String ownerType) {
         var user = security.requireCurrentUser();

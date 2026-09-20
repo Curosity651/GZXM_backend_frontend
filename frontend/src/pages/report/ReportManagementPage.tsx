@@ -9,7 +9,8 @@ import { ReportForm, type ReportFormValues } from '../../components/report/Repor
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
 import type { ApprovalRecord } from '../../types';
 
-interface Topic { id: string; code: string; name: string; enabled: boolean; status: string; leadUnitId: string }
+interface Topic { id: string; code: string; name: string; enabled: boolean; status: string; leadUnitId: string;
+  members: Array<{ membershipType: string; enabled: boolean; userIds?: string[] }> }
 interface TopicPage { items: Topic[] }
 const { Text } = Typography;
 const statusNames: Record<ApiReport['status'], string> = {
@@ -70,7 +71,7 @@ export function ReportManagementPage() {
   const canConfigure = user?.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('report.rule.manage');
   const canReview = Boolean(user?.actionPermissions.includes('report.initial.approve') || user?.actionPermissions.includes('report.final.approve'));
   const leadTopicIds = new Set(topics.filter(t => user?.unitId === t.leadUnitId
-    && user.memberships.some(m => m.topicId === t.id && m.membershipType === 'LEAD' && m.enabled)).map((topic) => topic.id));
+    && t.members.some(m => m.membershipType === 'LEAD' && m.enabled && m.userIds?.includes(user.id))).map((topic) => topic.id));
   const leadTopics = topics.filter(t => t.enabled && t.status === 'ACTIVE' && leadTopicIds.has(t.id));
   const canSeeEditableStatuses = user?.roleCode === 'SYSTEM_ADMIN' || (filters.topicId
     ? leadTopicIds.has(filters.topicId)

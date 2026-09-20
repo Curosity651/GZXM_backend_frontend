@@ -2,9 +2,9 @@ package com.gzxm.server.modules.topic.application;
 
 import com.gzxm.server.common.security.CurrentUser;
 import com.gzxm.server.common.security.SecurityContextFacade;
-import com.gzxm.server.common.security.TopicAccessService;
 import com.gzxm.server.modules.topic.repository.TopicMapper;
 import com.gzxm.server.modules.topic.repository.TopicMembershipMapper;
+import com.gzxm.server.modules.topic.repository.TopicUserAssignmentMapper;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -24,8 +24,8 @@ class TopicServiceTest {
         when(topics.count(null, null, "PAUSED", true)).thenReturn(1L);
         when(topics.count(null, null, "CLOSED", true)).thenReturn(3L);
 
-        TopicService service = new TopicService(topics, mock(TopicMembershipMapper.class),
-                mock(TopicUnitDirectory.class), security, mock(TopicAccessService.class));
+        TopicService service = new TopicService(topics, mock(TopicMembershipMapper.class), mock(TopicUserAssignmentMapper.class),
+                mock(TopicUnitDirectory.class), security);
 
         assertThat(service.countBusinessTopics()).isEqualTo(6);
         verify(topics, never()).count(null, null, "DRAFT", true);

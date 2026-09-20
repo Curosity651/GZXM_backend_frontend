@@ -3,13 +3,17 @@ import { patentScopeOptions, PATENT_STATUS_OPTIONS } from '../../utils/helpers';
 
 const { Option } = Select;
 
-export function PatentFields() {
+export function PatentFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' | 'FORMAL' | 'SUPPLEMENT' }) {
+  const statusOptions = workflowStage === 'PRE' ? PATENT_STATUS_OPTIONS.slice(0, 1) : workflowStage === 'FORMAL' ? PATENT_STATUS_OPTIONS.slice(1, 2) : PATENT_STATUS_OPTIONS.slice(2);
   return (
     <Row gutter={16}>
       <Col span={12}>
-        <Form.Item label="专利状态" name="patentStatus" rules={[{ required: true, message: '请选择专利状态' }]}>
+        <Form.Item label="专利状态" name="patentStatus" rules={[
+          { required: true, message: '请选择专利状态' },
+          { validator: (_: unknown, value: string) => !value || statusOptions.includes(value as never) ? Promise.resolve() : Promise.reject(new Error(`当前阶段专利状态应为“${statusOptions[0]}”`)) },
+        ]}>
           <Select placeholder="选择专利状态">
-            {PATENT_STATUS_OPTIONS.map((s) => (
+            {statusOptions.map((s) => (
               <Option key={s} value={s}>{s}</Option>
             ))}
           </Select>
@@ -65,12 +69,12 @@ export function PatentFields() {
       </Col>
       <Col span={12}><Form.Item label="公开号" name="publicationNumber"><Input /></Form.Item></Col>
       <Col span={12}>
-        <Form.Item label="受理时间" name="receiptDate">
+        <Form.Item label="受理时间" name="receiptDate" rules={workflowStage === 'FORMAL' ? [{ required: true, message: '请选择专利受理时间' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="授权时间" name="grantDate">
+        <Form.Item label="授权时间" name="grantDate" rules={workflowStage === 'SUPPLEMENT' ? [{ required: true, message: '请选择专利授权时间' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>

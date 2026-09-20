@@ -21,9 +21,8 @@ interface TaskRow { id: string; title: string; status: string; type: string }
 
 const achievementStatusLabels: Record<string, string> = {
   DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回',
-  PRE_APPROVED: '允许投稿/申请', EXTERNAL_SUBMITTED: '已投稿/已申请', FORMAL_DRAFT: '正式成果草稿',
-  FORMAL_INITIAL: '正式初审中', FORMAL_FINAL: '正式终审中', FORMAL_RETURNED: '正式退回',
-  WAIT_PUBLICATION: '等待发表', WAIT_GRANT: '等待授权', SUPPLEMENT_INITIAL: '补充材料初审中',
+  FORMAL_DRAFT: '第二轮材料草稿', FORMAL_INITIAL: '第二轮初审中', FORMAL_FINAL: '第二轮终审中', FORMAL_RETURNED: '第二轮退回',
+  WAIT_PUBLICATION: '等待正式刊出材料', WAIT_GRANT: '等待授权材料', WAIT_CERTIFICATE: '等待登记证书', SUPPLEMENT_INITIAL: '第三轮初审中',
   SUPPLEMENT_FINAL: '补充材料终审中', SUPPLEMENT_RETURNED: '补充材料退回', EFFECTIVE: '已生效',
 };
 const reportStatusLabels: Record<string, string> = {
@@ -46,7 +45,7 @@ export function HomePage() {
     try {
       const [summaryData, topicRows, nodes] = await Promise.all([
         apiRequest<Summary>('/dashboard/summary'),
-        collectAllPages((page, size) => topicApi.list(new URLSearchParams({ page: String(page), size: String(size), enabled: 'true' }))),
+        collectAllPages((page, size) => topicApi.list(new URLSearchParams({ page: String(page), size: String(size) }))),
         indicatorApi.nodes(),
       ]);
       const activeTopics = topicRows.filter(isBusinessTopic);

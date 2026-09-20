@@ -61,6 +61,8 @@ class AchievementWorkflowIntegrationTest {
             jdbc.update("INSERT INTO topic_indicator(id,project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(?,1,1,1,?,0,'PUBLISHED',1)",i,i);
             for(int unit=1;unit<=3;unit++) jdbc.update("INSERT INTO unit_indicator_allocation(project_id,topic_id,membership_id,unit_id,node_id,indicator_definition_id,topic_indicator_id,target_quantity,status,publish_version) VALUES(1,1,?,?,1,?,?,0,'PUBLISHED',1)",unit,unit,i,i);
         }
+        jdbc.update("UPDATE topic_indicator SET target_quantity=1 WHERE indicator_definition_id=1");
+        jdbc.update("UPDATE unit_indicator_allocation SET target_quantity=1 WHERE indicator_definition_id=1");
     }
     @AfterEach void cleanupHistory() {
         jdbc.update("DELETE FROM approval_record WHERE business_type='ACHIEVEMENT'");
@@ -82,7 +84,11 @@ class AchievementWorkflowIntegrationTest {
     }
     private ObjectNode body(int definition) {
         var body=json.createObjectNode();body.put("topicId","1");body.put("nodeId","1");body.put("indicatorDefinitionId",Integer.toString(definition));
-        body.put("title","Synthetic achievement");body.put("responsiblePerson","Synthetic person");return body;
+        body.put("title","Synthetic achievement");body.put("responsiblePerson","Synthetic person");
+        if(definition==1) body.putObject("detail").put("paperStatus","撰写/投稿准备");
+        if(definition==2) body.putObject("detail").put("patentStatus","申请材料准备/已申请");
+        if(definition==3) body.putObject("detail").put("copyrightStatus","申请材料准备/已申请");
+        return body;
     }
     private JsonNode create(int definition,long unit) throws Exception {
         var response=call(post("/api/v1/achievements").content(body(definition).toString()),unit==3?"EXTERNAL_TOPIC_UNIT":"INTERNAL_TOPIC_UNIT",unit)
@@ -98,35 +104,35 @@ class AchievementWorkflowIntegrationTest {
         reviewCall(id,"PROJECT_TECH_LEADER",reviewBody(id,"APPROVE"),key()).andExpect(status().isForbidden());
         call(put("/api/v1/achievements/"+id).content(body(definition).put("recordVersion",2).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
         review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
-        assertThat(current(id).path("status").asText()).isEqualTo(definition<=2?"PRE_APPROVED":"FORMAL_DRAFT");
+        assertThat(current(id).path("status").asText()).isEqualTo("FORMAL_DRAFT");
         assertThat(current(id).path("countsToIndicator").asBoolean()).isFalse();
         assertThat(current(id).path("approvals").size()).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM submission_snapshot WHERE business_type='ACHIEVEMENT'",Integer.class)).isEqualTo(1);
     }
     @ParameterizedTest @ValueSource(ints={1,2,3,4,5})
     void fullWorkflowWithTestOnlyFileBoundaryCountsExactlyOnce(int definition) throws Exception {
-        String id=create(definition,2).path("id").asText();preApprove(id);if(definition<=2) register(id);
-        var types=Map.of(1,List.of("论文定稿","录用通知或接收函","项目标注页"),2,List.of("专利授权证书","专利授权文件","项目关联说明"),
-                3,List.of("软件著作权证书","软件鉴别材料","著作权人证明"),4,List.of("标准送审稿","送审或立项证明"),5,List.of("研究生学位论文证明材料"));
-        var detail=Map.of(1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",2,"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-02-01\"}",
-                3,"{\"certificateDate\":\"2026-02-01\"}",4,"{\"draftCommitDate\":\"2026-02-01\"}",5,"{\"actualGraduationDate\":\"2026-02-01\"}");
+        String id=create(definition,2).path("id").asText();preApprove(id);
+        var types=Map.of(1,List.of("论文定稿","录用通知或接收函","项目标注页"),2,List.of("专利受理通知书","专利申请文件","项目关联说明"),
+                3,List.of("软件著作权登记受理通知书","软件鉴别材料","著作权人证明"),4,List.of("标准送审稿","送审或立项证明"),5,List.of("研究生学位论文证明材料"));
+        var detail=Map.of(1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",2,"{\"patentStatus\":\"已受理\",\"receiptDate\":\"2026-02-01\"}",
+                3,"{\"copyrightStatus\":\"已受理\",\"registrationApplicationDate\":\"2026-02-01\"}",4,"{\"draftCommitDate\":\"2026-02-01\"}",5,"{\"actualGraduationDate\":\"2026-02-01\"}");
         setMaterials(id,definition,detail.get(definition),types.get(definition));action(id,"SUBMIT_FORMAL");
         review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
-        if(definition<=2) {
+        if(definition<=3) {
             assertThat(current(id).path("countsToIndicator").asBoolean()).isTrue();
-            assertThat(current(id).path("status").asText()).isEqualTo(definition==1?"WAIT_PUBLICATION":"WAIT_GRANT");
+            assertThat(current(id).path("status").asText()).isEqualTo(definition==1?"WAIT_PUBLICATION":definition==2?"WAIT_GRANT":"WAIT_CERTIFICATE");
             String supplement=definition==1?"{\"paperStatus\":\"已正式刊出\",\"publicationDate\":\"2026-03-01\",\"paperType\":\"SCI\",\"isChineseCoreJournal\":true}"
-                    :"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-03-01\"}";
+                    :definition==2?"{\"patentStatus\":\"已授权\",\"grantDate\":\"2026-03-01\"}":"{\"copyrightStatus\":\"已取得登记证书\",\"certificateDate\":\"2026-03-01\"}";
             var supplementTypes=definition==1?List.of("正式刊出论文全文","期刊封面、目录及见刊页","项目标注页","检索证明","中文核心期刊认定证明")
-                    :List.of("专利授权证书","授权公告文本","法律状态证明","专利权属证明");
+                    :definition==2?List.of("专利授权证书","授权公告文本","法律状态证明","专利权属证明"):List.of("软件著作权登记证书","登记信息证明","著作权人证明");
             setMaterials(id,definition,supplement,supplementTypes);action(id,"SUBMIT_SUPPLEMENT");review(id,"RESEARCH_ASSISTANT","APPROVE");
             var request=reviewBody(id,"APPROVE");String retryKey=key();
             var first=reviewCall(id,"PROJECT_TECH_LEADER",request,retryKey).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
             assertThat(reviewCall(id,"PROJECT_TECH_LEADER",request,retryKey).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).isEqualTo(first);
         }
         var result=current(id);assertThat(result.path("status").asText()).isEqualTo("EFFECTIVE");assertThat(result.path("countsToIndicator").asBoolean()).isTrue();
-        assertThat(result.path("submittedVersion").asInt()).isEqualTo(definition<=2?3:2);
-        assertThat(result.path("approvals").size()).isEqualTo(definition<=2?6:4);
+        assertThat(result.path("submittedVersion").asInt()).isEqualTo(definition<=3?3:2);
+        assertThat(result.path("approvals").size()).isEqualTo(definition<=3?6:4);
         call(put("/api/v1/achievements/"+id).content(body(definition).put("recordVersion",result.path("recordVersion").asInt()).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
         call(post("/api/v1/achievements/"+id+"/actions").header("Idempotency-Key",key()).content(actionBody(id,"SUBMIT_SUPPLEMENT").toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
     }
@@ -205,7 +211,7 @@ class AchievementWorkflowIntegrationTest {
         } finally {jdbc.update("DELETE FROM submission_snapshot WHERE business_type='REPORT'");jdbc.update("DELETE FROM approval_record WHERE business_type='REPORT'");}
     }
     @Test void formalRequiredDatesAndConditionalMaterialsCannotBeSkipped() throws Exception {
-        String id=create(1,2).path("id").asText();preApprove(id);register(id);
+        String id=create(1,2).path("id").asText();preApprove(id);
         setMaterials(id,1,"{}",List.of("论文定稿","录用通知或接收函","项目标注页"));
         call(post("/api/v1/achievements/"+id+"/actions").header("Idempotency-Key",key()).content(actionBody(id,"SUBMIT_FORMAL").toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isUnprocessableEntity());
         setMaterials(id,1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",List.of("论文定稿"));
@@ -244,7 +250,7 @@ class AchievementWorkflowIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM submission_snapshot WHERE business_type='ACHIEVEMENT'",Integer.class)).isEqualTo(3);
     }
     @Test void supplementRequiresConditionalProofAndKeepsFormalCompletion() throws Exception {
-        String id=create(1,2).path("id").asText();preApprove(id);register(id);
+        String id=create(1,2).path("id").asText();preApprove(id);
         setMaterials(id,1,"{\"paperStatus\":\"已录用\",\"acceptanceDate\":\"2026-02-01\"}",List.of("论文定稿","录用通知或接收函","项目标注页"));
         action(id,"SUBMIT_FORMAL");review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
         String detail="{\"paperStatus\":\"已正式刊出\",\"publicationDate\":\"2026-03-01\",\"paperType\":\"SCI\",\"isChineseCoreJournal\":true}";
@@ -290,11 +296,6 @@ class AchievementWorkflowIntegrationTest {
     }
     private void preApprove(String id) throws Exception {
         action(id,"SUBMIT_PRE_REVIEW");review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
-    }
-    private void register(String id) throws Exception {
-        var request=actionBody(id,"REGISTER_EXTERNAL_SUBMISSION").put("externalSubmissionDate","2026-01-01").put("externalSubmissionNumber","SYNTHETIC-001");
-        call(post("/api/v1/achievements/"+id+"/actions").header("Idempotency-Key",key()).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isOk());
-        action(id,"START_FORMAL");
     }
     private void setMaterials(String id,int definition,String detail,List<String> types) throws Exception {
         org.mockito.Mockito.when(files.requireOwnedReady(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation->file(invocation.getArgument(0)));

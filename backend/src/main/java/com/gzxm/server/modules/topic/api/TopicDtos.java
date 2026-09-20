@@ -12,15 +12,17 @@ public final class TopicDtos {
             String summary,
             @NotBlank @Pattern(regexp = "[1-9][0-9]*") String leadUnitId,
             List<@NotBlank @Pattern(regexp = "[1-9][0-9]*") String> participantUnitIds,
+            java.util.Map<String, List<@NotBlank @Pattern(regexp = "[1-9][0-9]*") String>> memberUserIds,
             LocalDate startDate, LocalDate endDate,
             @Positive Integer recordVersion) {}
     public record TopicStatusRequest(@NotNull Boolean enabled,
             @Pattern(regexp = "DRAFT|ACTIVE|PAUSED|CLOSED") String status) {}
-    public record ParticipantRequest(@NotBlank @Pattern(regexp = "[1-9][0-9]*") String unitId) {}
+    public record ParticipantRequest(@NotBlank @Pattern(regexp = "[1-9][0-9]*") String unitId,
+                                     List<@NotBlank @Pattern(regexp = "[1-9][0-9]*") String> userIds) {}
     public record MembershipStatusRequest(@NotNull Boolean enabled) {}
     public record TopicView(String id, String code, String name, String summary, String leadUnitId,
                             String status, boolean enabled, LocalDate startDate, LocalDate endDate,
                             int recordVersion, List<MembershipView> members) {}
     public record MembershipView(String id, String topicId, String unitId, String unitName,
-                                 String membershipType, boolean enabled) {}
+                                 String membershipType, boolean enabled, List<String> userIds) {}
 }

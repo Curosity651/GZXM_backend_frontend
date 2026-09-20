@@ -6,7 +6,7 @@ export interface ApiArchiveFolder { id: string; topicId: string; unitId: string;
 export interface ApiSelfFundedProject { id: string; topicId: string; ownerUnitId: string; code: string; name: string; projectType: 'TECHNOLOGY' | 'RENOVATION' | 'INFRASTRUCTURE'; principalName: string; startDate?: string; endDate?: string; budget?: number; status: string; recordVersion: number; templateSnapshotId: string; completionRate: number }
 export type SelfFundedWrite = Pick<ApiSelfFundedProject, 'topicId' | 'code' | 'name' | 'projectType' | 'principalName'> &
   { startDate: string; endDate: string } & Partial<Pick<ApiSelfFundedProject, 'budget' | 'status' | 'recordVersion'>>;
-export interface ApiArchiveProgress { topicId: string; unitId: string; ownerType: string; requiredCount: number; completedCount: number; completionRate: number }
+export interface ApiArchiveProgress { topicId: string; unitId: string; ownerType: string; ownerId: string; requiredCount: number; completedCount: number; completionRate: number }
 
 export const archiveApi = {
   directories: () => apiRequest<ApiArchiveDirectory[]>('/archive/national'),

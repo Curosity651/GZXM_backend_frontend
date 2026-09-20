@@ -4,6 +4,7 @@ import com.gzxm.server.common.exception.BusinessException;
 import com.gzxm.server.modules.system.domain.UserEntity;
 import com.gzxm.server.modules.system.repository.SystemRelationMapper;
 import com.gzxm.server.modules.system.repository.UserMapper;
+import com.gzxm.server.modules.system.repository.UnitMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,6 +18,7 @@ import static org.mockito.Mockito.*;
 
 class AuthServiceTest {
     private final UserMapper users = mock(UserMapper.class);
+    private final UnitMapper units = mock(UnitMapper.class);
     private final SystemRelationMapper relations = mock(SystemRelationMapper.class);
     private final PasswordEncoder encoder = mock(PasswordEncoder.class);
     private final JwtService jwt = mock(JwtService.class);
@@ -25,7 +27,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthService(users, relations, encoder, jwt, refreshTokens);
+        service = new AuthService(users, units, relations, encoder, jwt, refreshTokens);
     }
 
     @Test

@@ -1,6 +1,6 @@
 import { Col, Form, Input, Row } from 'antd';
 
-export function StandardFields() {
+export function StandardFields({ formalStage = false }: { formalStage?: boolean }) {
   return (
     <Row gutter={16}>
       <Col span={12}>
@@ -39,7 +39,7 @@ export function StandardFields() {
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="送审稿提交时间" name="draftCommitDate">
+        <Form.Item label="送审稿提交时间" name="draftCommitDate" rules={formalStage ? [{ required: true, message: '请选择送审稿提交时间' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>

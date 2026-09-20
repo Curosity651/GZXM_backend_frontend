@@ -14,7 +14,6 @@ import com.gzxm.server.modules.topic.application.TopicQueryService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.time.LocalDate;
 import java.util.Objects;
 
 @Service
@@ -26,16 +25,15 @@ public class AchievementWorkflowService {
     private final TopicQueryService topics;
     private final AchievementAssignmentQuery assignments;
     private final AchievementSubmissionRules rules;
-    private final AchievementDetailValidator details;
     private final SecurityContextFacade security;
     private final ObjectMapper json;
     private final AchievementMaterialMapper materials;
 
     public AchievementWorkflowService(AchievementService achievements,AchievementMapper records,AchievementHistoryMapper history,
             AchievementOperationMapper operations,TopicQueryService topics,AchievementAssignmentQuery assignments,
-            AchievementSubmissionRules rules,AchievementDetailValidator details,SecurityContextFacade security,ObjectMapper json,AchievementMaterialMapper materials) {
+            AchievementSubmissionRules rules,SecurityContextFacade security,ObjectMapper json,AchievementMaterialMapper materials) {
         this.achievements=achievements;this.records=records;this.history=history;this.operations=operations;this.topics=topics;
-        this.assignments=assignments;this.rules=rules;this.details=details;this.security=security;this.json=json;this.materials=materials;
+        this.assignments=assignments;this.rules=rules;this.security=security;this.json=json;this.materials=materials;
     }
 
     @Transactional
@@ -51,9 +49,8 @@ public class AchievementWorkflowService {
         if(!row.getAchievementType().equals(assignment.achievementType())) throw BusinessException.conflict("ACHIEVEMENT_TYPE_CHANGED","指标类型已变更");
         String next=AchievementWorkflow.action(row.getStatus(),request.action(),row.getAchievementType());
         boolean submitting=request.action().startsWith("SUBMIT_");
-        if("REGISTER_EXTERNAL_SUBMISSION".equals(request.action())) register(row,request);
-        else if(request.externalSubmissionDate()!=null || request.externalSubmissionNumber()!=null)
-            throw BusinessException.validation("UNEXPECTED_EXTERNAL_FIELDS","仅投稿/申请登记动作接受外部投递字段");
+        if(request.externalSubmissionDate()!=null || request.externalSubmissionNumber()!=null)
+            throw BusinessException.validation("UNEXPECTED_EXTERNAL_FIELDS","成果流程不再接受单独的投稿或申请登记字段");
         if(submitting) {
             if(row.getSubmittedVersion()==Integer.MAX_VALUE) throw BusinessException.conflict("SUBMISSION_VERSION_EXHAUSTED","提交版本已达上限");
             rules.validate(row,AchievementWorkflow.stage(next));
@@ -113,19 +110,6 @@ public class AchievementWorkflowService {
         if("RESEARCH_ASSISTANT".equals(user.roleCode()) && user.authorities().contains("achievement.initial.approve")) return "INITIAL";
         if("PROJECT_TECH_LEADER".equals(user.roleCode()) && user.authorities().contains("achievement.final.approve")) return "FINAL";
         throw BusinessException.forbidden("ACHIEVEMENT_REVIEWER_REQUIRED","仅具备对应权限的科研助理或项目技术负责人可以审批");
-    }
-    private void register(AchievementEntity row,ActionRequest request) {
-        try {
-            if(request.externalSubmissionDate()==null || !request.externalSubmissionDate().matches("[0-9]{4}-[0-9]{2}-[0-9]{2}")) throw new IllegalArgumentException();
-            LocalDate.parse(request.externalSubmissionDate());
-        } catch(RuntimeException ex) {throw BusinessException.validation("EXTERNAL_SUBMISSION_DATE_REQUIRED","登记必须提供有效投递日期");}
-        try {
-            var detail=(ObjectNode)json.readTree(row.getDetailJson());boolean paper="PAPER".equals(row.getAchievementType());
-            detail.put(paper?"submissionDate":"applicationDate",request.externalSubmissionDate());
-            if(request.externalSubmissionNumber()!=null && !request.externalSubmissionNumber().isBlank())
-                detail.put(paper?"externalSubmissionNumber":"applicationNumber",request.externalSubmissionNumber().trim());
-            row.setDetailJson(details.validate(row.getAchievementType(),detail).toString());
-        } catch(com.fasterxml.jackson.core.JsonProcessingException ex){throw new IllegalStateException("Invalid achievement detail",ex);}
     }
     private void version(AchievementEntity row,Integer version) {
         if(version==null || version!=row.getRecordVersion()) throw BusinessException.conflict("ACHIEVEMENT_VERSION_CONFLICT","请携带最新recordVersion");

@@ -94,4 +94,10 @@ public class SystemController {
                              @RequestParam(required = false) Boolean internal) {
         return service.listUnits(keyword, internal);
     }
+
+    @GetMapping("/topic-unit-users")
+    @PreAuthorize("hasAuthority('topic.manage') or hasAuthority('system.manage')")
+    List<TopicUserView> listTopicUsers(@RequestParam(required = false) Long unitId) {
+        return service.listTopicUsers(unitId);
+    }
 }

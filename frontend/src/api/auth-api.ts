@@ -3,7 +3,9 @@ import { apiRequest } from './http-client';
 export interface ApiCurrentUser {
   id: string;
   username: string;
+  contactName?: string;
   unitId?: string;
+  unitName?: string;
   roleCode: string;
   pagePermissions: string[];
   actionPermissions: string[];

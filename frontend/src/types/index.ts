@@ -138,8 +138,9 @@ export interface Achievement {
   history?: AchievementHistoryRecord[];
 
   // 状态字段（替代旧认定类型）
-  paperStatus?: string;  // 撰写中 | 已投稿 | 已录用 | 已正式刊出
-  patentStatus?: string; // 申请材料准备中 | 已申请 | 已受理 | 已授权
+  paperStatus?: string;  // 撰写/投稿准备 | 已录用 | 已正式刊出
+  patentStatus?: string; // 申请材料准备/已申请 | 已受理 | 已授权
+  copyrightStatus?: string; // 申请材料准备/已申请 | 已受理 | 已取得登记证书
 
   standardNumber?: string; publishDate?: string; implementDate?: string; // 标准已发布补充
 

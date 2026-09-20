@@ -34,29 +34,29 @@ public class ArchiveController {
         return service.nationalFolders(TopicService.id(topicId), TopicService.id(unitId));
     }
     @PostMapping("/archive/national/topics/{topicId}/units/{unitId}/folders")
-    @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("isAuthenticated()")
+    @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('archive.topic.submit')")
     @Operation(operationId = "createNationalCustomFolder")
     public Folder addFolder(@PathVariable String topicId, @PathVariable String unitId, @Valid @RequestBody FolderCreate request) {
         var result = service.addNationalFolder(TopicService.id(topicId), TopicService.id(unitId), request.name(), request.required());
         audit.success("archive.folder.create", "ARCHIVE_FOLDER", result.id()); return result;
     }
     @DeleteMapping("/archive/folders/{folderId}") @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("isAuthenticated()") @Operation(operationId = "deleteCustomArchiveFolder")
+    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage')") @Operation(operationId = "deleteCustomArchiveFolder")
     public void deleteFolder(@PathVariable String folderId) {
         service.deleteFolder(TopicService.id(folderId)); audit.success("archive.folder.delete", "ARCHIVE_FOLDER", folderId);
     }
-    @GetMapping("/archive/folders/{folderId}/files") @PreAuthorize("isAuthenticated()")
+    @GetMapping("/archive/folders/{folderId}/files") @PreAuthorize("hasAuthority('file.download')")
     @Operation(operationId = "listArchiveFolderFiles")
     public List<FileView> files(@PathVariable String folderId) { return service.files(TopicService.id(folderId)); }
     @PostMapping("/archive/folders/{folderId}/files") @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
+    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage')")
     @Operation(operationId = "attachFileToArchiveFolder")
     public FileView attach(@PathVariable String folderId, @Valid @RequestBody FileLink request) {
         var result = service.attach(TopicService.id(folderId), TopicService.id(request.fileId()));
         audit.success("archive.file.attach", "ARCHIVE_FOLDER", folderId); return result;
     }
     @DeleteMapping("/archive/folders/{folderId}/files/{fileId}") @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
+    @PreAuthorize("hasAuthority('archive.topic.submit') or hasAuthority('self-funded.manage')")
     @Operation(operationId = "removeArchiveFolderFile")
     public void remove(@PathVariable String folderId, @PathVariable String fileId) {
         service.remove(TopicService.id(folderId), TopicService.id(fileId));
@@ -86,7 +86,7 @@ public class ArchiveController {
     @Operation(operationId = "listSelfFundedProjectFolders")
     public List<Folder> projectFolders(@PathVariable String projectId) { return service.projectFolders(TopicService.id(projectId)); }
     @PostMapping("/self-funded-projects/{projectId}/folders") @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAuthority('self-funded.manage') or hasAnyRole('SYSTEM_ADMIN','PROJECT_TECH_LEADER','RESEARCH_ASSISTANT')")
+    @PreAuthorize("hasAuthority('self-funded.manage')")
     @Operation(operationId = "createSelfFundedCustomFolder")
     public Folder addProjectFolder(@PathVariable String projectId, @Valid @RequestBody FolderCreate request) {
         var result = service.addProjectFolder(TopicService.id(projectId), request.name(), request.required());

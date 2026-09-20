@@ -691,7 +691,7 @@ class TopicIntegrationTest {
     }
 
     private TopicWriteRequest write(String code, String lead, List<String> participants, Integer version) {
-        return new TopicWriteRequest(code, "Synthetic topic", null, lead, participants, null, null, version);
+        return new TopicWriteRequest(code, "Synthetic topic", null, lead, participants, java.util.Map.of(), null, null, version);
     }
 
     private long memberId(String topic, long unit) {

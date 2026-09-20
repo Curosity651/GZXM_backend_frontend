@@ -62,7 +62,7 @@ public class SystemService {
     @Transactional
     public CreateUserResponse createUser(CreateUserRequest request) {
         RoleEntity role = requireRole(parseId(request.roleId(), "roleId"));
-        Long unitId = UNIT_ROLES.contains(role.getCode()) ? createAccountUnit(request.username().trim(), role) : null;
+        Long unitId = UNIT_ROLES.contains(role.getCode()) ? resolveAccountUnit(request.unitId(), request.unitName(), role) : null;
         UserEntity user = new UserEntity();
         user.setUsername(request.username().trim());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
@@ -79,7 +79,7 @@ public class SystemService {
             users.insert(user);
             relations.assignRole(user.getId(), role.getId());
         } catch (DuplicateKeyException ex) {
-            throw BusinessException.conflict("USER_UNIQUE_CONFLICT", "用户名已存在，或该单位已经存在有效课题账号");
+            throw BusinessException.conflict("USER_UNIQUE_CONFLICT", "用户名已存在");
         }
         return new CreateUserResponse(toUserView(user));
     }
@@ -103,16 +103,15 @@ public class SystemService {
             if (StringUtils.hasText(request.username())) {
                 String username = request.username().trim();
                 user.setUsername(username);
-                if ("TOPIC_UNIT".equals(user.getAccountType()) && user.getUnitId() != null) {
-                    UnitEntity unit = units.selectById(user.getUnitId());
-                    if (unit != null) {
-                        unit.setName(username);
-                        unit.setUpdatedAt(LocalDateTime.now());
-                        units.updateById(unit);
-                    }
-                }
             }
             if (StringUtils.hasText(request.name())) user.setContactName(request.name().trim());
+            if ("TOPIC_UNIT".equals(user.getAccountType()) && nextRole != null
+                    && (StringUtils.hasText(request.unitId()) || StringUtils.hasText(request.unitName()))) {
+                Long nextUnitId = resolveAccountUnit(request.unitId(), request.unitName(), nextRole);
+                if (!Objects.equals(nextUnitId, user.getUnitId()) && relations.activeTopicAssignmentCount(id) > 0)
+                    throw BusinessException.conflict("USER_UNIT_ASSIGNED", "该用户已承担课题，请先解除课题人员关系后再修改单位");
+                user.setUnitId(nextUnitId);
+            }
             user.setPhone(trimToNull(request.phone()));
             user.setEmail(trimToNull(request.email()));
             if (roleChanged) user.setTokenVersion(user.getTokenVersion() + 1);
@@ -120,17 +119,9 @@ public class SystemService {
             users.updateById(user);
             if (roleChanged) {
                 relations.assignRole(id, nextRole.getId());
-                if (UNIT_ROLES.contains(nextRole.getCode()) && user.getUnitId() != null) {
-                    UnitEntity unit = units.selectById(user.getUnitId());
-                    if (unit != null) {
-                        unit.setInternalFlag("INTERNAL_TOPIC_UNIT".equals(nextRole.getCode()));
-                        unit.setUpdatedAt(LocalDateTime.now());
-                        units.updateById(unit);
-                    }
-                }
             }
         } catch (DuplicateKeyException ex) {
-            throw BusinessException.conflict("USERNAME_EXISTS", "用户名或单位名称已存在");
+            throw BusinessException.conflict("USERNAME_EXISTS", "用户名已存在");
         }
         return toUserView(user);
     }
@@ -143,9 +134,7 @@ public class SystemService {
         user.setUpdatedAt(LocalDateTime.now());
         try {
             users.updateById(user);
-        } catch (DuplicateKeyException ex) {
-            throw BusinessException.conflict("ACTIVE_UNIT_ACCOUNT_EXISTS", "该单位已经存在另一个有效课题账号");
-        }
+        } catch (DuplicateKeyException ex) { throw BusinessException.conflict("USER_STATUS_CONFLICT", "账号状态修改冲突"); }
         return toUserView(user);
     }
 
@@ -189,6 +178,7 @@ public class SystemService {
             role.setUpdatedAt(LocalDateTime.now());
             roles.updateById(role);
         }
+        relations.invalidateRoleUsers(id);
         return toRoleView(role);
     }
 
@@ -211,11 +201,28 @@ public class SystemService {
                         eligibleTopicUnits.contains(u.getId()))).toList();
     }
 
+    public List<TopicUserView> listTopicUsers(Long unitId) {
+        var unitDirectory = units.selectList(new LambdaQueryWrapper<UnitEntity>().isNull(UnitEntity::getDeletedAt))
+                .stream().collect(Collectors.toMap(UnitEntity::getId, Function.identity()));
+        return users.selectList(new LambdaQueryWrapper<UserEntity>()
+                        .isNull(UserEntity::getDeletedAt).eq(UserEntity::getEnabled, true)
+                        .eq(unitId != null, UserEntity::getUnitId, unitId)
+                        .inSql(UserEntity::getId, "SELECT ur.user_id FROM sys_user_role ur JOIN sys_role r ON r.id=ur.role_id " +
+                                "WHERE r.enabled=1 AND r.code IN ('INTERNAL_TOPIC_UNIT','EXTERNAL_TOPIC_UNIT')")
+                        .orderByAsc(UserEntity::getUnitId).orderByAsc(UserEntity::getContactName))
+                .stream().map(user -> {
+                    var unit = unitDirectory.get(user.getUnitId());
+                    return new TopicUserView(String.valueOf(user.getId()), user.getUsername(), user.getContactName(),
+                            String.valueOf(user.getUnitId()), unit == null ? null : unit.getName(), true);
+                }).toList();
+    }
+
     private UserView toUserView(UserEntity user) {
         Long roleId = relations.findRoleId(user.getId());
         RoleEntity role = roleId == null ? null : roles.selectById(roleId);
+        UnitEntity unit = user.getUnitId() == null ? null : units.selectById(user.getUnitId());
         return new UserView(String.valueOf(user.getId()), user.getUsername(), user.getContactName(),
-                user.getUnitId() == null ? null : String.valueOf(user.getUnitId()),
+                user.getUnitId() == null ? null : String.valueOf(user.getUnitId()), unit == null ? null : unit.getName(),
                 role == null ? null : String.valueOf(role.getId()), role == null ? null : role.getName(),
                 user.getPhone(), user.getEmail(), Boolean.TRUE.equals(user.getEnabled()), user.getCreatedAt());
     }
@@ -244,7 +251,24 @@ public class SystemService {
         return role;
     }
 
-    private Long createAccountUnit(String name, RoleEntity role) {
+    private Long resolveAccountUnit(String unitIdValue, String unitNameValue, RoleEntity role) {
+        UnitEntity existing = null;
+        if (StringUtils.hasText(unitIdValue)) {
+            existing = units.selectById(parseId(unitIdValue.trim(), "unitId"));
+            if (existing == null || existing.getDeletedAt() != null || !Boolean.TRUE.equals(existing.getEnabled()))
+                throw BusinessException.validation("INVALID_UNIT", "所属单位不存在或已停用");
+        } else if (StringUtils.hasText(unitNameValue)) {
+            String name = unitNameValue.trim();
+            existing = units.selectOne(new LambdaQueryWrapper<UnitEntity>().eq(UnitEntity::getName, name).isNull(UnitEntity::getDeletedAt));
+            if (existing == null) existing = createAccountUnit(name, role);
+        } else throw BusinessException.validation("UNIT_REQUIRED", "课题单位账号必须选择或填写所属单位");
+        boolean expectedInternal = "INTERNAL_TOPIC_UNIT".equals(role.getCode());
+        if (!Objects.equals(existing.getInternalFlag(), expectedInternal))
+            throw BusinessException.validation("UNIT_ROLE_MISMATCH", expectedInternal ? "该单位不是内部课题单位" : "该单位不是外部课题单位");
+        return existing.getId();
+    }
+
+    private UnitEntity createAccountUnit(String name, RoleEntity role) {
         UnitEntity unit = new UnitEntity();
         unit.setCode("UNIT-" + UUID.randomUUID().toString().replace("-", "").substring(0, 20).toUpperCase(Locale.ROOT));
         unit.setName(name);
@@ -257,7 +281,7 @@ public class SystemService {
         } catch (DuplicateKeyException ex) {
             throw BusinessException.conflict("UNIT_NAME_EXISTS", "该单位名称已经存在");
         }
-        return unit.getId();
+        return unit;
     }
 
     private long parseId(String value, String field) {

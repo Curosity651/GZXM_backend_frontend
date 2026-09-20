@@ -40,22 +40,26 @@ public class BootstrapInitializer implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         if (!properties.bootstrap().enabled()) return;
+        Set<String> existingRoles = roles.selectList(new LambdaQueryWrapper<RoleEntity>()).stream()
+                .map(RoleEntity::getCode).collect(java.util.stream.Collectors.toSet());
         Map<String, PermissionEntity> permissionMap = seedPermissions();
         Map<String, RoleEntity> roleMap = seedRoles();
-        assign(roleMap.get("SYSTEM_ADMIN"), permissionMap.keySet(), permissionMap);
-        assign(roleMap.get("PROJECT_TECH_LEADER"), Set.of(
+        assignNewRole(existingRoles, "SYSTEM_ADMIN", roleMap.get("SYSTEM_ADMIN"), permissionMap.keySet(), permissionMap);
+        assignNewRole(existingRoles, "PROJECT_TECH_LEADER", roleMap.get("PROJECT_TECH_LEADER"), Set.of(
                 "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "page:self-funded-archive", "page:archive-monitoring", "topic.manage", "indicator.manage", "topic-indicator.publish",
-                "achievement.final.approve", "report.final.approve", "file.download"), permissionMap);
-        assign(roleMap.get("RESEARCH_ASSISTANT"), Set.of(
+                "achievement.final.approve", "report.final.approve", "archive.topic.submit", "self-funded.manage",
+                "file.upload", "file.download"), permissionMap);
+        assignNewRole(existingRoles, "RESEARCH_ASSISTANT", roleMap.get("RESEARCH_ASSISTANT"), Set.of(
                 "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "page:self-funded-archive", "page:archive-monitoring", "topic.manage", "indicator.manage", "topic-indicator.publish",
-                "achievement.initial.approve", "report.initial.approve", "report.rule.manage", "file.download"), permissionMap);
-        assign(roleMap.get("INTERNAL_TOPIC_UNIT"), Set.of(
+                "achievement.initial.approve", "report.initial.approve", "report.rule.manage", "archive.topic.submit",
+                "self-funded.manage", "file.upload", "file.download"), permissionMap);
+        assignNewRole(existingRoles, "INTERNAL_TOPIC_UNIT", roleMap.get("INTERNAL_TOPIC_UNIT"), Set.of(
                 "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "page:self-funded-archive", "topic-unit.manage", "unit-allocation.manage", "unit-allocation.publish",
                 "achievement.submit", "report.submit", "archive.topic.submit", "self-funded.manage", "file.upload", "file.download"), permissionMap);
-        assign(roleMap.get("EXTERNAL_TOPIC_UNIT"), Set.of(
+        assignNewRole(existingRoles, "EXTERNAL_TOPIC_UNIT", roleMap.get("EXTERNAL_TOPIC_UNIT"), Set.of(
                 "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "topic-unit.manage", "unit-allocation.manage", "unit-allocation.publish", "achievement.submit", "report.submit",
                 "archive.topic.submit", "file.upload", "file.download"), permissionMap);
@@ -139,6 +143,11 @@ public class BootstrapInitializer implements ApplicationRunner {
         relations.deleteRolePermissions(role.getId());
         List<Long> ids = codes.stream().map(permissionMap::get).filter(Objects::nonNull).map(PermissionEntity::getId).toList();
         if (!ids.isEmpty()) relations.insertRolePermissions(role.getId(), ids);
+    }
+
+    private void assignNewRole(Set<String> existingRoles, String code, RoleEntity role, Set<String> permissions,
+                               Map<String, PermissionEntity> permissionMap) {
+        if (!existingRoles.contains(code)) assign(role, permissions, permissionMap);
     }
 
     private void page(Map<String, PermissionSeed> seeds, String code, String name, String group, boolean locked) {

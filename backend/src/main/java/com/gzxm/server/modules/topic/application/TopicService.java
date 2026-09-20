@@ -18,13 +18,13 @@ public class TopicService {
     private static final Set<String> STATUSES = Set.of("DRAFT", "ACTIVE", "PAUSED", "CLOSED");
     private final TopicMapper topics;
     private final TopicMembershipMapper members;
+    private final TopicUserAssignmentMapper assignments;
     private final TopicUnitDirectory units;
     private final SecurityContextFacade security;
-    private final TopicAccessService access;
 
-    public TopicService(TopicMapper topics, TopicMembershipMapper members, TopicUnitDirectory units,
-                        SecurityContextFacade security, TopicAccessService access) {
-        this.topics = topics; this.members = members; this.units = units; this.security = security; this.access = access;
+    public TopicService(TopicMapper topics, TopicMembershipMapper members, TopicUserAssignmentMapper assignments, TopicUnitDirectory units,
+                        SecurityContextFacade security) {
+        this.topics = topics; this.members = members; this.assignments = assignments; this.units = units; this.security = security;
     }
 
     @Transactional(readOnly = true)
@@ -33,20 +33,20 @@ public class TopicService {
         if (page < 1 || size < 1 || size > 200 || page - 1 > Long.MAX_VALUE / size)
             throw BusinessException.validation("INVALID_PAGINATION", "page必须大于等于1，size必须在1到200之间");
         if (status != null) validateStatus(status);
-        Long unitId = user.isGlobalRole() ? null : user.unitId();
+        Long userId = user.isGlobalRole() ? null : user.id();
         String query = keyword == null || keyword.isBlank() ? null : keyword.trim();
         var directory = units.snapshot();
-        return PageResult.of(topics.search(unitId, query, status, enabled, size, (page - 1) * size)
+        return PageResult.of(topics.search(userId, query, status, enabled, size, (page - 1) * size)
                 .stream().map(topic -> view(topic, directory)).toList(), page, size,
-                topics.count(unitId, query, status, enabled));
+                topics.count(userId, query, status, enabled));
     }
 
     @Transactional(readOnly = true)
     public long countBusinessTopics() {
         CurrentUser user = reader();
-        Long unitId = user.isGlobalRole() ? null : user.unitId();
+        Long userId = user.isGlobalRole() ? null : user.id();
         return STATUSES.stream().filter(status -> !"DRAFT".equals(status))
-                .mapToLong(status -> topics.count(unitId, null, status, true)).sum();
+                .mapToLong(status -> topics.count(userId, null, status, true)).sum();
     }
 
     @Transactional(readOnly = true)
@@ -83,6 +83,7 @@ public class TopicService {
             topics.insert(topic);
             insertMember(topic.getId(), leadId, "LEAD", user.id());
             for (long unit : participants) insertMember(topic.getId(), unit, "PARTICIPANT", user.id());
+            syncAssignments(topic.getId(), request.memberUserIds(), user.id());
         } catch (DuplicateKeyException ex) {
             throw BusinessException.conflict("TOPIC_UNIQUE_CONFLICT", "课题编号或成员关系重复");
         }
@@ -117,6 +118,7 @@ public class TopicService {
             for (long unitId : participants) {
                 if (members.findUnit(topicId, unitId) == null) insertMember(topicId, unitId, "PARTICIPANT", user.id());
             }
+            syncAssignments(topicId, request.memberUserIds(), user.id());
             apply(request, topic, user);
             persist(topic);
         } catch (DuplicateKeyException ex) {
@@ -131,6 +133,7 @@ public class TopicService {
         if (request.enabled() == null) throw BusinessException.validation("VALIDATION_FAILED", "enabled不能为空");
         if (request.status() != null) validateStatus(request.status());
         TopicEntity topic = requireTopic(topicId, true);
+        if ("ACTIVE".equals(request.status())) requireCompleteAssignments(topicId);
         // Status administration remains available to restore a read-only topic.
         topic.setEnabled(request.enabled());
         if (request.status() != null) topic.setStatus(request.status());
@@ -152,6 +155,7 @@ public class TopicService {
             throw BusinessException.conflict("TOPIC_MEMBER_CONFLICT", "该单位已存在成员关系，停用关系请使用启用接口恢复");
         try {
             var member = insertMember(topicId, unitId, "PARTICIPANT", user.id());
+            syncMemberAssignments(member, request.userIds(), user.id());
             topic.setUpdatedBy(user.id()); persist(topic);
             return view(member, directory);
         } catch (DuplicateKeyException ex) {
@@ -173,6 +177,7 @@ public class TopicService {
         requireEligibleTopicUnit(user.unitId(), directory);
         if (request.enabled()) requireEligibleTopicUnit(member.getUnitId(), directory);
         member.setEnabled(request.enabled()); member.setUpdatedBy(user.id()); members.update(member);
+        if (!request.enabled()) assignments.disableAll(member.getId(), user.id());
         topic.setUpdatedBy(user.id()); persist(topic);
         return view(member, directory);
     }
@@ -197,6 +202,36 @@ public class TopicService {
         member.setEnabled(true); member.setCreatedBy(actor); member.setUpdatedBy(actor);
         members.insert(member);
         return member;
+    }
+
+    private void syncAssignments(long topicId, Map<String, List<String>> requested, long actor) {
+        Map<String, List<String>> values = requested == null ? Map.of() : requested;
+        for (var member : members.list(topicId)) {
+            assignments.disableAll(member.getId(), actor);
+            if (!member.isEnabled()) continue;
+            var unique = new LinkedHashSet<>(values.getOrDefault(Long.toString(member.getUnitId()), List.of()));
+            for (String value : unique) {
+                long userId = id(value);
+                if (assignments.eligible(userId, member.getUnitId()) != 1)
+                    throw BusinessException.validation("TOPIC_USER_UNIT_MISMATCH", "课题人员必须是所选单位的启用课题单位账号");
+                assignments.enable(member.getId(), userId, actor);
+            }
+        }
+    }
+
+    private void syncMemberAssignments(TopicMembershipEntity member, List<String> values, long actor) {
+        assignments.disableAll(member.getId(), actor);
+        for (String value : new LinkedHashSet<>(values == null ? List.of() : values)) {
+            long userId = id(value);
+            if (assignments.eligible(userId, member.getUnitId()) != 1)
+                throw BusinessException.validation("TOPIC_USER_UNIT_MISMATCH", "课题人员必须是所选单位的启用课题单位账号");
+            assignments.enable(member.getId(), userId, actor);
+        }
+    }
+
+    private void requireCompleteAssignments(long topicId) {
+        for (var member : members.list(topicId)) if (member.isEnabled() && assignments.activeUserIds(member.getId()).isEmpty())
+            throw BusinessException.validation("TOPIC_USER_REQUIRED", "每个牵头单位和承担单位至少需要配置一名承担人员");
     }
 
     private void persist(TopicEntity topic) {
@@ -232,27 +267,24 @@ public class TopicService {
         CurrentUser user = reader();
         if (topics.find(topicId) == null) return false;
         if (user.isGlobalRole()) return true;
-        if (user.memberships().stream().noneMatch(member -> member.topicId() == topicId && member.enabled())) return false;
         var member = members.findUnit(topicId, user.unitId());
-        return member != null && member.isEnabled();
+        return member != null && member.isEnabled() && assignments.assigned(member.getId(), user.id()) == 1;
     }
 
     private void requireReadable(long topicId) {
         positive(topicId);
         CurrentUser user = reader();
-        access.requireMember(topicId);
         if (!user.isGlobalRole()) {
             var member = members.findUnit(topicId, user.unitId());
-            if (member == null || !member.isEnabled())
+            if (member == null || !member.isEnabled() || assignments.assigned(member.getId(), user.id()) != 1)
                 throw BusinessException.forbidden("TOPIC_SCOPE_DENIED", "当前单位不属于该课题的有效成员");
         }
     }
 
     private void requireLead(TopicEntity topic, CurrentUser user) {
-        access.requireLead(topic.getId());
         var member = members.findUnit(topic.getId(), user.unitId());
         if (member == null || !member.isEnabled() || !"LEAD".equals(member.getMembershipType())
-                || !Objects.equals(topic.getLeadUnitId(), user.unitId()))
+                || !Objects.equals(topic.getLeadUnitId(), user.unitId()) || assignments.assigned(member.getId(), user.id()) != 1)
             throw BusinessException.forbidden("TOPIC_LEAD_REQUIRED", "当前单位不是该课题的有效牵头单位");
         requireWritable(topic);
     }
@@ -336,6 +368,7 @@ public class TopicService {
     private MembershipView view(TopicMembershipEntity member, Map<Long, UnitView> directory) {
         var unit = directory.get(member.getUnitId());
         return new MembershipView(member.getId().toString(), member.getTopicId().toString(), member.getUnitId().toString(),
-                unit == null ? null : unit.name(), member.getMembershipType(), member.isEnabled());
+                unit == null ? null : unit.name(), member.getMembershipType(), member.isEnabled(),
+                assignments.activeUserIds(member.getId()).stream().map(String::valueOf).toList());
     }
 }

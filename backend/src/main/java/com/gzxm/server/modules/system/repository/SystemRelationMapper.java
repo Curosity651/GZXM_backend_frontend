@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -40,10 +41,21 @@ public interface SystemRelationMapper {
     @Select("""
             SELECT m.id, m.topic_id AS topicId, m.unit_id AS unitId,
                    m.membership_type AS membershipType, m.enabled
-            FROM biz_topic_unit_membership m
-            WHERE m.unit_id=#{unitId} AND m.enabled=1
+            FROM biz_topic_user_assignment a
+            JOIN biz_topic_unit_membership m ON m.id=a.membership_id AND m.enabled=1
+            WHERE a.user_id=#{userId} AND a.enabled=1
             """)
-    List<CurrentUser.TopicMembership> findMemberships(long unitId);
+    List<CurrentUser.TopicMembership> findMemberships(long userId);
+
+    @Select("SELECT COUNT(*) FROM biz_topic_user_assignment WHERE user_id=#{userId} AND enabled=1")
+    int activeTopicAssignmentCount(long userId);
+
+    @Update("""
+            UPDATE sys_user u JOIN sys_user_role ur ON ur.user_id=u.id
+            SET u.token_version=u.token_version+1,u.updated_at=NOW(3)
+            WHERE ur.role_id=#{roleId} AND u.deleted_at IS NULL
+            """)
+    int invalidateRoleUsers(long roleId);
 
     @Delete("DELETE FROM sys_role_permission WHERE role_id=#{roleId}")
     int deleteRolePermissions(long roleId);

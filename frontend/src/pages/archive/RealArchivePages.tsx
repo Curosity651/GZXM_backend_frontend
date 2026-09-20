@@ -21,7 +21,7 @@ function fileExtension(name: string) {
   return name.includes('.') ? name.split('.').pop()?.toUpperCase() ?? '文件' : '文件';
 }
 
-function RealFolderFileList({ folder, editable, onChanged }: { folder: ApiArchiveFolder; editable: boolean; onChanged: () => void }) {
+function RealFolderFileList({ folder, editable, canUpload, canDownload, onChanged }: { folder: ApiArchiveFolder; editable: boolean; canUpload: boolean; canDownload: boolean; onChanged: () => void }) {
   const [files, setFiles] = useState<ApiFile[]>([]);
   const [selectedFileIds, setSelectedFileIds] = useState<Key[]>([]);
   const [busy, setBusy] = useState(false);
@@ -59,8 +59,8 @@ function RealFolderFileList({ folder, editable, onChanged }: { folder: ApiArchiv
         title={<Space wrap><b>材料提交提示</b><Tag color={folder.required ? 'red' : 'gold'}>{folder.required ? '必存' : '有则必存'}</Tag></Space>}
         description={folder.required ? `“${folder.name}”为必须归档保存的材料，请至少上传 ${folder.requiredQuantity} 份文件。` : `“${folder.name}”如在项目执行过程中形成，则必须上传归档；未形成时无需提交。`} /></div>
       <Space className="archive-file-actions">
-        <Upload disabled={!editable || busy} showUploadList={false} beforeUpload={(file) => { void upload(file); return false; }}>
-          <Button type="primary" disabled={!editable || busy} loading={busy} icon={<UploadOutlined />}>上传文件</Button>
+        <Upload disabled={!editable || !canUpload || busy} showUploadList={false} beforeUpload={(file) => { void upload(file); return false; }}>
+          <Button type="primary" disabled={!editable || !canUpload || busy} loading={busy} icon={<UploadOutlined />}>上传文件</Button>
         </Upload>
         <Button danger disabled={!editable || !selectedFileIds.length} icon={<DeleteOutlined />} onClick={() => confirmRemove(selectedFileIds)}>批量删除</Button>
       </Space>
@@ -75,8 +75,8 @@ function RealFolderFileList({ folder, editable, onChanged }: { folder: ApiArchiv
         { title: '上传人', dataIndex: 'uploaderId', width: 140 },
         { title: '上传时间', dataIndex: 'createdAt', width: 190 },
         { title: '操作', width: 220, render: (_, file) => <Space size={0}>
-          <Button type="link" size="small" disabled={!canPreviewFile(file.contentType)} icon={<EyeOutlined />} onClick={() => void fileApi.download(file, true)}>查看</Button>
-          <Button type="link" size="small" icon={<DownloadOutlined />} onClick={() => void fileApi.download(file)}>下载</Button>
+          <Button type="link" size="small" disabled={!canDownload || !canPreviewFile(file.contentType)} icon={<EyeOutlined />} onClick={() => void fileApi.download(file, true)}>查看</Button>
+          <Button type="link" size="small" disabled={!canDownload} icon={<DownloadOutlined />} onClick={() => void fileApi.download(file)}>下载</Button>
           {editable && <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => confirmRemove([file.id])}>删除</Button>}
         </Space> },
       ]} />
@@ -120,7 +120,8 @@ export function RealNationalArchivePage() {
   const selectedTopicDirectories = directories.filter((item) => item.topicId === selectedTopicId && (!unitFilter || item.unitId === unitFilter));
   const topicOperational = selectedTopic?.enabled && selectedTopic.status === 'ACTIVE';
   const canSubmitSelectedUnit = Boolean(user && selectedDirectory && topicOperational && user.unitId === selectedDirectory.unitId && user.actionPermissions.includes('archive.topic.submit'));
-  const canManageSelectedUnit = Boolean(user && selectedDirectory && topicOperational && (GLOBAL_ROLES.has(user.roleCode) || canSubmitSelectedUnit));
+  const canManageSelectedUnit = Boolean(user && selectedDirectory && topicOperational && user.actionPermissions.includes('archive.topic.submit')
+    && (GLOBAL_ROLES.has(user.roleCode) || canSubmitSelectedUnit));
   const submitFolder = async () => {
     if (!selectedDirectory || !canManageSelectedUnit) return;
     try {
@@ -189,7 +190,7 @@ export function RealNationalArchivePage() {
       </Col>)}{!folders.length && <Col span={24}><Empty description="当前单位暂无材料文件夹" /></Col>}</Row>
     </Drawer>
     <Drawer width="78%" title={selectedFolder && selectedDirectory ? `${selectedDirectory.unitName} · ${selectedFolder.name} · 文件管理` : ''} open={Boolean(selectedFolder)} onClose={() => setSelectedFolder(undefined)}>
-      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedUnit} onChanged={() => selectedDirectory && refreshFolders(selectedDirectory)} />}
+      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedUnit} canUpload={Boolean(user?.actionPermissions.includes('file.upload'))} canDownload={Boolean(user?.actionPermissions.includes('file.download'))} onChanged={() => selectedDirectory && refreshFolders(selectedDirectory)} />}
     </Drawer>
     <Modal title="新增自定义材料文件夹" open={addFolderOpen} onCancel={() => { setAddFolderOpen(false); folderForm.resetFields(); }} onOk={() => void submitFolder()} okText="创建" cancelText="取消">
       <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
@@ -245,9 +246,10 @@ export function RealSelfFundedPage() {
   const editable = Boolean(user?.roleCode === 'INTERNAL_TOPIC_UNIT' && user.actionPermissions.includes('self-funded.manage'));
   const selectedProjectTopic = topics.find((topic) => topic.id === selected?.topicId);
   const selectedProjectOperational = Boolean(selectedProjectTopic?.enabled && selectedProjectTopic.status === 'ACTIVE');
-  const canManageSelectedProject = Boolean(user && selected && selectedProjectOperational
+  const canManageSelectedProject = Boolean(user && selected && selectedProjectOperational && user.actionPermissions.includes('self-funded.manage')
     && (GLOBAL_ROLES.has(user.roleCode) || editable && user.unitId === selected.ownerUnitId));
-  const editableTopics = topics.filter((topic) => topic.enabled && topic.status === 'ACTIVE' && user?.memberships.some((member) => member.topicId === topic.id && member.enabled));
+  const editableTopics = topics.filter((topic) => user && topic.enabled && topic.status === 'ACTIVE'
+    && topic.members.some((member) => member.enabled && member.userIds?.includes(user.id)));
   const filteredProjects = projects.filter((project) => (!topicFilter || project.topicId === topicFilter) && (!unitFilter || project.ownerUnitId === unitFilter));
   const unitNames = new Map(directories.map((item) => [item.unitId, item.unitName]));
   const unitOptions = [...new Set(projects.map((item) => item.ownerUnitId))].map((unitId) => ({ value: unitId, label: unitNames.get(unitId) ?? unitId }));
@@ -308,7 +310,7 @@ export function RealSelfFundedPage() {
         </div></Space>{folder.canDelete && <Button type="text" danger size="small" className="archive-folder-delete" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); removeFolder(folder); }} />}</Card></Col>)}{!folders.length && <Col span={24}><Empty description="当前项目暂无材料文件夹" /></Col>}</Row>
     </Drawer>
     <Drawer width="78%" title={selectedFolder ? `${selectedFolder.name} · 文件管理` : ''} open={Boolean(selectedFolder)} onClose={() => setSelectedFolder(undefined)}>
-      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedProject} onChanged={() => selected && refreshProjectFolders(selected)} />}
+      {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedProject} canUpload={Boolean(user?.actionPermissions.includes('file.upload'))} canDownload={Boolean(user?.actionPermissions.includes('file.download'))} onChanged={() => selected && refreshProjectFolders(selected)} />}
     </Drawer>
     <Modal title="新增自定义材料文件夹" open={addFolderOpen} onCancel={() => { setAddFolderOpen(false); folderForm.resetFields(); }} onOk={() => void submitFolder()} okText="创建" cancelText="取消">
       <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>

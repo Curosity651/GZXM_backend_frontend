@@ -11,7 +11,7 @@ import java.util.List;
 public final class SystemDtos {
     private SystemDtos() {}
 
-    public record UserView(String id, String username, String name, String unitId,
+    public record UserView(String id, String username, String name, String unitId, String unitName,
                            String roleId, String roleName, String phone, String email,
                            boolean enabled, LocalDateTime createdAt) {}
 
@@ -19,11 +19,13 @@ public final class SystemDtos {
                                     @NotBlank String roleId,
                                     @NotBlank String name, String phone,
                                     @Email String email, Boolean enabled,
+                                    String unitId, String unitName,
                                     @NotBlank @Size(min = 8, max = 72) String password) {}
 
     public record CreateUserResponse(UserView user) {}
 
-    public record UpdateUserRequest(String username, String roleId, String name, String phone, @Email String email) {}
+    public record UpdateUserRequest(String username, String roleId, String name, String phone, @Email String email,
+                                    String unitId, String unitName) {}
     public record StatusRequest(boolean enabled) {}
     public record PasswordChangeRequest(@NotBlank @Size(min = 8, max = 72) String password) {}
 
@@ -40,4 +42,6 @@ public final class SystemDtos {
 
     public record UnitView(String id, String code, String name, boolean internal, boolean enabled,
                            boolean topicUnitEligible) {}
+    public record TopicUserView(String id, String username, String name, String unitId, String unitName,
+                                boolean enabled) {}
 }

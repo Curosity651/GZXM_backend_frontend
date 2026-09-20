@@ -3,7 +3,7 @@ import { educationLevelOptions } from '../../utils/helpers';
 
 const { Option } = Select;
 
-export function TalentFields() {
+export function TalentFields({ formalStage = false }: { formalStage?: boolean }) {
   return (
     <Row gutter={16}>
       <Col span={12}>
@@ -46,7 +46,7 @@ export function TalentFields() {
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="实际毕业时间" name="actualGraduationDate">
+        <Form.Item label="实际毕业时间" name="actualGraduationDate" rules={formalStage ? [{ required: true, message: '请选择实际毕业时间' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>

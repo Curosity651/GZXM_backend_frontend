@@ -11,18 +11,14 @@ import { AchievementForm } from '../../components/achievement/AchievementForm';
 import { ApiAchievementDetail } from '../../components/achievement/ApiAchievementDetail';
 import { formalMaterialRequirements, supplementMaterialRequirements } from '../../domain/achievement-materials';
 import { classifyUnitProgress } from '../../domain/achievement-progress';
+import { achievementPhaseLabel, achievementPhaseOptions, matchesAchievementPhase } from '../../domain/achievement-status';
 import type { Achievement, AchievementType } from '../../types';
 
 const { Text } = Typography;
 const typeNames: Record<ApiAchievement['achievementType'], AchievementType> = { PAPER: '学术论文', PATENT: '发明专利', COPYRIGHT: '软件著作权', STANDARD: '标准规范', TALENT: '人才培养' };
-const statusNames: Record<string, string> = {
-  DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回', PRE_APPROVED: '允许投稿/申请',
-  EXTERNAL_SUBMITTED: '已投稿/已申请', FORMAL_DRAFT: '正式成果草稿', FORMAL_INITIAL: '正式初审中', FORMAL_FINAL: '正式终审中', FORMAL_RETURNED: '正式退回',
-  WAIT_PUBLICATION: '待见刊补充', WAIT_GRANT: '待授权补充', SUPPLEMENT_INITIAL: '补充初审中', SUPPLEMENT_FINAL: '补充终审中', SUPPLEMENT_RETURNED: '补充退回', EFFECTIVE: '已生效',
-};
 const statusColor = (status: string) => status === 'EFFECTIVE' ? 'green' : status.includes('RETURNED') ? 'red' : status.includes('INITIAL') || status.includes('FINAL') ? 'processing' : 'default';
-const editableStatuses = new Set(['DRAFT', 'PRE_RETURNED', 'FORMAL_DRAFT', 'FORMAL_RETURNED', 'WAIT_PUBLICATION', 'WAIT_GRANT', 'SUPPLEMENT_RETURNED']);
-const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'firstSigningUnit', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'intendedJournal', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstApplicant', 'inventorList', 'applicationNumber', 'receiptNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'legalStatus', 'technicalField', 'applicationCountry', 'ownershipDescription', 'isPowerGridFirstApplicant', 'shortName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'firstCompleter', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'certificateDate', 'firstPublicationDate', 'developmentMode', 'rightsScope', 'softwareCategory', 'operatingPlatform', 'developmentLanguage', 'technicalFeatures', 'isPowerGridFirstCompleter', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
+const editableStatuses = new Set(['DRAFT', 'PRE_RETURNED', 'FORMAL_DRAFT', 'FORMAL_RETURNED', 'WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED']);
+const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'firstSigningUnit', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'intendedJournal', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstApplicant', 'inventorList', 'applicationNumber', 'receiptNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'legalStatus', 'technicalField', 'applicationCountry', 'ownershipDescription', 'isPowerGridFirstApplicant', 'copyrightStatus', 'shortName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'firstCompleter', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'certificateDate', 'firstPublicationDate', 'developmentMode', 'rightsScope', 'softwareCategory', 'operatingPlatform', 'developmentLanguage', 'technicalFeatures', 'isPowerGridFirstCompleter', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
 
 interface FormValues extends Record<string, unknown> {
   unitIndicatorAllocationId: string; topicId: string; unitId: string; nodeId: string;
@@ -75,8 +71,6 @@ export function AchievementEntryPage() {
   const [editing, setEditing] = useState<ApiAchievement>();
   const [formOpen, setFormOpen] = useState(false);
   const [detail, setDetail] = useState<ApiAchievement>();
-  const [external, setExternal] = useState<ApiAchievement>();
-  const [externalForm] = Form.useForm<{ externalSubmissionDate: string; externalSubmissionNumber: string }>();
   const [decision, setDecision] = useState<'APPROVE' | 'RETURN'>();
   const [opinion, setOpinion] = useState('');
   const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
@@ -87,7 +81,8 @@ export function AchievementEntryPage() {
   const canInitial = user.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('achievement.initial.approve');
   const canFinal = user.roleCode === 'PROJECT_TECH_LEADER' && user.actionPermissions.includes('achievement.final.approve');
   const canViewMultipleUnits = ['SYSTEM_ADMIN', 'RESEARCH_ASSISTANT', 'PROJECT_TECH_LEADER'].includes(user.roleCode)
-    || user.memberships.some((membership) => membership.enabled && membership.membershipType === 'LEAD');
+    || topics.some((topic) => topic.members.some((membership) => membership.enabled
+      && membership.membershipType === 'LEAD' && membership.userIds?.includes(user.id)));
 
   const loadBase = useCallback(async () => {
     const [topicPage, unitRows, nodeRows, definitionRows] = await Promise.all([
@@ -106,11 +101,11 @@ export function AchievementEntryPage() {
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
-      const page = await achievementApi.list({ topicId: filters.topicId, status: filters.status, indicatorDefinitionId: filters.indicatorDefinitionId, pendingForMe: filters.pendingForMe || undefined });
+      const page = await achievementApi.list({ topicId: filters.topicId, indicatorDefinitionId: filters.indicatorDefinitionId, pendingForMe: filters.pendingForMe || undefined });
       setRows(page.items);
     } catch (error) { message.error(error instanceof Error ? error.message : '成果数据加载失败'); }
     finally { setLoading(false); }
-  }, [filters.indicatorDefinitionId, filters.pendingForMe, filters.status, filters.topicId]);
+  }, [filters.indicatorDefinitionId, filters.pendingForMe, filters.topicId]);
   const loadProgress = useCallback(async () => {
     if (!progressFilters.nodeId) return;
     setProgressLoading(true);
@@ -128,7 +123,10 @@ export function AchievementEntryPage() {
   const visibleUnitOptions = units.filter((unit) => rows.some((row) => row.unitId === unit.id));
   const selectedAllocation = allocations.find((item) => item.id === allocationId);
   const selectedType = editing?.achievementType ?? (selectedAllocation ? definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.achievementType as ApiAchievement['achievementType'] : undefined);
-  const visibleRows = rows.filter((item) => (!filters.keyword || item.title.toLowerCase().includes(filters.keyword.toLowerCase()))
+  const workflowStage: 'PRE' | 'FORMAL' | 'SUPPLEMENT' = editing && ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(editing.status) ? 'FORMAL'
+    : editing && ['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED'].includes(editing.status) ? 'SUPPLEMENT' : 'PRE';
+  const visibleRows = rows.filter((item) => matchesAchievementPhase(item.status, filters.status)
+    && (!filters.keyword || item.title.toLowerCase().includes(filters.keyword.toLowerCase()))
     && (!filters.unitId || item.unitId === filters.unitId));
   const topicProgress = useMemo<TopicProgressSummary[]>(() => {
     if (!progress) return [];
@@ -179,7 +177,6 @@ export function AchievementEntryPage() {
       missing: all.filter((unit) => unit.stages.submitted === 0).length,
     };
   }, [topicProgress]);
-
   const renderIndicatorProgress = (details: TopicProgressSummary['details']) => <Table size="small"
     rowKey={(row) => `${row.scope}-${row.unitId ?? ''}-${row.indicatorDefinitionId}-${row.special}`}
     dataSource={details} pagination={false} columns={[
@@ -225,7 +222,7 @@ export function AchievementEntryPage() {
     setEditing(undefined); setPendingFiles({}); form.resetFields();
     form.setFieldsValue({
       unitId: user.unitId,
-      responsiblePerson: user.username,
+      responsiblePerson: user.contactName || user.username,
       projectLabeling: `${import.meta.env.VITE_PROJECT_NAME ?? '国家科技重大专项示范'}（${import.meta.env.VITE_PROJECT_CODE ?? 'GZ-2025-001'}）`,
     });
     setFormOpen(true);
@@ -242,7 +239,7 @@ export function AchievementEntryPage() {
     if (!editing || !selectedType) return [];
     const chinese = typeNames[selectedType];
     if (['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(editing.status)) return formalMaterialRequirements(chinese);
-    if (['WAIT_PUBLICATION', 'WAIT_GRANT', 'SUPPLEMENT_RETURNED'].includes(editing.status)) return supplementMaterialRequirements({ achievementType: chinese, paperType: String(editing.detail.paperType ?? '') as Achievement['paperType'], isChineseCoreJournal: Boolean(editing.detail.isChineseCoreJournal) });
+    if (['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED'].includes(editing.status)) return supplementMaterialRequirements({ achievementType: chinese, paperType: String(editing.detail.paperType ?? '') as Achievement['paperType'], isChineseCoreJournal: Boolean(editing.detail.isChineseCoreJournal) });
     return [];
   }, [editing, selectedType]);
 
@@ -263,7 +260,7 @@ export function AchievementEntryPage() {
     } catch (error) { message.error(error instanceof Error ? error.message : '保存失败'); }
   };
   const act = async (row: ApiAchievement, action: string, extra: { externalSubmissionDate?: string; externalSubmissionNumber?: string } = {}) => {
-    try { await achievementApi.action(row.id, { action, recordVersion: row.recordVersion, ...extra }); message.success('流程状态已更新'); setExternal(undefined); await loadRows(); }
+    try { await achievementApi.action(row.id, { action, recordVersion: row.recordVersion, ...extra }); message.success('流程状态已更新'); await loadRows(); }
     catch (error) { message.error(error instanceof Error ? error.message : '操作失败'); }
   };
   const reviewable = (row: ApiAchievement) => canInitial && row.status.endsWith('_INITIAL') || canFinal && row.status.endsWith('_FINAL');
@@ -276,13 +273,14 @@ export function AchievementEntryPage() {
 
   const actionButtons = (row: ApiAchievement) => {
     const owner = canSubmit && row.unitId === user.unitId;
-    return <Space wrap><Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>{reviewable(row) ? '审批' : '查看'}</Button>
-      {owner && editableStatuses.has(row.status) && <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(row)}>编辑</Button>}
-      {owner && ['DRAFT', 'PRE_RETURNED'].includes(row.status) && <Button type="link" icon={<SendOutlined />} onClick={() => void act(row, 'SUBMIT_PRE_REVIEW')}>提交预审</Button>}
-      {owner && row.status === 'PRE_APPROVED' && <Button type="link" onClick={() => { setExternal(row); externalForm.resetFields(); }}>登记投稿/申请</Button>}
-      {owner && row.status === 'EXTERNAL_SUBMITTED' && <Button type="link" onClick={() => void act(row, 'START_FORMAL')}>补充正式成果</Button>}
-      {owner && ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(row.status) && <Button type="link" icon={<SendOutlined />} onClick={() => void act(row, 'SUBMIT_FORMAL')}>提交正式审批</Button>}
-      {owner && ['WAIT_PUBLICATION', 'WAIT_GRANT', 'SUPPLEMENT_RETURNED'].includes(row.status) && <Button type="link" icon={<SendOutlined />} onClick={() => void act(row, 'SUBMIT_SUPPLEMENT')}>提交补充审批</Button>}
+    const longActionStyle = { height: 'auto', maxWidth: 136, paddingInline: 8, whiteSpace: 'normal' as const, lineHeight: 1.35 };
+    const editLabel = ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(row.status) ? '补充第二轮材料'
+      : ['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED'].includes(row.status) ? '补充第三轮材料' : '编辑';
+    return <Space size={4} style={{ whiteSpace: 'nowrap' }}><Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>{reviewable(row) ? '审批' : '查看'}</Button>
+      {owner && editableStatuses.has(row.status) && <Button type="link" style={longActionStyle} icon={<EditOutlined />} onClick={() => openEdit(row)}>{editLabel}</Button>}
+      {owner && ['DRAFT', 'PRE_RETURNED'].includes(row.status) && <Button type="link" style={longActionStyle} icon={<SendOutlined />} onClick={() => void act(row, 'SUBMIT_PRE_REVIEW')}>提交第一轮预审</Button>}
+      {owner && ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(row.status) && <Button type="link" style={longActionStyle} icon={<SendOutlined />} onClick={() => void act(row, 'SUBMIT_FORMAL')}>提交第二轮正式审批</Button>}
+      {owner && ['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED'].includes(row.status) && <Button type="link" style={longActionStyle} icon={<SendOutlined />} onClick={() => void act(row, 'SUBMIT_SUPPLEMENT')}>提交第三轮补充审批</Button>}
     </Space>;
   };
 
@@ -330,7 +328,7 @@ export function AchievementEntryPage() {
       <div className={`achievement-filter-grid${filterExpanded ? ' is-expanded' : ''}`}>
         {(canInitial || canFinal) && <Space className="achievement-filter-field" size={8}><Text>处理范围</Text><Select value={filters.pendingForMe} onChange={(value) => setFilters({ ...filters, pendingForMe: value })} options={[{ value: true, label: '待我处理' }, { value: false, label: '全部成果' }]} /></Space>}
         <Space className="achievement-filter-field" size={8}><Text>所属课题</Text><Select allowClear placeholder="全部相关课题" value={filters.topicId || undefined} onChange={(value) => setFilters({ ...filters, topicId: value ?? '' })} options={topics.map((item) => ({ value: item.id, label: `${item.code} ${item.name}` }))} /></Space>
-        <Space className="achievement-filter-field" size={8}><Text>成果状态</Text><Select allowClear placeholder="全部状态" value={filters.status || undefined} onChange={(value) => setFilters({ ...filters, status: value ?? '' })} options={Object.entries(statusNames).map(([value, label]) => ({ value, label }))} /></Space>
+        <Space className="achievement-filter-field" size={8}><Text>成果阶段</Text><Select allowClear placeholder="全部阶段" value={filters.status || undefined} onChange={(value) => setFilters({ ...filters, status: value ?? '' })} options={achievementPhaseOptions} /></Space>
         {filterExpanded && <>
           <Space className="achievement-filter-field" size={8}><Text>成果指标</Text><Select allowClear placeholder="全部指标" value={filters.indicatorDefinitionId || undefined} onChange={(value) => setFilters({ ...filters, indicatorDefinitionId: value ?? '' })} options={definitions.map((item) => ({ value: item.id, label: item.name }))} /></Space>
           {canViewMultipleUnits && <Space className="achievement-filter-field" size={8}><Text>提交单位</Text><Select allowClear placeholder="全部单位" value={filters.unitId || undefined} onChange={(value) => setFilters({ ...filters, unitId: value ?? '' })} options={visibleUnitOptions.map((item) => ({ value: item.id, label: item.name }))} /></Space>}
@@ -348,14 +346,14 @@ export function AchievementEntryPage() {
       pageSizeOptions: [5, 10, 20],
       showTotal: (total) => `共 ${total} 条`,
       onChange: (page, pageSize) => setEntryPagination((current) => ({ current: pageSize !== current.pageSize ? 1 : page, pageSize })),
-    }} scroll={{ x: 1150 }} columns={[
-      { title: '成果名称', dataIndex: 'title', width: 260, fixed: 'left', render: (value, row) => <Space direction="vertical" size={0}><Text strong>{value}</Text><Text type="secondary">{definitionMap[row.indicatorDefinitionId]?.name ?? typeNames[row.achievementType]}</Text></Space> },
+    }} scroll={{ x: 1320 }} columns={[
+      { title: '成果名称', dataIndex: 'title', width: 200, fixed: 'left', render: (value, row) => <Space direction="vertical" size={0}><Text strong>{value}</Text><Text type="secondary">{definitionMap[row.indicatorDefinitionId]?.name ?? typeNames[row.achievementType]}</Text></Space> },
       { title: '课题', width: 180, render: (_, row) => topicMap[row.topicId]?.name ?? row.topicId },
       { title: '提交单位', width: 170, render: (_, row) => unitMap[row.unitId] ?? row.unitId },
       { title: '成果类型', width: 110, render: (_, row) => <Tag color="blue">{typeNames[row.achievementType]}</Tag> },
       { title: '负责人', dataIndex: 'responsiblePerson', width: 110 },
-      { title: '状态', width: 130, render: (_, row) => <Tag color={statusColor(row.status)}>{statusNames[row.status] ?? row.status}</Tag> },
-      { title: '操作', width: 310, fixed: 'right', render: (_, row) => actionButtons(row) },
+      { title: '当前阶段', width: 160, render: (_, row) => <Tag color={statusColor(row.status)}>{achievementPhaseLabel(row.status)}</Tag> },
+      { title: '操作', width: 390, fixed: 'right', render: (_, row) => actionButtons(row) },
     ]} />
     </Card>
 
@@ -364,8 +362,8 @@ export function AchievementEntryPage() {
       <Form form={form} layout="vertical">
       <AchievementForm form={form} topics={topics} units={units} lockOwnership={Boolean(editing)} definitions={definitions}
         project={{ name: import.meta.env.VITE_PROJECT_NAME ?? '国家科技重大专项示范', code: import.meta.env.VITE_PROJECT_CODE ?? 'GZ-2025-001' }}
-        allocations={allocations} nodes={nodes} currentUnitId={editing?.unitId ?? user.unitId} />
-      {materialRequirements.length > 0 && <Card size="small" title="本阶段材料"><Space direction="vertical" style={{ width: '100%' }}>{materialRequirements.map((requirement) => <Row key={requirement.materialType} align="middle" gutter={12}><Col span={7}><b>{requirement.materialType}</b></Col><Col span={9}><Text type="secondary">{requirement.description}</Text></Col><Col span={8}><label className="ant-btn"><UploadOutlined /> {pendingFiles[requirement.materialType]?.name ?? (editing?.materialLinks.some((item) => item.active && item.materialType === requirement.materialType) ? '已上传（点击替换）' : '选择文件')}<input hidden type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) setPendingFiles({ ...pendingFiles, [requirement.materialType]: file }); }} /></label></Col></Row>)}</Space></Card>}
+        allocations={allocations} nodes={nodes} currentUnitId={editing?.unitId ?? user.unitId} workflowStage={workflowStage} />
+      {materialRequirements.length > 0 && <Card size="small" title={editing && ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(editing.status) ? '第二轮正式成果材料' : '第三轮后续补充材料'} extra={<Text type="secondary">带红色 * 的文件为必传材料，将在保存草稿时一并上传</Text>}><Space direction="vertical" style={{ width: '100%' }}>{materialRequirements.map((requirement) => <Row key={requirement.materialType} align="middle" gutter={12}><Col span={7}><Space size={4}>{requirement.required && <Text type="danger">*</Text>}<b>{requirement.materialType}</b></Space></Col><Col span={9}><Text type="secondary">{requirement.description}</Text></Col><Col span={8}><label className="ant-btn"><UploadOutlined /> {pendingFiles[requirement.materialType]?.name ?? (editing?.materialLinks.some((item) => item.active && item.materialType === requirement.materialType) ? '已上传（点击替换）' : '选择文件')}<input hidden type="file" onChange={(event) => { const file = event.target.files?.[0]; if (file) setPendingFiles({ ...pendingFiles, [requirement.materialType]: file }); }} /></label></Col></Row>)}</Space></Card>}
       </Form>
     </Drawer>
 
@@ -374,6 +372,5 @@ export function AchievementEntryPage() {
         <ApiAchievementDetail achievement={detail} topics={topics} units={units} /></>}
     </Drawer>
     <Modal title={decision === 'APPROVE' ? '确认审批通过' : '退回修改'} open={Boolean(decision)} onCancel={() => setDecision(undefined)} onOk={() => void review()}><Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'RETURN' ? '请填写退回原因' : '审批意见（选填）'} /></Modal>
-    <Modal title="登记投稿/申请" open={Boolean(external)} onCancel={() => setExternal(undefined)} onOk={() => void externalForm.validateFields().then((values) => external && act(external, 'REGISTER_EXTERNAL_SUBMISSION', values))}><Form form={externalForm} layout="vertical"><Form.Item name="externalSubmissionDate" label="投稿/申请日期" rules={[{ required: true }]}><Input type="date" /></Form.Item><Form.Item name="externalSubmissionNumber" label="投稿/申请编号"><Input /></Form.Item></Form></Modal>
   </>;
 }

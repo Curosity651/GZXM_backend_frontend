@@ -31,7 +31,7 @@ export function ArchiveMonitoringPage() {
   const nationalRows = rows.filter((row) => row.ownerType === 'TOPIC_NATIONAL' && (!topicId || row.topicId === topicId) && (!unitId || row.unitId === unitId));
   const selfFundedProgress = rows.filter((row) => row.ownerType === 'SELF_FUNDED' && (!topicId || row.topicId === topicId) && (!unitId || row.unitId === unitId));
   const projectRows = projects.filter((project) => (!topicId || project.topicId === topicId) && (!unitId || project.ownerUnitId === unitId)).map((project) => {
-    const progress = selfFundedProgress.find((item) => item.topicId === project.topicId && item.unitId === project.ownerUnitId);
+    const progress = selfFundedProgress.find((item) => item.ownerId === project.id);
     return { ...project, requiredCount: progress?.requiredCount ?? 0, completedCount: progress?.completedCount ?? 0, rate: project.completionRate ?? progress?.completionRate ?? 0 };
   });
   const nationalRequired = nationalRows.reduce((sum, row) => sum + row.requiredCount, 0);

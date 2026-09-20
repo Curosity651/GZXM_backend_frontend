@@ -5,7 +5,7 @@ import jakarta.validation.constraints.*;
 
 public final class AchievementWorkflowDtos {
     private AchievementWorkflowDtos() {}
-    public record ActionRequest(@NotBlank @Pattern(regexp="SUBMIT_PRE_REVIEW|REGISTER_EXTERNAL_SUBMISSION|START_FORMAL|SUBMIT_FORMAL|SUBMIT_SUPPLEMENT") String action,
+    public record ActionRequest(@NotBlank @Pattern(regexp="SUBMIT_PRE_REVIEW|SUBMIT_FORMAL|SUBMIT_SUPPLEMENT") String action,
                                 @NotNull @Positive @JsonDeserialize(using=AchievementIntegerDeserializer.class) Integer recordVersion,
                                 @Pattern(regexp="[0-9]{4}-[0-9]{2}-[0-9]{2}") String externalSubmissionDate,
                                 @Size(max=500) String externalSubmissionNumber) {}

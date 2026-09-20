@@ -61,11 +61,10 @@ public class DefaultTopicQueryService implements TopicQueryService {
         var user=security.requireCurrentUser();
         if(!user.isGlobalRole() && (!(user.isInternalUnit() || user.isExternalUnit()) || user.unitId()==null))
             throw com.gzxm.server.common.exception.BusinessException.forbidden("TOPIC_SCOPE_DENIED","当前账号没有课题数据范围");
-        return mapper.projectTopics(projectId,user.isGlobalRole()?null:user.unitId()).stream()
+        return mapper.projectTopics(projectId,user.isGlobalRole()?null:user.id()).stream()
                 // Disabled topics are soft-deleted/read-only, but their historical progress
                 // must remain visible. Draft topics are configuration work and stay hidden.
                 .filter(row -> !"DRAFT".equals(row.getStatus()))
-                .filter(row->user.isGlobalRole() || user.memberships().stream().anyMatch(member->member.enabled() && member.topicId()==row.getId()))
                 .map(row->new TopicSummary(row.getId(),row.getProjectId(),row.getCode(),row.getName(),row.getLeadUnitId(),row.getStatus(),row.isEnabled())).toList();
     }
 

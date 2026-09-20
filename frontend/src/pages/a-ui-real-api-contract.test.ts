@@ -19,7 +19,9 @@ describe('A branch page design on real API contracts', () => {
     const code = achievementSource;
     expect(code).toContain('achievement-filter-grid');
     expect(code).toContain('成果进度');
-    expect(code).toContain('提交预审');
+    expect(code).toContain('提交第一轮预审');
+    expect(code).toContain('提交第二轮正式审批');
+    expect(code).toContain('提交第三轮补充审批');
     expect(code).toContain('achievementApi.create');
     expect(code).toContain('achievementApi.review');
     expect(code).not.toContain('useAppStore');

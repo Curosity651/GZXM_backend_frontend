@@ -9,9 +9,10 @@ public interface TopicMapper {
     List<Long> configuredProjects();
     String FILTER = """
         <where>
-          <if test="unitId != null">
-            EXISTS (SELECT 1 FROM biz_topic_unit_membership m
-              WHERE m.topic_id=t.id AND m.unit_id=#{unitId} AND m.enabled=1)
+          <if test="userId != null">
+            EXISTS (SELECT 1 FROM biz_topic_user_assignment a
+              JOIN biz_topic_unit_membership m ON m.id=a.membership_id AND m.enabled=1
+              WHERE m.topic_id=t.id AND a.user_id=#{userId} AND a.enabled=1)
           </if>
           <if test="keyword != null">
             AND (t.code LIKE CONCAT('%',#{keyword},'%') OR t.name LIKE CONCAT('%',#{keyword},'%'))
@@ -22,18 +23,18 @@ public interface TopicMapper {
         """;
 
     @Select("<script>SELECT t.* FROM biz_topic t " + FILTER + " ORDER BY t.id DESC LIMIT #{size} OFFSET #{offset}</script>")
-    List<TopicEntity> search(@Param("unitId") Long unitId, @Param("keyword") String keyword,
+    List<TopicEntity> search(@Param("userId") Long userId, @Param("keyword") String keyword,
                              @Param("status") String status, @Param("enabled") Boolean enabled,
                              @Param("size") long size, @Param("offset") long offset);
 
     @Select("<script>SELECT COUNT(*) FROM biz_topic t " + FILTER + "</script>")
-    long count(@Param("unitId") Long unitId, @Param("keyword") String keyword,
+    long count(@Param("userId") Long userId, @Param("keyword") String keyword,
                @Param("status") String status, @Param("enabled") Boolean enabled);
 
     @Select("SELECT * FROM biz_topic WHERE id=#{id}")
     TopicEntity find(long id);
-    @Select("<script>SELECT t.* FROM biz_topic t WHERE t.project_id=#{project} <if test='unit != null'>AND EXISTS(SELECT 1 FROM biz_topic_unit_membership m WHERE m.topic_id=t.id AND m.unit_id=#{unit} AND m.enabled=1)</if> ORDER BY t.id</script>")
-    List<TopicEntity> projectTopics(@Param("project") long project,@Param("unit") Long unit);
+    @Select("<script>SELECT t.* FROM biz_topic t WHERE t.project_id=#{project} <if test='userId != null'>AND EXISTS(SELECT 1 FROM biz_topic_user_assignment a JOIN biz_topic_unit_membership m ON m.id=a.membership_id AND m.enabled=1 WHERE m.topic_id=t.id AND a.user_id=#{userId} AND a.enabled=1)</if> ORDER BY t.id</script>")
+    List<TopicEntity> projectTopics(@Param("project") long project,@Param("userId") Long userId);
     @Select("SELECT * FROM biz_topic WHERE id=#{id} FOR UPDATE")
     TopicEntity lock(long id);
     @Select("SELECT id FROM biz_project WHERE enabled=1 ORDER BY id LIMIT 2 FOR UPDATE")

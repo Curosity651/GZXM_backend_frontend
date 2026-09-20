@@ -13,12 +13,12 @@ const FORMAL_REQUIREMENTS: Record<AchievementType, AchievementMaterialRequiremen
     { materialType: '项目标注页', description: '能看清项目名称或项目编号', required: true },
   ],
   发明专利: [
-    { materialType: '专利授权证书', description: '国家知识产权局颁发的授权证书', required: true },
-    { materialType: '专利授权文件', description: '能够核验授权公告号及授权内容', required: true },
+    { materialType: '专利受理通知书', description: '能够核验专利申请已被受理', required: true },
+    { materialType: '专利申请文件', description: '本次受理对应的完整申请文件', required: true },
     { materialType: '项目关联说明', description: '说明专利与课题的对应关系', required: true },
   ],
   软件著作权: [
-    { materialType: '软件著作权证书', description: '登记机构颁发的证书', required: true },
+    { materialType: '软件著作权登记受理通知书', description: '能够核验登记申请已被受理', required: true },
     { materialType: '软件鉴别材料', description: '源程序及文档鉴别材料', required: true },
     { materialType: '著作权人证明', description: '用于核验著作权归属及排序', required: true },
   ],
@@ -56,6 +56,13 @@ export function supplementMaterialRequirements(achievement: Pick<Achievement, 'a
       { materialType: '授权公告文本', description: '包含授权公告号和专利全文', required: true },
       { materialType: '法律状态证明', description: '可核验当前专利权有效状态', required: true },
       { materialType: '专利权属证明', description: '用于核验专利权人及排序', required: true },
+    ];
+  }
+  if (achievement.achievementType === '软件著作权') {
+    return [
+      { materialType: '软件著作权登记证书', description: '登记机构颁发的软件著作权登记证书', required: true },
+      { materialType: '登记信息证明', description: '用于核验登记号、发证日期和软件信息', required: true },
+      { materialType: '著作权人证明', description: '用于核验著作权归属及排序', required: true },
     ];
   }
   return [];

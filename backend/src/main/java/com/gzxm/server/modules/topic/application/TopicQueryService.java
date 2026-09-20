@@ -13,9 +13,9 @@ public interface TopicQueryService {
     TopicSummary getTopic(long topicId);
     default boolean isBusinessVisibleTopic(long topicId) {
         var topic = getTopic(topicId);
-        return topic.enabled() && !"DRAFT".equals(topic.status());
+        return !"DRAFT".equals(topic.status());
     }
-    /** Request-scoped business topics, excluding drafts, stopped topics and revoked memberships. */
+    /** Request-scoped business topics, excluding drafts and revoked memberships; stopped topics remain readable. */
     List<TopicSummary> listReadableTopics(long projectId);
     List<Member> listMembers(long topicId, boolean includeDisabled);
     /** Identity fact only; consumers must separately authorize their own write actions. */

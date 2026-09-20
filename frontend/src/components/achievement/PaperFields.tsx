@@ -3,13 +3,17 @@ import { paperTypeOptions, PAPER_STATUS_OPTIONS } from '../../utils/helpers';
 
 const { Option } = Select;
 
-export function PaperFields() {
+export function PaperFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' | 'FORMAL' | 'SUPPLEMENT' }) {
+  const statusOptions = workflowStage === 'PRE' ? PAPER_STATUS_OPTIONS.slice(0, 1) : workflowStage === 'FORMAL' ? PAPER_STATUS_OPTIONS.slice(1, 2) : PAPER_STATUS_OPTIONS.slice(2);
   return (
     <Row gutter={16}>
       <Col span={12}>
-        <Form.Item label="论文状态" name="paperStatus" rules={[{ required: true, message: '请选择论文状态' }]}>
+        <Form.Item label="论文状态" name="paperStatus" rules={[
+          { required: true, message: '请选择论文状态' },
+          { validator: (_: unknown, value: string) => !value || statusOptions.includes(value as never) ? Promise.resolve() : Promise.reject(new Error(`当前阶段论文状态应为“${statusOptions[0]}”`)) },
+        ]}>
           <Select placeholder="选择论文状态">
-            {PAPER_STATUS_OPTIONS.map((s) => (
+            {statusOptions.map((s) => (
               <Option key={s} value={s}>{s}</Option>
             ))}
           </Select>
@@ -97,12 +101,12 @@ export function PaperFields() {
       </Col>
       <Col span={12}><Form.Item label="投稿编号" name="externalSubmissionNumber"><Input /></Form.Item></Col>
       <Col span={12}>
-        <Form.Item label="录用时间" name="acceptanceDate">
+        <Form.Item label="录用时间" name="acceptanceDate" rules={workflowStage === 'FORMAL' ? [{ required: true, message: '请选择论文录用时间' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="正式刊出时间" name="publicationDate">
+        <Form.Item label="正式刊出时间" name="publicationDate" rules={workflowStage === 'SUPPLEMENT' ? [{ required: true, message: '请选择论文正式刊出时间' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>

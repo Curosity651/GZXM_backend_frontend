@@ -22,6 +22,6 @@ public final class ArchiveDtos {
                           String projectType, String principalName, LocalDate startDate, LocalDate endDate,
                           BigDecimal budget, String status, int recordVersion, String templateSnapshotId,
                           double completionRate) {}
-    public record Progress(String topicId, String unitId, String ownerType, int requiredCount,
+    public record Progress(String topicId, String unitId, String ownerType, String ownerId, int requiredCount,
                            int completedCount, double completionRate) {}
 }

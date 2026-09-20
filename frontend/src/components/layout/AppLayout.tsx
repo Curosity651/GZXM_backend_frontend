@@ -95,7 +95,7 @@ export function AppLayout() {
               { type: 'divider' },
               { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: () => { void signOut(); } },
             ] }}>
-              <Button type="text"><Space><Avatar size="small" icon={<UserOutlined />} />{user.username}</Space></Button>
+              <Button type="text"><Space><Avatar size="small" icon={<UserOutlined />} />{user.unitName ? `${user.unitName}-${user.contactName}` : user.contactName || user.username}</Space></Button>
             </Dropdown>
           </Space>
         </Header>

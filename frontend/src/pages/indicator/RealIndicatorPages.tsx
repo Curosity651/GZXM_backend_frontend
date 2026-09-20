@@ -4,7 +4,7 @@ import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOu
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { topicApi, type ApiTopic, type TopicMember, type TopicWrite } from '../../api/topic-api';
 import { indicatorApi, type IndicatorDefinition, type IndicatorTarget, type TimeNode } from '../../api/indicator-api';
-import { systemApi, type ApiUnit } from '../../api/system-api';
+import { systemApi, type ApiTopicUser, type ApiUnit } from '../../api/system-api';
 import { useSessionStore } from '../../store/session';
 
 const statusLabel: Record<ApiTopic['status'], string> = { DRAFT: '草稿', ACTIVE: '实施中', PAUSED: '已暂停', CLOSED: '已结题' };
@@ -29,7 +29,8 @@ export function RealIndicatorConfigPage() {
   const canManage = user.roleCode === 'RESEARCH_ASSISTANT' && has(user.actionPermissions, 'topic.manage');
   const canManageNodes = user.roleCode === 'RESEARCH_ASSISTANT' && has(user.actionPermissions, 'indicator.manage');
   const canAllocate = (topic: ApiTopic) => topic.enabled && topic.status === 'ACTIVE' && has(user.actionPermissions, 'unit-allocation.manage')
-    && user.memberships.some((membership) => membership.topicId === topic.id && membership.membershipType === 'LEAD' && membership.enabled);
+    && topic.members.some((membership) => membership.membershipType === 'LEAD' && membership.enabled
+      && membership.userIds?.includes(user.id));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,12 +168,15 @@ export function RealTopicIndicatorConfigPage() {
   const user = useSessionStore((state) => state.user)!;
   const [form] = Form.useForm<TopicFormValues>();
   const selectedLeadUnitId = Form.useWatch('leadUnitId', form);
+  const selectedParticipantUnitIds = Form.useWatch('participantUnitIds', form) ?? [];
   const isNew = topicId === 'new';
   const allocationMode = searchParams.get('mode') === 'allocation';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [topic, setTopic] = useState<ApiTopic | null>(null);
   const [units, setUnits] = useState<ApiUnit[]>([]);
+  const [topicUsers, setTopicUsers] = useState<ApiTopicUser[]>([]);
+  const [memberUserIds, setMemberUserIds] = useState<Record<string, string[]>>({});
   const [nodes, setNodes] = useState<TimeNode[]>([]);
   const [definitions, setDefinitions] = useState<IndicatorDefinition[]>([]);
   const [nodeId, setNodeId] = useState<string>();
@@ -183,7 +187,8 @@ export function RealTopicIndicatorConfigPage() {
   const [allocationDraftVersions, setAllocationDraftVersions] = useState<VersionMap>({});
   const isResearchAssistant = user.roleCode === 'RESEARCH_ASSISTANT';
   const topicEditable = isNew || Boolean(topic?.enabled && (topic.status === 'DRAFT' || topic.status === 'ACTIVE'));
-  const isCurrentTopicLead = Boolean(topic && user.memberships.some((membership) => membership.topicId === topic.id && membership.membershipType === 'LEAD' && membership.enabled));
+  const isCurrentTopicLead = Boolean(topic && topic.members.some((membership) => membership.membershipType === 'LEAD'
+    && membership.enabled && membership.userIds?.includes(user.id)));
   const canManageTopic = isResearchAssistant && has(user.actionPermissions, 'topic.manage') && topicEditable && !allocationMode;
   const canManageTargets = isResearchAssistant && has(user.actionPermissions, 'indicator.manage') && has(user.actionPermissions, 'topic-indicator.publish') && topicEditable && !allocationMode;
   const canManageAllocations = isCurrentTopicLead && has(user.actionPermissions, 'unit-allocation.manage') && has(user.actionPermissions, 'unit-allocation.publish') && allocationMode && topic?.enabled && topic.status === 'ACTIVE';
@@ -192,10 +197,12 @@ export function RealTopicIndicatorConfigPage() {
     void (async () => {
       setLoading(true);
       try {
-        const [unitRows, nodeRows, definitionRows, topicRow] = await Promise.all([
+        const [unitRows, nodeRows, definitionRows, topicRow, topicUserRows] = await Promise.all([
           systemApi.units(), indicatorApi.nodes(), indicatorApi.definitions(), isNew ? Promise.resolve(null) : topicApi.get(topicId!),
+          isResearchAssistant ? systemApi.topicUsers() : Promise.resolve([]),
         ]);
         const activeNodes = nodeRows.filter((node) => node.enabled).sort((a, b) => a.sortOrder - b.sortOrder);
+        setTopicUsers(topicUserRows);
         setUnits(unitRows.filter((unit) => unit.enabled)); setNodes(activeNodes); setDefinitions(definitionRows.filter((item) => item.enabled)); setTopic(topicRow); setNodeId(activeNodes[0]?.id);
         setTargetsByNode(Object.fromEntries(activeNodes.map((node) => [node.id, Object.fromEntries(definitionRows.filter((item) => item.enabled).map((definition) => [definition.id, 0]))])));
         if (topicRow) {
@@ -207,11 +214,14 @@ export function RealTopicIndicatorConfigPage() {
               .map((member) => member.unitId),
             startDate: topicRow.startDate, endDate: topicRow.endDate,
           });
+          setMemberUserIds(Object.fromEntries(topicRow.members.map((member) => [member.unitId, member.userIds ?? []])));
+        } else {
+          setMemberUserIds({});
         }
       } catch (error) { message.error(error instanceof Error ? error.message : '课题配置加载失败'); }
       finally { setLoading(false); }
     })();
-  }, [form, isNew, topicId]);
+  }, [form, isNew, isResearchAssistant, topicId]);
 
   const loadTargets = useCallback(async () => {
     if (!topic || allocationMode || !nodes.length) return;
@@ -264,8 +274,10 @@ export function RealTopicIndicatorConfigPage() {
     let latestTopic = topic;
     try {
       const eligibleUnitIds = new Set(units.filter((unit) => unit.enabled && unit.topicUnitEligible).map((unit) => unit.id));
+      const selectedUnits = [values.leadUnitId, ...(values.participantUnitIds ?? [])];
       const data: TopicWrite = { ...values, participantUnitIds: (values.participantUnitIds ?? [])
-        .filter((unitId) => unitId !== values.leadUnitId && eligibleUnitIds.has(unitId)), recordVersion: topic?.recordVersion };
+        .filter((unitId) => unitId !== values.leadUnitId && eligibleUnitIds.has(unitId)),
+        memberUserIds: Object.fromEntries(selectedUnits.map((unitId) => [unitId, memberUserIds[unitId] ?? []])), recordVersion: topic?.recordVersion };
       const currentParticipants = (topic?.members ?? [])
         .filter((member) => member.enabled && member.membershipType === 'PARTICIPANT'
           && units.some((unit) => unit.id === member.unitId && unit.enabled && unit.topicUnitEligible))
@@ -273,10 +285,16 @@ export function RealTopicIndicatorConfigPage() {
       const hasIneligibleActiveParticipant = (topic?.members ?? []).some((member) => member.enabled
         && member.membershipType === 'PARTICIPANT' && !eligibleUnitIds.has(member.unitId));
       const nextParticipants = [...data.participantUnitIds].sort();
+      const nextMemberUsers = Object.fromEntries(Object.entries(data.memberUserIds ?? {})
+        .map(([unitId, userIds]) => [unitId, [...userIds].sort()]));
+      const currentMemberUsers = Object.fromEntries((topic?.members ?? []).filter((member) => member.enabled)
+        .map((member) => [member.unitId, [...(member.userIds ?? [])].sort()]));
+      const assignmentsChanged = JSON.stringify(Object.entries(currentMemberUsers).sort(([left], [right]) => left.localeCompare(right)))
+        !== JSON.stringify(Object.entries(nextMemberUsers).sort(([left], [right]) => left.localeCompare(right)));
       const topicChanged = !topic || topic.code !== data.code || topic.name !== data.name
         || (topic.summary ?? '') !== (data.summary ?? '') || topic.leadUnitId !== data.leadUnitId
         || (topic.startDate ?? '') !== (data.startDate ?? '') || (topic.endDate ?? '') !== (data.endDate ?? '')
-        || currentParticipants.join(',') !== nextParticipants.join(',') || hasIneligibleActiveParticipant;
+        || currentParticipants.join(',') !== nextParticipants.join(',') || hasIneligibleActiveParticipant || assignmentsChanged;
       const saved = topic ? (topicChanged ? await topicApi.update(topic.id, data) : topic) : await topicApi.create(data);
       latestTopic = saved;
       const versions: VersionMap = {};
@@ -310,10 +328,8 @@ export function RealTopicIndicatorConfigPage() {
       if (!Object.keys(targetMap).length) return `${node.name}的课题指标尚未提交`;
       const stageValues = allocationsByNode[node.id] ?? {};
       for (const definition of definitions) {
-        for (const member of activeMembers) {
-          if (stageValues[`${member.unitId}:${definition.id}`] === undefined)
-            return `${node.name} / ${unitMap[member.unitId] ?? member.unitName} / ${definition.name}尚未填写`;
-        }
+        for (const member of activeMembers) if (stageValues[`${member.unitId}:${definition.id}`] === undefined)
+          return `${node.name} / ${unitMap[member.unitId] ?? member.unitName} / ${definition.name}尚未填写`;
         const sum = activeMembers.reduce((total, member) => total + (stageValues[`${member.unitId}:${definition.id}`] ?? 0), 0);
         if (sum !== (targetMap[definition.id] ?? 0))
           return `${node.name} / ${definition.name}：要求分配 ${targetMap[definition.id] ?? 0}${definition.unit}，当前已分配 ${sum}${definition.unit}`;
@@ -386,9 +402,8 @@ export function RealTopicIndicatorConfigPage() {
     <Button style={{ marginBottom: 16 }} icon={<ArrowLeftOutlined />} onClick={() => navigate('/indicator')}>返回课题列表</Button>
     <Card title="单位指标分配" extra={<Typography.Text type="secondary">方案状态：<Typography.Text strong type={completedStages === nodes.length && nodes.length ? 'success' : 'warning'}>{completedStages === nodes.length && nodes.length ? '已完成' : '未完成'}　{completedStages}/{nodes.length} 阶段完成</Typography.Text></Typography.Text>}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
-        <Space wrap>{nodes.map((node) => <Button key={node.id} type={node.id === nodeId ? 'primary' : 'default'} onClick={() => setNodeId(node.id)}>
-          {node.name} {stageComplete(node.id) ? '✓' : '!'}
-        </Button>)}</Space>
+        <Space wrap><Typography.Text>时间阶段</Typography.Text><Select style={{ width: 190 }} value={nodeId} onChange={setNodeId}
+          options={nodes.map((node) => ({ value: node.id, label: `${node.name} ${stageComplete(node.id) ? '✓' : '!'}` }))} /></Space>
         {canManageAllocations && <Button type="primary" loading={saving} onClick={confirmAllocations}>提交全部分配方案</Button>}
       </div>
       {!canManageAllocations && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="当前账号为只读查看，或课题已暂停、结题、停用。" />}
@@ -430,7 +445,14 @@ export function RealTopicIndicatorConfigPage() {
         <Form form={form} layout="vertical" disabled={!canManageTopic} initialValues={{ participantUnitIds: [] }}>
           <Row gutter={12}><Col span={8}><Form.Item name="code" label="课题编号" rules={[{ required: true, message: '请输入课题编号' }]}><Input /></Form.Item></Col><Col span={16}><Form.Item name="name" label="课题名称" rules={[{ required: true, message: '请输入课题名称' }]}><Input /></Form.Item></Col></Row>
           <Form.Item name="leadUnitId" label="牵头单位" rules={[{ required: true, message: '请选择牵头单位' }]}><Select showSearch optionFilterProp="label" options={eligibleTopicUnits.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
+          {selectedLeadUnitId && <Form.Item label="牵头人员" required><Select mode="multiple" value={memberUserIds[selectedLeadUnitId] ?? []}
+            onChange={(value) => setMemberUserIds((current) => ({ ...current, [selectedLeadUnitId]: value }))}
+            placeholder="请选择该单位的牵头人员" options={topicUsers.filter((item) => item.unitId === selectedLeadUnitId).map((item) => ({ value: item.id, label: `${item.name}（${item.username}）` }))} /></Form.Item>}
           <Form.Item name="participantUnitIds" label="承担单位"><Select mode="multiple" options={eligibleTopicUnits.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
+          {selectedParticipantUnitIds.map((unitId: string) => <Form.Item key={unitId} label={`${units.find((unit) => unit.id === unitId)?.name ?? '承担单位'}人员`} required>
+            <Select mode="multiple" value={memberUserIds[unitId] ?? []} onChange={(value) => setMemberUserIds((current) => ({ ...current, [unitId]: value }))}
+              placeholder="请选择该单位的承担人员" options={topicUsers.filter((item) => item.unitId === unitId).map((item) => ({ value: item.id, label: `${item.name}（${item.username}）` }))} />
+          </Form.Item>)}
           <Row gutter={12}><Col span={12}><Form.Item name="startDate" label="开始日期"><Input type="date" /></Form.Item></Col><Col span={12}><Form.Item name="endDate" label="结束日期"><Input type="date" /></Form.Item></Col></Row>
           <Form.Item name="summary" label="研究内容摘要"><Input.TextArea rows={4} /></Form.Item>
         </Form>

@@ -1,8 +1,18 @@
 import { Col, Form, Input, Row, Select } from 'antd';
+import { COPYRIGHT_STATUS_OPTIONS } from '../../utils/helpers';
 
-export function CopyrightFields() {
+export function CopyrightFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' | 'FORMAL' | 'SUPPLEMENT' }) {
+  const statusOptions = workflowStage === 'PRE' ? COPYRIGHT_STATUS_OPTIONS.slice(0, 1) : workflowStage === 'FORMAL' ? COPYRIGHT_STATUS_OPTIONS.slice(1, 2) : COPYRIGHT_STATUS_OPTIONS.slice(2);
   return (
     <Row gutter={16}>
+      <Col span={12}>
+        <Form.Item label="软件著作权状态" name="copyrightStatus" rules={[
+          { required: true, message: '请选择软件著作权状态' },
+          { validator: (_: unknown, value: string) => !value || statusOptions.includes(value as never) ? Promise.resolve() : Promise.reject(new Error(`当前阶段软件著作权状态应为“${statusOptions[0]}”`)) },
+        ]}>
+          <Select placeholder="选择软件著作权状态" options={statusOptions.map((value) => ({ label: value, value }))} />
+        </Form.Item>
+      </Col>
       <Col span={12}>
         <Form.Item label="软件简称" name="shortName">
           <Input />
@@ -48,7 +58,7 @@ export function CopyrightFields() {
       <Col span={24}><Form.Item label="主要功能" name="softwareMainFunctions" rules={[{ required: true, message: '请填写软件主要功能' }]}><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={24}><Form.Item label="技术特点" name="technicalFeatures"><Input.TextArea rows={3} /></Form.Item></Col>
       <Col span={12}>
-        <Form.Item label="登记申请日期" name="registrationApplicationDate">
+        <Form.Item label="登记申请日期" name="registrationApplicationDate" rules={workflowStage === 'FORMAL' ? [{ required: true, message: '请选择软件著作权登记申请日期' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>
@@ -58,7 +68,7 @@ export function CopyrightFields() {
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="发证日期" name="certificateDate">
+        <Form.Item label="发证日期" name="certificateDate" rules={workflowStage === 'SUPPLEMENT' ? [{ required: true, message: '请选择软件著作权发证日期' }] : undefined}>
           <Input type="date" />
         </Form.Item>
       </Col>

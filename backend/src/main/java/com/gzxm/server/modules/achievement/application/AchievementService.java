@@ -20,10 +20,10 @@ import java.util.*;
 @Service
 public class AchievementService {
     private static final List<String> ASSISTANT_VISIBLE_STATES=List.of(
-            "PRE_INITIAL","PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_INITIAL","FORMAL_FINAL",
-            "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
+            "PRE_INITIAL","PRE_FINAL","FORMAL_INITIAL","FORMAL_FINAL",
+            "WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
     private static final List<String> LEADER_VISIBLE_STATES=List.of(
-            "PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_FINAL","EFFECTIVE");
+            "PRE_FINAL","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_FINAL","EFFECTIVE");
     private final AchievementMapper records;
     private final AchievementMaterialMapper materials;
     private final TopicQueryService topics;
@@ -49,11 +49,9 @@ public class AchievementService {
         if(status!=null && status.length()>40) throw invalid("INVALID_ACHIEVEMENT_STATUS","状态超出长度限制");
         var memberTopics=new ArrayList<Long>();memberTopics.add(-1L);
         var leadTopics=new ArrayList<Long>();leadTopics.add(-1L);
-        if(!user.isGlobalRole()) for(var member:user.memberships()) {
-            if(!member.enabled()) continue;
-            if(!topics.canReadTopic(member.topicId())) continue;
-            memberTopics.add(member.topicId());
-            if(topics.isLeadUnit(member.topicId(),user.unitId())) leadTopics.add(member.topicId());
+        if(!user.isGlobalRole()) for(var member:topics.listReadableTopics(topics.currentProjectId())) {
+            memberTopics.add(member.id());
+            if(topics.isLeadUnit(member.id(),user.unitId())) leadTopics.add(member.id());
         }
         List<String> pendingStates=null;
         if(pending) pendingStates="RESEARCH_ASSISTANT".equals(user.roleCode()) && user.authorities().contains("achievement.initial.approve")

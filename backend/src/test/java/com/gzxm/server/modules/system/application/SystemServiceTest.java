@@ -77,9 +77,10 @@ class SystemServiceTest {
         when(relations.findRoleId(41L)).thenReturn(5L);
 
         var result = service.createUser(new CreateUserRequest(
-                "清华大学", "5", "张老师", "13800000000", "teacher@example.com", true, "Password123"));
+                "qinghua_zhang", "5", "张老师", "13800000000", "teacher@example.com", true,
+                null, "清华大学", "Password123"));
 
-        assertThat(result.user().username()).isEqualTo("清华大学");
+        assertThat(result.user().username()).isEqualTo("qinghua_zhang");
         assertThat(result.user().unitId()).isEqualTo("31");
         assertThat(result.user().roleName()).isEqualTo("外部课题单位");
         ArgumentCaptor<UnitEntity> unitCaptor = ArgumentCaptor.forClass(UnitEntity.class);
@@ -109,7 +110,7 @@ class SystemServiceTest {
         when(roles.selectById(4L)).thenReturn(role(4, "INTERNAL_TOPIC_UNIT"));
 
         assertThatThrownBy(() -> service.updateUser(41L,
-                new UpdateUserRequest("assistant", "4", "科研助理", null, null)))
+                new UpdateUserRequest("assistant", "4", "科研助理", null, null, null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).code()).isEqualTo("USER_ROLE_CATEGORY_CHANGE_DENIED");
         verify(relations, never()).assignRole(41L, 4L);

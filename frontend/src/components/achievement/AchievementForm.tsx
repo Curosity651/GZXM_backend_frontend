@@ -22,9 +22,10 @@ interface AchievementFormProps {
   allocations: UnitAllocation[];
   nodes: TimeNode[];
   currentUnitId?: string;
+  workflowStage?: 'PRE' | 'FORMAL' | 'SUPPLEMENT';
 }
 
-export function AchievementForm({ form, topics, units, lockOwnership = false, definitions = [], project, allocations, nodes, currentUnitId }: AchievementFormProps) {
+export function AchievementForm({ form, topics, units, lockOwnership = false, definitions = [], project, allocations, nodes, currentUnitId, workflowStage = 'PRE' }: AchievementFormProps) {
   const achievementType = Form.useWatch('achievementType', form);
   const topicId = Form.useWatch('topicId', form);
   const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
@@ -125,11 +126,11 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
 
       {achievementType && (
         <Card title={achievementType === 'PAPER' ? '论文信息与作者' : achievementType === 'PATENT' ? '提案信息、发明人与申请人' : achievementType === 'COPYRIGHT' ? '软件信息、著作权人与技术特点' : achievementType === 'STANDARD' ? '标准规范详细信息' : '人才培养详细信息'} size="small" style={{ marginBottom: 16 }}>
-          {achievementType === 'PAPER' && <PaperFields />}
-          {achievementType === 'PATENT' && <PatentFields />}
-          {achievementType === 'COPYRIGHT' && <CopyrightFields />}
-          {achievementType === 'STANDARD' && <StandardFields />}
-          {achievementType === 'TALENT' && <TalentFields />}
+          {achievementType === 'PAPER' && <PaperFields workflowStage={workflowStage} />}
+          {achievementType === 'PATENT' && <PatentFields workflowStage={workflowStage} />}
+          {achievementType === 'COPYRIGHT' && <CopyrightFields workflowStage={workflowStage} />}
+          {achievementType === 'STANDARD' && <StandardFields formalStage={workflowStage === 'FORMAL'} />}
+          {achievementType === 'TALENT' && <TalentFields formalStage={workflowStage === 'FORMAL'} />}
         </Card>
       )}
     </div>

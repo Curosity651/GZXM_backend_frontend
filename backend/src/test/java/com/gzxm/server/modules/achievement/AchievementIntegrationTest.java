@@ -58,6 +58,8 @@ class AchievementIntegrationTest {
             jdbc.update("INSERT INTO topic_indicator(id,project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(?,1,1,1,?,0,'PUBLISHED',1)",i,i);
             for(int unit=1;unit<=3;unit++) jdbc.update("INSERT INTO unit_indicator_allocation(project_id,topic_id,membership_id,unit_id,node_id,indicator_definition_id,topic_indicator_id,target_quantity,status,publish_version) VALUES(1,1,?,?,1,?,?,0,'PUBLISHED',1)",unit,unit,i,i);
         }
+        jdbc.update("UPDATE topic_indicator SET target_quantity=1 WHERE indicator_definition_id=1");
+        jdbc.update("UPDATE unit_indicator_allocation SET target_quantity=1 WHERE indicator_definition_id=1");
     }
     private UsernamePasswordAuthenticationToken auth(String role,Long unit,Set<String> permissions) {
         var memberships=unit==null?List.<CurrentUser.TopicMembership>of():jdbc.query("SELECT * FROM biz_topic_unit_membership WHERE unit_id=? AND enabled=1",

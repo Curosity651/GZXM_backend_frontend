@@ -13,14 +13,14 @@ public final class AuthDtos {
 
     public record TokenResponse(String accessToken, String tokenType, long expiresIn, CurrentUserView user) {}
 
-    public record CurrentUserView(String id, String username, String unitId, String roleCode,
+    public record CurrentUserView(String id, String username, String contactName, String unitId, String unitName, String roleCode,
                                   Set<String> pagePermissions, Set<String> actionPermissions,
                                   List<MembershipView> memberships) {
         public static CurrentUserView from(CurrentUser user) {
             Set<String> pages = user.authorities().stream().filter(p -> p.startsWith("page:")).map(p -> p.substring(5)).collect(java.util.stream.Collectors.toUnmodifiableSet());
             Set<String> actions = user.authorities().stream().filter(p -> !p.startsWith("page:") && !p.startsWith("ROLE_")).collect(java.util.stream.Collectors.toUnmodifiableSet());
-            return new CurrentUserView(String.valueOf(user.id()), user.username(),
-                    user.unitId() == null ? null : String.valueOf(user.unitId()), user.roleCode(), pages, actions,
+            return new CurrentUserView(String.valueOf(user.id()), user.username(), user.contactName(),
+                    user.unitId() == null ? null : String.valueOf(user.unitId()), user.unitName(), user.roleCode(), pages, actions,
                     user.memberships().stream().map(MembershipView::from).toList());
         }
     }

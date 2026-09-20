@@ -9,20 +9,19 @@ const typeNames: Record<ApiAchievement['achievementType'], string> = {
   PAPER: '学术论文', PATENT: '发明专利', COPYRIGHT: '软件著作权', STANDARD: '标准规范', TALENT: '人才培养',
 };
 const statusNames: Record<string, string> = {
-  DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回', PRE_APPROVED: '允许投稿/申请',
-  EXTERNAL_SUBMITTED: '已投稿/已申请', FORMAL_DRAFT: '正式成果草稿', FORMAL_INITIAL: '正式初审中', FORMAL_FINAL: '正式终审中', FORMAL_RETURNED: '正式退回',
-  WAIT_PUBLICATION: '待见刊补充', WAIT_GRANT: '待授权补充', SUPPLEMENT_INITIAL: '补充初审中', SUPPLEMENT_FINAL: '补充终审中', SUPPLEMENT_RETURNED: '补充退回', EFFECTIVE: '已生效',
+  DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回',
+  FORMAL_DRAFT: '第二轮材料草稿', FORMAL_INITIAL: '第二轮初审中', FORMAL_FINAL: '第二轮终审中', FORMAL_RETURNED: '第二轮退回',
+  WAIT_PUBLICATION: '待补充正式刊出材料', WAIT_GRANT: '待补充授权材料', WAIT_CERTIFICATE: '待补充登记证书', SUPPLEMENT_INITIAL: '第三轮初审中', SUPPLEMENT_FINAL: '第三轮终审中', SUPPLEMENT_RETURNED: '第三轮退回', EFFECTIVE: '已完成',
 };
 
 function stage(achievement: ApiAchievement) {
-  const supplement = achievement.achievementType === 'PAPER' || achievement.achievementType === 'PATENT';
-  const stages = supplement ? ['成果填报', '预审', '投稿/申请', '正式材料', '见刊/授权补充', '成果生效'] : ['成果填报', '预审', '正式材料', '成果生效'];
+  const supplement = ['PAPER', 'PATENT', 'COPYRIGHT'].includes(achievement.achievementType);
+  const stages = supplement ? ['成果填报', '第一轮预审', '第二轮材料审批', '第三轮补充审批', '成果完成'] : ['成果填报', '第一轮预审', '第二轮材料审批', '成果完成'];
   const status = achievement.status;
   let current = 0;
   if (status === 'EFFECTIVE') current = stages.length - 1;
-  else if (status.startsWith('SUPPLEMENT_') || status === 'WAIT_PUBLICATION' || status === 'WAIT_GRANT') current = 4;
-  else if (status.startsWith('FORMAL_')) current = supplement ? 3 : 2;
-  else if (status === 'EXTERNAL_SUBMITTED') current = 2;
+  else if (status.startsWith('SUPPLEMENT_') || ['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE'].includes(status)) current = 3;
+  else if (status.startsWith('FORMAL_')) current = 2;
   else if (status.startsWith('PRE_')) current = 1;
   return <Steps size="small" current={current} status={status.includes('RETURNED') ? 'error' : status === 'EFFECTIVE' ? 'finish' : 'process'} items={stages.map((title) => ({ title }))} />;
 }

@@ -22,12 +22,12 @@ import java.util.stream.Collectors;
 public class DefaultAchievementProgressQuery implements AchievementProgressQuery {
     private static final List<String> TYPES=List.of("PAPER","PATENT","COPYRIGHT","STANDARD","TALENT");
     private static final Set<String> ASSISTANT_VISIBLE_STATES=Set.of(
-            "PRE_INITIAL","PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_INITIAL","FORMAL_FINAL",
-            "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
+            "PRE_INITIAL","PRE_FINAL","FORMAL_INITIAL","FORMAL_FINAL",
+            "WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
     private static final Set<String> LEADER_VISIBLE_STATES=Set.of(
-            "PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_FINAL","EFFECTIVE");
+            "PRE_FINAL","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_FINAL","EFFECTIVE");
     private static final Set<String> INDICATOR_COUNTABLE_STATES=Set.of(
-            "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","SUPPLEMENT_RETURNED","EFFECTIVE");
+            "WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","SUPPLEMENT_RETURNED","EFFECTIVE");
     private final IndicatorProgressQuery indicators;
     private final TopicQueryService topics;
     private final AchievementProgressMapper mapper;
