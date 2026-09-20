@@ -89,8 +89,8 @@ class AchievementProgressIntegrationTest {
         jdbc.update("INSERT INTO topic_indicator(project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(1,1,2,1,5,'PUBLISHED',9)");
         var later=statistics("RESEARCH_ASSISTANT",null,"nodeId=2&topicId=1");
         assertThat(later.path("baseTotals").path("PAPER").asLong()).isEqualTo(3);
-        assertThat(row(later,"TOPIC",null,"1").path("targetQuantity").asLong()).isEqualTo(5);
-        assertThat(row(later,"TOPIC",null,"1").path("completionRate").decimalValue()).isEqualByComparingTo("60.00");
+        assertThat(row(later,"TOPIC",null,"1").path("targetQuantity").asLong()).isEqualTo(6);
+        assertThat(row(later,"TOPIC",null,"1").path("completionRate").decimalValue()).isEqualByComparingTo("50.00");
     }
     @Test void stageHistoryCountsExistenceNotRetriesOrCurrentReturnedState() throws Exception {
         fact(1,2,1,1,"SUPPLEMENT_RETURNED",false,"{}");history(1,1,"PRE_REVIEW");history(1,2,"FORMAL");history(1,3,"FORMAL");history(1,4,"SUPPLEMENT");
@@ -101,10 +101,13 @@ class AchievementProgressIntegrationTest {
         assertThat(result.path("effective").asLong()).isZero();
     }
     @Test void totalsRequireEffectiveAndCountFlagAndNeverGuessMissingHistory() throws Exception {
-        fact(1,2,1,1,"EFFECTIVE",false,"{}");fact(2,2,1,1,"DRAFT",true,"{}");fact(3,2,1,1,"EFFECTIVE",true,"{}");
+        fact(1,2,1,1,"EFFECTIVE",false,"{}");
+        assertThatThrownBy(() -> fact(2,2,1,1,"DRAFT",true,"{}"))
+                .hasMessageContaining("chk_achievement_indicator_state");
+        fact(3,2,1,1,"EFFECTIVE",true,"{}");
         var result=statistics("INTERNAL_TOPIC_UNIT",2L,"nodeId=1");
         assertThat(result.path("baseTotals").path("PAPER").asLong()).isEqualTo(1);
-        assertThat(result.path("baseStages").path("initiated").asLong()).isEqualTo(3);
+        assertThat(result.path("baseStages").path("initiated").asLong()).isEqualTo(2);
         assertThat(result.path("baseStages").path("submitted").asLong()).isEqualTo(2);
         assertThat(result.path("baseStages").path("preApproved").asLong()).isZero();
     }

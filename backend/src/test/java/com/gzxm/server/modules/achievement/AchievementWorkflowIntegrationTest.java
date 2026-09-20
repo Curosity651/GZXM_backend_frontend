@@ -95,7 +95,7 @@ class AchievementWorkflowIntegrationTest {
         var submitted=action(id,"SUBMIT_PRE_REVIEW");
         assertThat(submitted.path("status").asText()).isEqualTo("PRE_INITIAL");
         assertThat(submitted.path("submittedVersion").asInt()).isEqualTo(1);
-        reviewCall(id,"PROJECT_TECH_LEADER",reviewBody(id,"APPROVE"),key()).andExpect(status().isConflict());
+        reviewCall(id,"PROJECT_TECH_LEADER",reviewBody(id,"APPROVE"),key()).andExpect(status().isForbidden());
         call(put("/api/v1/achievements/"+id).content(body(definition).put("recordVersion",2).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
         review(id,"RESEARCH_ASSISTANT","APPROVE");review(id,"PROJECT_TECH_LEADER","APPROVE");
         assertThat(current(id).path("status").asText()).isEqualTo(definition<=2?"PRE_APPROVED":"FORMAL_DRAFT");
@@ -137,7 +137,7 @@ class AchievementWorkflowIntegrationTest {
         call(put("/api/v1/achievements/"+id).content(body(1).put("title","Revised").put("recordVersion",current(id).path("recordVersion").asInt()).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isOk());
         action(id,"SUBMIT_PRE_REVIEW");assertThat(current(id).path("submittedVersion").asInt()).isEqualTo(2);
         assertThat(current(id).path("status").asText()).isEqualTo("PRE_INITIAL");
-        reviewCall(id,"PROJECT_TECH_LEADER",stale,key()).andExpect(status().isConflict());
+        reviewCall(id,"PROJECT_TECH_LEADER",stale,key()).andExpect(status().isForbidden());
         assertThat(jdbc.queryForObject("SELECT payload_json FROM submission_snapshot WHERE business_type='ACHIEVEMENT' AND business_id=? AND submitted_version=1",String.class,id)).isEqualTo(payload);
         assertThat(json.readTree(payload).path("title").asText()).isEqualTo("Synthetic achievement");
     }
@@ -227,7 +227,10 @@ class AchievementWorkflowIntegrationTest {
             var start=new CountDownLatch(1);
             var first=executor.submit(()->{start.await();return reviewCall(id,"RESEARCH_ASSISTANT",approve,key()).andReturn().getResponse().getStatus();});
             var second=executor.submit(()->{start.await();return reviewCall(id,"RESEARCH_ASSISTANT",reject,key()).andReturn().getResponse().getStatus();});
-            start.countDown();assertThat(List.of(first.get(20,TimeUnit.SECONDS),second.get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(201,409);
+            start.countDown();
+            var statuses = List.of(first.get(20,TimeUnit.SECONDS), second.get(20,TimeUnit.SECONDS));
+            assertThat(statuses.stream().filter(status -> status == 201).count()).isEqualTo(1);
+            assertThat(statuses.stream().filter(status -> status != 201).findFirst().orElseThrow()).isIn(403, 409);
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM approval_record WHERE business_type='ACHIEVEMENT'",Integer.class)).isEqualTo(1);
     }

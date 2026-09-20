@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>归档进度监控原型 V2</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1180px; background: #f3f6fb; color: #1f2329; font: 14px/1.5 "Microsoft YaHei", Arial, sans-serif; }
+    button, select { font: inherit; }
+    .page { padding: 24px; }
+    .card { overflow: hidden; border: 1px solid #e5eaf1; border-radius: 14px; background: #fff; box-shadow: 0 2px 10px rgba(31,35,41,.04); }
+    .card + .card { margin-top: 18px; }
+    .head { display: flex; min-height: 68px; align-items: center; justify-content: space-between; gap: 20px; padding: 14px 24px; border-bottom: 1px solid #edf0f5; }
+    .title { font-size: 20px; font-weight: 700; }
+    .subtitle { margin-top: 3px; color: #8a919c; font-size: 13px; }
+    .btn { height: 38px; padding: 0 16px; border: 1px solid #d9dde5; border-radius: 8px; background: #fff; cursor: pointer; }
+    .btn:hover { border-color: #1677ff; color: #1677ff; }
+    .btn.primary { border-color: #1677ff; background: #1677ff; color: #fff; }
+    .rule { display: flex; align-items: center; gap: 11px; margin: 18px 24px 0; padding: 12px 15px; border: 1px solid #91caff; border-radius: 9px; background: #eaf5ff; color: #31577d; }
+    .rule-icon { display: inline-grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: #1677ff; color: #fff; font-weight: 700; }
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding: 18px 24px 24px; }
+    .metric { min-height: 120px; padding: 16px 18px; border: 1px solid #e8edf4; border-radius: 11px; background: #fafcff; }
+    .metric.blue { background: #f3f8ff; }
+    .metric.green { background: #f2fbf6; }
+    .metric.orange { background: #fff9ef; }
+    .metric-label { color: #697386; }
+    .metric-value { margin: 6px 0 7px; font-size: 29px; font-weight: 700; }
+    .metric-value small { margin-left: 4px; color: #8b93a1; font-size: 13px; font-weight: 400; }
+    .metric-note { color: #7b8494; font-size: 13px; }
+    .bar { height: 7px; overflow: hidden; border-radius: 9px; background: #e7ebf0; }
+    .bar i { display: block; height: 100%; border-radius: inherit; background: #1677ff; }
+    .bar.green i { background: #20a464; }
+    .workspace-head { display: flex; height: 62px; align-items: flex-end; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid #edf0f5; }
+    .tabs { display: flex; height: 100%; align-items: flex-end; gap: 34px; }
+    .tab { height: 62px; padding: 0 4px; border: 0; border-bottom: 3px solid transparent; background: none; color: #667085; cursor: pointer; }
+    .tab.active { border-bottom-color: #1677ff; color: #1677ff; font-weight: 700; }
+    .hint { padding-bottom: 18px; color: #8a919c; font-size: 13px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .filters { display: grid; grid-template-columns: minmax(300px, 1.35fr) minmax(230px, 1fr) minmax(180px, .75fr) auto; gap: 18px; align-items: end; padding: 20px 24px; background: #fcfdff; }
+    .field label { display: block; margin-bottom: 7px; color: #4d5667; }
+    select { width: 100%; height: 40px; padding: 0 12px; border: 1px solid #d9dde5; border-radius: 8px; background: #fff; color: #323843; }
+    .actions { display: flex; gap: 10px; }
+    .table-wrap { padding: 0 24px 24px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    th { height: 48px; padding: 0 13px; background: #f5f7fa; color: #405172; font-weight: 600; text-align: left; }
+    td { height: 58px; padding: 10px 13px; border-bottom: 1px solid #edf0f5; }
+    .parent { cursor: pointer; }
+    .parent:hover td { background: #fafcff; }
+    .arrow { display: inline-flex; width: 22px; justify-content: center; margin-right: 6px; color: #1677ff; transition: transform .2s; }
+    .parent.expanded .arrow { transform: rotate(90deg); }
+    .name { font-weight: 600; }
+    .code { margin-left: 8px; padding: 2px 8px; border-radius: 5px; background: #eaf3ff; color: #1677ff; font-size: 12px; }
+    .tag { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 13px; white-space: nowrap; }
+    .done { background: #e8f8ee; color: #15803d; }
+    .doing { background: #fff2d9; color: #c26100; }
+    .todo { background: #fff0f0; color: #cf1322; }
+    .optional { background: #f0f2f5; color: #667085; }
+    .custom { background: #f3eefe; color: #722ed1; }
+    .progress { display: flex; min-width: 165px; align-items: center; gap: 9px; }
+    .progress .bar { width: 110px; }
+    .detail { display: none; }
+    .detail.open { display: table-row; }
+    .detail > td { height: auto; padding: 0 22px 22px 52px; background: #fafcff; }
+    .detail-box { overflow: hidden; border: 1px solid #e1e7f0; border-radius: 10px; background: #fff; }
+    .detail-title { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid #edf0f5; color: #566174; }
+    .inner th { height: 42px; background: #f8fafc; }
+    .inner td { height: 50px; }
+    .muted { color: #9098a6; }
+    .missing { color: #d4380d; }
+    .success { color: #15803d; }
+    .link { border: 0; background: none; color: #1677ff; cursor: pointer; }
+    .count { font-variant-numeric: tabular-nums; }
+    .toast { position: fixed; top: 24px; left: 50%; display: none; transform: translateX(-50%); padding: 11px 18px; border-radius: 8px; background: rgba(31,35,41,.9); color: #fff; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="head">
+        <div><div class="title">归档总体进度</div><div class="subtitle">统计当前权限范围内全部非草稿课题；下面筛选不影响总体统计</div></div>
+        <button class="btn primary" id="refresh">↻ 刷新统计</button>
+      </header>
+      <div class="rule"><span class="rule-icon">i</span><span><b>完成规则：</b>必存文件夹中文件数量大于 1（至少 2 个文件）才算完成；非必存文件夹不进入完成率。</span></div>
+      <div class="summary">
+        <div class="metric blue"><div class="metric-label">监控课题</div><div class="metric-value">12<small>个</small></div><div class="metric-note">包含 25 个参与单位清单</div></div>
+        <div class="metric"><div class="metric-label">国家材料单位清单</div><div class="metric-value">18 / 25</div><div class="bar"><i style="width:72%"></i></div><div class="metric-note" style="margin-top:8px">18 个单位已完成全部当前必存文件夹</div></div>
+        <div class="metric green"><div class="metric-label">配套自筹项目</div><div class="metric-value">7 / 10</div><div class="bar green"><i style="width:70%"></i></div><div class="metric-note" style="margin-top:8px">7 个项目已完成全部当前必存文件夹</div></div>
+        <div class="metric orange"><div class="metric-label">必存文件夹完成</div><div class="metric-value">42 / 61</div><div class="bar"><i style="width:69%"></i></div><div class="metric-note" style="margin-top:8px">分母随新增或删除的必存文件夹动态变化</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="workspace-head">
+        <div class="tabs"><button class="tab active" data-panel="national">课题国家材料</button><button class="tab" data-panel="funded">配套自筹项目</button></div>
+        <div class="hint">点击课题行展开单位或项目，再展开查看文件夹完成情况</div>
+      </div>
+
+      <div class="panel active" id="national">
+        <div class="filters">
+          <div class="field"><label>课题</label><select><option>全部课题</option><option>K1 总体架构与关键技术研究</option><option>K2 核心设备研制</option></select></div>
+          <div class="field"><label>提交单位</label><select><option>全部单位</option><option>广西电网</option><option>山东大学</option><option>清华大学</option></select></div>
+          <div class="field"><label>完成状态</label><select><option>全部状态</option><option>未开始</option><option>进行中</option><option>已完成</option></select></div>
+          <div class="actions"><button class="btn reset">重置</button></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th style="width:31%">课题</th><th>单位完成</th><th>当前必存文件夹</th><th>已完成文件夹</th><th style="width:190px">完成率</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr class="parent expanded" data-detail="national-k1"><td><span class="arrow">›</span><span class="name">总体架构与关键技术研究</span><span class="code">K1</span></td><td>2 / 4 个单位</td><td>25</td><td>18</td><td><div class="progress"><div class="bar"><i style="width:72%"></i></div><b>72%</b></div></td><td><span class="tag doing">进行中</span></td></tr>
+            <tr class="detail open" id="national-k1"><td colspan="6"><div class="detail-box"><div class="detail-title"><span>各参与单位当前归档清单</span><span class="muted">“当前必存”包含模板必存和新增必存文件夹</span></div><table class="inner">
+              <thead><tr><th>提交单位</th><th>模板必存</th><th>新增必存</th><th>非必存</th><th>已完成 / 当前必存</th><th style="width:180px">完成率</th><th>状态</th><th>尚缺文件夹</th></tr></thead>
+              <tbody>
+                <tr class="parent expanded" data-detail="unit-a"><td><span class="arrow">›</span>山东大学</td><td>5</td><td>2</td><td>3</td><td class="count">7 / 7</td><td><div class="progress"><div class="bar green"><i style="width:100%"></i></div><b>100%</b></div></td><td><span class="tag done">已完成</span></td><td class="muted">—</td></tr>
+                <tr class="detail open" id="unit-a"><td colspan="8"><div class="detail-box"><div class="detail-title">山东大学文件夹明细</div><table class="inner"><thead><tr><th>文件夹</th><th>来源</th><th>是否必存</th><th>文件数量</th><th>完成判定</th></tr></thead><tbody>
+                  <tr><td>知识产权证明材料</td><td>系统模板</td><td><span class="tag doing">必存</span></td><td class="count">3 个</td><td class="success">已完成（3 &gt; 1）</td></tr>
+                  <tr><td>成果应用证明</td><td><span class="tag custom">自定义</span></td><td><span class="tag doing">必存</span></td><td class="count">2 个</td><td class="success">已完成（2 &gt; 1）</td></tr>
+                  <tr><td>其他参考资料</td><td><span class="tag custom">自定义</span></td><td><span class="tag optional">非必存</span></td><td class="count">1 个</td><td class="muted">不进入完成率</td></tr>
+                </tbody></table></div></td></tr>
+                <tr><td>清华大学</td><td>5</td><td>3</td><td>1</td><td class="count">5 / 8</td><td><div class="progress"><div class="bar"><i style="width:63%"></i></div><b>63%</b></div></td><td><span class="tag doing">进行中</span></td><td class="missing">验收报告等 3 个</td></tr>
+                <tr><td>广西电网</td><td>5</td><td>1</td><td>2</td><td class="count">0 / 6</td><td><div class="progress"><div class="bar"><i style="width:0%"></i></div><b>0%</b></div></td><td><span class="tag todo">未开始</span></td><td class="missing">尚缺 6 个</td></tr>
+                <tr><td>南网数字集团</td><td>5</td><td>1</td><td>0</td><td class="count">6 / 6</td><td><div class="progress"><div class="bar green"><i style="width:100%"></i></div><b>100%</b></div></td><td><span class="tag done">已完成</span></td><td class="muted">—</td></tr>
+              </tbody>
+            </table></div></td></tr>
+            <tr class="parent" data-detail="national-k2"><td><span class="arrow">›</span><span class="name">核心设备研制</span><span class="code">K2</span></td><td>3 / 3 个单位</td><td>18</td><td>18</td><td><div class="progress"><div class="bar green"><i style="width:100%"></i></div><b>100%</b></div></td><td><span class="tag done">已完成</span></td></tr>
+            <tr class="detail" id="national-k2"><td colspan="6"><div class="detail-box"><div style="padding:18px" class="muted">3 个单位均已完成当前全部必存文件夹。</div></div></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="panel" id="funded">
+        <div class="filters" style="grid-template-columns:1.2fr .9fr .75fr .85fr auto">
+          <div class="field"><label>课题</label><select><option>全部课题</option><option>K1 总体架构与关键技术研究</option></select></div>
+          <div class="field"><label>归属单位</label><select><option>全部单位</option><option>广西电网</option><option>山东大学</option></select></div>
+          <div class="field"><label>项目类型</label><select><option>全部类型</option><option>科技项目</option><option>技改项目</option><option>基建项目</option></select></div>
+          <div class="field"><label>完成状态</label><select><option>全部状态</option><option>未开始</option><option>进行中</option><option>已完成</option></select></div>
+          <div class="actions"><button class="btn reset">重置</button></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th style="width:30%">所属课题</th><th>项目完成</th><th>当前必存文件夹</th><th>已完成文件夹</th><th style="width:190px">完成率</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr class="parent expanded" data-detail="funded-k1"><td><span class="arrow">›</span><span class="name">总体架构与关键技术研究</span><span class="code">K1</span></td><td>1 / 3 个项目</td><td>19</td><td>10</td><td><div class="progress"><div class="bar"><i style="width:53%"></i></div><b>53%</b></div></td><td><span class="tag doing">进行中</span></td></tr>
+            <tr class="detail open" id="funded-k1"><td colspan="6"><div class="detail-box"><div class="detail-title"><span>配套自筹项目</span><span class="muted">完成条件同样为每个必存文件夹至少 2 个文件</span></div><table class="inner"><thead><tr><th>项目名称</th><th>归属单位</th><th>模板必存</th><th>新增必存</th><th>非必存</th><th>已完成 / 当前必存</th><th>完成率</th><th>状态</th></tr></thead><tbody>
+              <tr><td>智能调度平台研发</td><td>广西电网</td><td>5</td><td>1</td><td>2</td><td>6 / 6</td><td>100%</td><td><span class="tag done">已完成</span></td></tr>
+              <tr><td>配电网改造</td><td>山东大学</td><td>4</td><td>2</td><td>1</td><td>4 / 6</td><td>67%</td><td><span class="tag doing">进行中</span></td></tr>
+              <tr><td>数据中心建设</td><td>清华大学</td><td>4</td><td>3</td><td>0</td><td>0 / 7</td><td>0%</td><td><span class="tag todo">未开始</span></td></tr>
+            </tbody></table></div></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast">统计已刷新</div>
+  <script>
+    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(item => item.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(item => item.classList.remove('active'));
+      tab.classList.add('active'); document.getElementById(tab.dataset.panel).classList.add('active');
+    }));
+    document.querySelectorAll('.parent').forEach(row => row.addEventListener('click', event => {
+      if (event.target.closest('button')) return;
+      row.classList.toggle('expanded'); document.getElementById(row.dataset.detail).classList.toggle('open');
+    }));
+    document.querySelectorAll('.reset').forEach(button => button.addEventListener('click', () => {
+      button.closest('.filters').querySelectorAll('select').forEach(select => select.selectedIndex = 0);
+    }));
+    document.getElementById('refresh').addEventListener('click', () => {
+      const toast = document.getElementById('toast'); toast.style.display = 'block'; setTimeout(() => toast.style.display = 'none', 1200);
+    });
+  </script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import com.gzxm.server.common.security.SecurityContextFacade;
 import com.gzxm.server.config.AppProperties;
 import com.gzxm.server.modules.auth.api.AuthDtos.*;
 import com.gzxm.server.modules.auth.application.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
@@ -31,6 +32,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @Operation(operationId = "refreshToken")
     TokenResponse refresh(@CookieValue(name = REFRESH_COOKIE, required = false) String token, HttpServletResponse response) {
         AuthService.LoginResult result = auth.refresh(token);
         setRefreshCookie(response, result.refreshToken());
@@ -45,6 +47,7 @@ public class AuthController {
     }
 
     @GetMapping("/me")
+    @Operation(operationId = "getCurrentUser")
     CurrentUserView me() { return CurrentUserView.from(security.requireCurrentUser()); }
 
     private void setRefreshCookie(HttpServletResponse response, String token) {

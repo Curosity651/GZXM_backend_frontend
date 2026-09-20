@@ -6,6 +6,7 @@ import com.gzxm.server.common.exception.BusinessException;
 import com.gzxm.server.common.security.CurrentUser;
 import com.gzxm.server.modules.system.api.SystemDtos.*;
 import com.gzxm.server.modules.system.application.SystemService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -44,6 +45,7 @@ public class SystemController {
     UserView getUser(@PathVariable long userId) { return service.getUser(userId); }
 
     @PatchMapping("/users/{userId}")
+    @Operation(operationId = "updateUserProfile")
     @PreAuthorize("hasAuthority('system.manage')")
     UserView updateUser(@PathVariable long userId, @Valid @RequestBody UpdateUserRequest request,
                         @AuthenticationPrincipal CurrentUser currentUser) {
@@ -60,6 +62,7 @@ public class SystemController {
     }
 
     @PutMapping("/users/{userId}/password")
+    @Operation(operationId = "changeUserPassword")
     @PreAuthorize("hasAuthority('system.manage')")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void changePassword(@PathVariable long userId, @Valid @RequestBody PasswordChangeRequest request) {
@@ -75,6 +78,7 @@ public class SystemController {
     RoleView getRole(@PathVariable long roleId) { return service.getRole(roleId); }
 
     @PutMapping("/roles/{roleId}")
+    @Operation(operationId = "updateRolePermissions")
     @PreAuthorize("hasAuthority('system.manage')")
     RoleView updateRole(@PathVariable long roleId, @Valid @RequestBody RolePermissionRequest request) {
         RoleView result = service.updateRolePermissions(roleId, request); audit.success("system.role.permissions.update", "ROLE", String.valueOf(roleId)); return result;

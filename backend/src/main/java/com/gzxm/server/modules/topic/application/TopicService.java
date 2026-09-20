@@ -42,6 +42,14 @@ public class TopicService {
     }
 
     @Transactional(readOnly = true)
+    public long countBusinessTopics() {
+        CurrentUser user = reader();
+        Long unitId = user.isGlobalRole() ? null : user.unitId();
+        return STATUSES.stream().filter(status -> !"DRAFT".equals(status))
+                .mapToLong(status -> topics.count(unitId, null, status, true)).sum();
+    }
+
+    @Transactional(readOnly = true)
     public TopicView get(long topicId) {
         requireReadable(topicId);
         return view(requireTopic(topicId, false), units.snapshot());

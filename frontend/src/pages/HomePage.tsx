@@ -5,13 +5,13 @@ import {
   FolderOpenOutlined, RiseOutlined, WarningOutlined,
 } from '@ant-design/icons';
 import { apiRequest } from '../api/http-client';
-import { topicApi, type ApiTopic } from '../api/topic-api';
+import { isBusinessTopic, topicApi, type ApiTopic } from '../api/topic-api';
 import { achievementApi, type ApiAchievement } from '../api/achievement-api';
 import { reportApi, type ApiReport } from '../api/report-api';
-import { archiveApi } from '../api/archive-api';
 import { indicatorApi } from '../api/indicator-api';
 import { useSessionStore } from '../store/session';
 import { StatusTag } from '../components/common/StatusTag';
+import { collectAllPages, latestEnabledNode } from '../domain/dashboard';
 
 const { Text } = Typography;
 
@@ -44,32 +44,32 @@ export function HomePage() {
     setLoading(true);
     setError(undefined);
     try {
-      const [summaryData, topicPage, achievementPage, reportPage] = await Promise.all([
+      const [summaryData, topicRows, nodes] = await Promise.all([
         apiRequest<Summary>('/dashboard/summary'),
-        topicApi.list(new URLSearchParams({ page: '1', size: '200', enabled: 'true' })),
-        achievementApi.list(),
-        reportApi.list(new URLSearchParams({ page: '1', size: '200' })),
-        archiveApi.directories(),
+        collectAllPages((page, size) => topicApi.list(new URLSearchParams({ page: String(page), size: String(size), enabled: 'true' }))),
+        indicatorApi.nodes(),
       ]);
-      const activeTopics = topicPage.items.filter((topic) => topic.enabled);
-      const nodes = await indicatorApi.nodes();
-      const currentNode = [...nodes].filter((node) => node.enabled).sort((a, b) => b.sortOrder - a.sortOrder)[0];
-      const rows = await Promise.all(activeTopics.map(async (topic): Promise<TopicSummary> => {
-        let planned = 0;
-        if (currentNode) {
-          try {
-            const targets = await indicatorApi.targets(topic.id, currentNode.id);
-            planned = targets.rows.reduce((sum, row) => sum + row.targetQuantity, 0);
-          } catch { planned = 0; }
-        }
-        const completed = achievementPage.items.filter((item) => item.topicId === topic.id && item.status === 'EFFECTIVE' && item.countsToIndicator).length;
+      const activeTopics = topicRows.filter(isBusinessTopic);
+      const currentNode = latestEnabledNode(nodes);
+      const [achievementRows, reportRows, progress] = await Promise.all([
+        collectAllPages((page, size) => achievementApi.list({ page: String(page), size: String(size), pendingForMe: true })),
+        collectAllPages((page, size) => reportApi.list(new URLSearchParams({ page: String(page), size: String(size), pendingForMe: 'true' }))),
+        currentNode ? achievementApi.progress(currentNode.id) : Promise.resolve(undefined),
+      ]);
+      const rows = activeTopics.map((topic): TopicSummary => {
+        const topicRows = progress?.rows.filter((row) => row.topicId === topic.id) ?? [];
+        const topicScope = topicRows.some((row) => row.scope === 'TOPIC')
+          ? topicRows.filter((row) => row.scope === 'TOPIC')
+          : topicRows.filter((row) => row.scope === 'UNIT' && !row.historical);
+        const planned = topicScope.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0);
+        const completed = topicScope.reduce((sum, row) => sum + row.stages.effective, 0);
         const rate = planned > 0 ? Math.min(100, Math.round((completed / planned) * 100)) : 0;
         return { topicId: topic.id, topicCode: topic.code, topicName: topic.name, planned, completed, gap: Math.max(0, planned - completed), rate };
-      }));
+      });
       setSummary(summaryData);
       setTopics(activeTopics);
-      setAchievements(achievementPage.items);
-      setReports(reportPage.items);
+      setAchievements(achievementRows);
+      setReports(reportRows);
       setTopicSummaries(rows);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '工作台加载失败');
@@ -93,7 +93,7 @@ export function HomePage() {
       .map((item) => ({ id: `report-${item.id}`, title: `${item.reportType === 'MONTHLY' ? '月报' : '季报'} · ${topicNames.get(item.topicId) ?? '未知课题'}`, status: reportStatusLabels[item.status], type: '进度报告' })),
   ], [achievements, reports, canInitialAchievement, canFinalAchievement, canInitialReport, canFinalReport, topicNames]);
 
-  const effective = achievements.filter((item) => item.status === 'EFFECTIVE' && item.countsToIndicator).length;
+  const effective = topicSummaries.reduce((sum, topic) => sum + topic.completed, 0);
   const metricCards = [
     { title: '课题数量', value: summary?.topicCount ?? topics.length, icon: <RiseOutlined />, color: '#1677ff' },
     { title: '生效成果', value: effective, icon: <FileDoneOutlined />, color: '#00a870' },

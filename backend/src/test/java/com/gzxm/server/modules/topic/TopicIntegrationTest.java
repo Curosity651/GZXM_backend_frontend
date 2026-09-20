@@ -138,12 +138,21 @@ class TopicIntegrationTest {
         jdbc.update("DELETE FROM biz_topic_unit_membership");
         jdbc.update("DELETE FROM biz_topic");
         jdbc.update("DELETE FROM biz_project");
+        jdbc.update("DELETE FROM sys_user_role");
+        jdbc.update("DELETE FROM sys_user");
         jdbc.update("DELETE FROM sys_unit");
         jdbc.update("DELETE FROM audit_log");
         jdbc.update("INSERT INTO biz_project(id,code,name,enabled) VALUES(1,'TEST-P','Synthetic project',1)");
         for (int unit = 1; unit <= 5; unit++) {
             jdbc.update("INSERT INTO sys_unit(id,code,name,internal_flag,enabled) VALUES(?,?,?,?,?)",
                     unit, "TEST-U" + unit, "Synthetic unit " + unit, unit != 3, unit != 5);
+        }
+        jdbc.update("INSERT IGNORE INTO sys_role(id,code,name,built_in,enabled) VALUES(9001,'INTERNAL_TOPIC_UNIT','Synthetic internal topic unit',1,1)");
+        jdbc.update("INSERT IGNORE INTO sys_role(id,code,name,built_in,enabled) VALUES(9002,'EXTERNAL_TOPIC_UNIT','Synthetic external topic unit',1,1)");
+        for (int unit = 1; unit <= 5; unit++) {
+            jdbc.update("INSERT INTO sys_user(id,username,password_hash,contact_name,unit_id,account_type,enabled) VALUES(?,?,?,?,?,'TOPIC_UNIT',?)",
+                    9100 + unit, "synthetic-unit-" + unit, "unused", "Synthetic user " + unit, unit, unit != 5);
+            jdbc.update("INSERT INTO sys_user_role(user_id,role_id) VALUES(?,?)", 9100 + unit, unit == 3 ? 9002 : 9001);
         }
     }
 
@@ -453,7 +462,16 @@ class TopicIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE success=1 AND version IN ('202609150900','202609160100','202609160200','202609160300','202609160930')", Integer.class)).isEqualTo(5);
         mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.paths['/api/v1/topics'].get.operationId").value("listTopics"))
-                .andExpect(jsonPath("$.paths['/api/v1/topics/{topicId}/members'].post.operationId").value("addTopicParticipant"));
+                .andExpect(jsonPath("$.paths['/api/v1/topics/{topicId}/members'].post.operationId").value("addTopicParticipant"))
+                .andExpect(jsonPath("$.paths['/api/v1/auth/refresh'].post.operationId").value("refreshToken"))
+                .andExpect(jsonPath("$.paths['/api/v1/auth/me'].get.operationId").value("getCurrentUser"))
+                .andExpect(jsonPath("$.paths['/api/v1/users/{userId}'].patch.operationId").value("updateUserProfile"))
+                .andExpect(jsonPath("$.paths['/api/v1/users/{userId}/password'].put.operationId").value("changeUserPassword"))
+                .andExpect(jsonPath("$.paths['/api/v1/roles/{roleId}'].put.operationId").value("updateRolePermissions"))
+                .andExpect(jsonPath("$.paths['/api/v1/reports/{reportId}/reviews'].get.operationId").value("listReportReviews"))
+                .andExpect(jsonPath("$.paths['/api/v1/report-progress'].get.operationId").value("getReportProgress"))
+                .andExpect(jsonPath("$.paths['/api/v1/archive/national'].get.operationId").value("listNationalArchiveDirectories"))
+                .andExpect(jsonPath("$.paths['/api/v1/dashboard/summary'].get.operationId").value("getDashboardSummary"));
     }
 
     private JsonNode create(String code, String lead, List<String> participants) throws Exception {

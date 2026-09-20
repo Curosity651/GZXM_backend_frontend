@@ -10,6 +10,7 @@ import { useSessionStore } from '../../store/session';
 import { AchievementForm } from '../../components/achievement/AchievementForm';
 import { ApiAchievementDetail } from '../../components/achievement/ApiAchievementDetail';
 import { formalMaterialRequirements, supplementMaterialRequirements } from '../../domain/achievement-materials';
+import { classifyUnitProgress } from '../../domain/achievement-progress';
 import type { Achievement, AchievementType } from '../../types';
 
 const { Text } = Typography;
@@ -40,6 +41,7 @@ interface UnitProgressSummary {
   key: string;
   topicId: string;
   unitId: string;
+  allocated: boolean;
   target: number;
   stages: AchievementProgressRow['stages'];
   details: Array<AchievementProgressRow & { special: boolean }>;
@@ -60,6 +62,7 @@ export function AchievementEntryPage() {
   const [form] = Form.useForm<FormValues>();
   const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
   const [topics, setTopics] = useState<ApiTopic[]>([]);
+  const [progressTopics, setProgressTopics] = useState<ApiTopic[]>([]);
   const [units, setUnits] = useState<ApiUnit[]>([]);
   const [nodes, setNodes] = useState<TimeNode[]>([]);
   const [definitions, setDefinitions] = useState<IndicatorDefinition[]>([]);
@@ -91,7 +94,8 @@ export function AchievementEntryPage() {
       topicApi.list(), systemApi.units(), indicatorApi.nodes(user.roleCode === 'RESEARCH_ASSISTANT'), indicatorApi.definitions(),
     ]);
     const businessTopics = topicPage.items.filter(isBusinessTopic);
-    setTopics(businessTopics); setUnits(unitRows); setNodes(nodeRows); setDefinitions(definitionRows.filter((item) => item.enabled));
+    setTopics(businessTopics); setProgressTopics(topicPage.items.filter((item) => item.status !== 'DRAFT'));
+    setUnits(unitRows); setNodes(nodeRows); setDefinitions(definitionRows.filter((item) => item.enabled));
     if (!progressFilters.nodeId) setProgressFilters((current) => ({ ...current, nodeId: [...nodeRows].filter((node) => node.enabled).sort((a, b) => b.sortOrder - a.sortOrder)[0]?.id ?? '' }));
     if (canSubmit && user.unitId) {
       const calls = businessTopics.flatMap((topic) => nodeRows.filter((node) => node.enabled).map((node) => indicatorApi.allocations(topic.id, node.id)));
@@ -119,7 +123,7 @@ export function AchievementEntryPage() {
   useEffect(() => { void loadProgress(); }, [loadProgress]);
 
   const definitionMap = useMemo(() => Object.fromEntries(definitions.map((item) => [item.id, item])), [definitions]);
-  const topicMap = useMemo(() => Object.fromEntries(topics.map((item) => [item.id, item])), [topics]);
+  const topicMap = useMemo(() => Object.fromEntries(progressTopics.map((item) => [item.id, item])), [progressTopics]);
   const unitMap = useMemo(() => Object.fromEntries(units.map((item) => [item.id, item.name])), [units]);
   const visibleUnitOptions = units.filter((unit) => rows.some((row) => row.unitId === unit.id));
   const selectedAllocation = allocations.find((item) => item.id === allocationId);
@@ -146,12 +150,13 @@ export function AchievementEntryPage() {
           key: `${topicId}-${unitId}`,
           topicId,
           unitId,
+          allocated: unitBase.some((row) => row.targetPublished),
           target: unitBase.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0),
           stages: unitStages,
           details: groupIndicatorRows(unitBase, unitSpecial)
             .filter((row) => (row.targetQuantity ?? 0) > 0 || row.stages.submitted > 0),
         };
-      }).filter((unit) => unit.target > 0 || unit.stages.submitted > 0);
+      });
       return {
         topicId,
         target: selectedBase.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0),
@@ -169,8 +174,8 @@ export function AchievementEntryPage() {
     const all = topicProgress.flatMap((topic) => topic.units);
     return {
       total: all.length,
-      complete: all.filter((unit) => unit.target > 0 && unit.stages.submitted >= unit.target).length,
-      partial: all.filter((unit) => unit.stages.submitted > 0 && unit.stages.submitted < unit.target).length,
+      complete: all.filter((unit) => classifyUnitProgress(unit.allocated, unit.target, unit.stages.submitted) === 'COMPLETE').length,
+      partial: all.filter((unit) => classifyUnitProgress(unit.allocated, unit.target, unit.stages.submitted) === 'PARTIAL').length,
       missing: all.filter((unit) => unit.stages.submitted === 0).length,
     };
   }, [topicProgress]);
@@ -190,17 +195,25 @@ export function AchievementEntryPage() {
     <Alert type="info" showIcon message="按单位查看成果提交情况；展开单位可查看各项指标明细。" />
     <Table<UnitProgressSummary> size="small" rowKey="key" dataSource={summary.units} pagination={false}
       locale={{ emptyText: '当前权限范围内暂无单位分配数据' }}
-      expandable={{ expandRowByClick: true, expandedRowRender: (unit) => renderIndicatorProgress(unit.details) }}
+      expandable={{ expandRowByClick: true, expandedRowRender: (unit) => unit.allocated
+        ? renderIndicatorProgress(unit.details)
+        : <Alert type="warning" showIcon message="牵头单位尚未提交该单位的指标分配方案" /> }}
       columns={[
         { title: '单位', dataIndex: 'unitId', render: (value: string) => <Text strong>{unitMap[value] ?? value}</Text> },
-        { title: '累计目标', dataIndex: 'target', width: 100 },
+        { title: '累计目标', dataIndex: 'target', width: 100, render: (value: number, unit) => unit.allocated ? value : '—' },
         { title: '已提交', width: 90, render: (_: unknown, unit) => unit.stages.submitted },
         { title: '正式成果', width: 100, render: (_: unknown, unit) => unit.stages.formal },
         { title: '已生效', width: 90, render: (_: unknown, unit) => unit.stages.effective },
-        { title: '提交状态', width: 110, render: (_: unknown, unit) => unit.stages.submitted === 0
-          ? <Tag color="red">未提交</Tag>
-          : unit.stages.submitted < unit.target ? <Tag color="orange">部分提交</Tag> : <Tag color="green">全部提交</Tag> },
+        { title: '提交状态', width: 120, render: (_: unknown, unit) => {
+          const state = classifyUnitProgress(unit.allocated, unit.target, unit.stages.submitted);
+          if (state === 'UNALLOCATED') return <Tag>指标未分配</Tag>;
+          if (state === 'NOT_REQUIRED') return <Tag color="blue">无需提交</Tag>;
+          if (state === 'NOT_SUBMITTED') return <Tag color="red">尚未提交</Tag>;
+          if (state === 'PARTIAL') return <Tag color="orange">部分提交</Tag>;
+          return <Tag color="green">全部提交</Tag>;
+        } },
         { title: '尚缺指标', width: 280, render: (_: unknown, unit) => {
+          if (!unit.allocated) return <Text type="warning">等待牵头单位分配指标</Text>;
           const missing = unit.details.filter((item) => !item.special && (item.targetQuantity ?? 0) > item.stages.submitted)
             .map((item) => `${definitionMap[item.indicatorDefinitionId]?.name ?? '未知指标'} ${Math.max((item.targetQuantity ?? 0) - item.stages.submitted, 0)}项`);
           return missing.length ? <Text type="warning">{missing.join('、')}</Text> : <Text type="success">已全部提交</Text>;
@@ -286,7 +299,7 @@ export function AchievementEntryPage() {
       <div className="achievement-progress-summary">
         {[
           ['累计分配指标', progressTotals.target, 'default'], ['成果已提交', progressTotals.stages.submitted, 'default'],
-          ['成果已生效', progressTotals.stages.effective, 'default'], ['应提交单位', unitProgressTotals.total, 'default'],
+          ['成果已生效', progressTotals.stages.effective, 'default'], ['参与单位', unitProgressTotals.total, 'default'],
           ['全部提交单位', unitProgressTotals.complete, 'default'], ['部分提交单位', unitProgressTotals.partial, 'warning'],
           ['尚未提交单位', unitProgressTotals.missing, 'danger'],
         ].map(([label, value, tone]) => <div className={`achievement-progress-metric${tone === 'warning' ? ' is-warning' : ''}${tone === 'danger' ? ' is-danger' : ''}`} key={String(label)}><Statistic title={label} value={value} suffix={String(label).includes('单位') ? '个' : '项'} /></div>)}
@@ -298,7 +311,7 @@ export function AchievementEntryPage() {
           { key: 'indicators', label: '按指标查看', children: renderIndicatorProgress(summary.details) },
         ]} /> }}
         columns={[
-          { title: '课题汇总', dataIndex: 'topicId', render: (value: string) => <Space><Text strong>{topicMap[value]?.name ?? value}</Text>{topicMap[value]?.code && <Tag color="blue">{topicMap[value].code}</Tag>}</Space> },
+          { title: '课题汇总', dataIndex: 'topicId', render: (value: string) => <Space><Text strong>{topicMap[value]?.name ?? value}</Text>{topicMap[value]?.code && <Tag color="blue">{topicMap[value].code}</Tag>}{topicMap[value] && !topicMap[value].enabled && <Tag>已停用 · 只读</Tag>}</Space> },
           { title: '累计目标', dataIndex: 'target', width: 100 },
           { title: '成果已提交', width: 110, render: (_: unknown, row) => row.stages.submitted },
           { title: '已生效', width: 90, render: (_: unknown, row) => row.stages.effective },

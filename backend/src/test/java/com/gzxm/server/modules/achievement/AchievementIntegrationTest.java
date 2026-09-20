@@ -118,11 +118,11 @@ class AchievementIntegrationTest {
         var response=call(post("/api/v1/achievements").content(request.toString()),"INTERNAL_TOPIC_UNIT",2L)
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.unitId").value("2")).andExpect(jsonPath("$.status").value("DRAFT")).andReturn().getResponse();
         String id=json.readTree(response.getContentAsString()).path("id").asText();create(1,3);
-        call(get("/api/v1/achievements"),"INTERNAL_TOPIC_UNIT",1L).andExpect(jsonPath("$.total").value(2));
+        call(get("/api/v1/achievements"),"INTERNAL_TOPIC_UNIT",1L).andExpect(jsonPath("$.total").value(0));
         call(get("/api/v1/achievements"),"INTERNAL_TOPIC_UNIT",2L).andExpect(jsonPath("$.total").value(1));
         call(get("/api/v1/achievements?unitId=3"),"INTERNAL_TOPIC_UNIT",2L).andExpect(jsonPath("$.total").value(0));
         call(get("/api/v1/achievements/"+id),"EXTERNAL_TOPIC_UNIT",3L).andExpect(status().isForbidden());
-        call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",1L).andExpect(status().isOk());
+        call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",1L).andExpect(status().isForbidden());
         call(get("/api/v1/achievements"),"SYSTEM_ADMIN",null).andExpect(jsonPath("$.total").value(2));
         call(get("/api/v1/achievements"),"RESEARCH_ASSISTANT",null).andExpect(jsonPath("$.total").value(0));
         call(get("/api/v1/achievements"),"PROJECT_TECH_LEADER",null).andExpect(jsonPath("$.total").value(0));
@@ -178,7 +178,7 @@ class AchievementIntegrationTest {
         jdbc.update("UPDATE biz_topic_unit_membership SET membership_type=CASE WHEN unit_id=2 THEN 'LEAD' ELSE 'PARTICIPANT' END");
         mvc.perform(get("/api/v1/achievements/"+id).with(authentication(oldLead))).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/achievements").with(authentication(oldLead))).andExpect(jsonPath("$.total").value(0));
-        call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isOk());
+        call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isForbidden());
         jdbc.update("UPDATE biz_topic_unit_membership SET enabled=0 WHERE unit_id=3");
         mvc.perform(get("/api/v1/achievements/"+id).with(authentication(formerMember))).andExpect(status().isForbidden());
         mvc.perform(get("/api/v1/achievements").with(authentication(formerMember))).andExpect(jsonPath("$.total").value(0));

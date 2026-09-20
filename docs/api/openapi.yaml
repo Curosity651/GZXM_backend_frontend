@@ -410,6 +410,11 @@ paths:
       parameters: [{ $ref: '#/components/parameters/ReportId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       responses: { '200': { description: 已提交初审并冻结版本, content: { application/json: { schema: { $ref: '#/components/schemas/ProgressReport' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
   /reports/{reportId}/reviews:
+    get:
+      tags: [Reports]
+      operationId: listReportReviews
+      parameters: [{ $ref: '#/components/parameters/ReportId' }]
+      responses: { '200': { description: 报告审批记录, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ApprovalRecord' } } } } } }
     post:
       tags: [Reports]
       operationId: reviewReport

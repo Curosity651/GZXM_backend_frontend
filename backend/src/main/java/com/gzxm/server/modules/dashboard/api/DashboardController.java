@@ -29,7 +29,7 @@ public class DashboardController {
         var report = reports.progress(null, null);
         var archive = archives.progress(null, null, null);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("topicCount", topics.list(1, 1, null, null, true).total());
+        result.put("topicCount", topics.countBusinessTopics());
         result.put("reportTotal", report.get("total"));
         result.put("reportApproved", report.get("approved"));
         result.put("reportOverdue", report.get("overdue"));

@@ -26,6 +26,8 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
             "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
     private static final Set<String> LEADER_VISIBLE_STATES=Set.of(
             "PRE_FINAL","PRE_APPROVED","EXTERNAL_SUBMITTED","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_FINAL","EFFECTIVE");
+    private static final Set<String> INDICATOR_COUNTABLE_STATES=Set.of(
+            "WAIT_PUBLICATION","WAIT_GRANT","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","SUPPLEMENT_RETURNED","EFFECTIVE");
     private final IndicatorProgressQuery indicators;
     private final TopicQueryService topics;
     private final AchievementProgressMapper mapper;
@@ -103,7 +105,9 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
         return new Row(scope,Long.toString(context.topicId()),unit==null?null:unit.toString(),Long.toString(context.node().id()),Long.toString(definition.id()),definition.achievementType(),
                 target,version,target!=null,hasTarget,rate,historical,counts);
     }
-    private static boolean effective(Fact fact) {return fact.countsToIndicator();}
+    private static boolean effective(Fact fact) {
+        return fact.countsToIndicator() && INDICATOR_COUNTABLE_STATES.contains(fact.status());
+    }
     private Stages stages(List<Fact> facts) {
         return new Stages(facts.size(),facts.stream().filter(fact->!"DRAFT".equals(fact.status())).count(),facts.stream().filter(Fact::preApproved).count(),
                 facts.stream().filter(fact->Set.of("PAPER","PATENT").contains(fact.achievementType()) && fact.external()).count(),
