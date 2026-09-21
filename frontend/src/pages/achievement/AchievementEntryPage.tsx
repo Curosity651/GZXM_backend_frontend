@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dayjs from 'dayjs';
 import { Alert, Button, Card, Col, Drawer, Form, Input, Modal, Progress, Row, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UpOutlined, UploadOutlined } from '@ant-design/icons';
 import { achievementApi, type ApiAchievement, type AchievementProgress, type AchievementProgressRow, type AchievementWrite } from '../../api/achievement-api';
@@ -21,7 +22,7 @@ const editableStatuses = new Set(['DRAFT', 'PRE_RETURNED', 'FORMAL_DRAFT', 'FORM
 const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstInventor', 'inventorList', 'applicationNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'technicalField', 'ownershipDescription', 'isPowerGridFirstApplicant', 'copyrightStatus', 'softwareFullName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'copyrightPublicationDate', 'firstPublicationDate', 'developmentMode', 'softwareCategory', 'hardwareEnvironment', 'developmentOperatingSystem', 'softwareDevelopmentEnvironment', 'operatingPlatform', 'softwareSupportEnvironment', 'developmentLanguage', 'sourceCodeQuantity', 'developmentPurpose', 'industryField', 'technicalFeatures', 'isPowerGridFirstCopyrightOwner', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
 
 interface FormValues extends Record<string, unknown> {
-  unitIndicatorAllocationId: string; topicId: string; unitId: string; nodeId: string; indicatorDefinitionId: string;
+  topicId: string; unitId: string; nodeId: string; indicatorDefinitionId: string;
   achievementType: ApiAchievement['achievementType']; title: string; responsiblePerson: string;
 }
 
@@ -56,7 +57,7 @@ const groupIndicatorRows = (base: AchievementProgressRow[], special: Achievement
 export function AchievementEntryPage() {
   const user = useSessionStore((state) => state.user)!;
   const [form] = Form.useForm<FormValues>();
-  const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
+  const selectedDefinitionId = Form.useWatch('indicatorDefinitionId', form);
   const [topics, setTopics] = useState<ApiTopic[]>([]);
   const [progressTopics, setProgressTopics] = useState<ApiTopic[]>([]);
   const [units, setUnits] = useState<ApiUnit[]>([]);
@@ -121,8 +122,12 @@ export function AchievementEntryPage() {
   const topicMap = useMemo(() => Object.fromEntries(progressTopics.map((item) => [item.id, item])), [progressTopics]);
   const unitMap = useMemo(() => Object.fromEntries(units.map((item) => [item.id, item.name])), [units]);
   const visibleUnitOptions = units.filter((unit) => rows.some((row) => row.unitId === unit.id));
-  const selectedDefinitionId = String(allocationId ?? '').split(':')[1];
   const selectedType = editing?.achievementType ?? definitions.find((item) => item.id === selectedDefinitionId)?.achievementType as ApiAchievement['achievementType'] | undefined;
+  const automaticNode = useMemo(() => {
+    const active = nodes.filter((node) => node.enabled).sort((left, right) => left.sortOrder - right.sortOrder);
+    const today = dayjs().startOf('day');
+    return active.find((node) => !dayjs(node.deadline).isBefore(today, 'day')) ?? active.at(-1);
+  }, [nodes]);
   const workflowStage: 'PRE' | 'FORMAL' | 'SUPPLEMENT' = editing && ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(editing.status) ? 'FORMAL'
     : editing && ['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED'].includes(editing.status) ? 'SUPPLEMENT' : 'PRE';
   const visibleRows = rows.filter((item) => matchesAchievementPhase(item.status, filters.status)
@@ -202,6 +207,7 @@ export function AchievementEntryPage() {
     setEditing(undefined); setPendingFiles({}); form.resetFields();
     form.setFieldsValue({
       unitId: user.unitId,
+      nodeId: automaticNode?.id,
       responsiblePerson: user.principalName || user.username,
       projectLabeling: `${import.meta.env.VITE_PROJECT_NAME ?? '国家科技重大专项示范'}（${import.meta.env.VITE_PROJECT_CODE ?? 'GZ-2025-001'}）`,
     });
@@ -209,7 +215,7 @@ export function AchievementEntryPage() {
   };
   const openEdit = (row: ApiAchievement) => {
     setEditing(row); setPendingFiles({});
-    form.setFieldsValue({ unitIndicatorAllocationId: `${row.nodeId}:${row.indicatorDefinitionId}`, indicatorDefinitionId: row.indicatorDefinitionId, topicId: row.topicId, unitId: row.unitId, nodeId: row.nodeId,
+    form.setFieldsValue({ indicatorDefinitionId: row.indicatorDefinitionId, topicId: row.topicId, unitId: row.unitId, nodeId: row.nodeId,
       achievementType: row.achievementType, title: row.title, responsiblePerson: row.responsiblePerson, ...row.detail });
     setFormOpen(true);
   };

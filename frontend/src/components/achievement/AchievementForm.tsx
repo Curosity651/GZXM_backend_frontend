@@ -28,11 +28,13 @@ interface AchievementFormProps {
 export function AchievementForm({ form, topics, units, lockOwnership = false, definitions = [], project, allocations, nodes, currentUnitId, workflowStage = 'PRE' }: AchievementFormProps) {
   const achievementType = Form.useWatch('achievementType', form);
   const topicId = Form.useWatch('topicId', form);
-  const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
+  const selectedDefinitionId = Form.useWatch('indicatorDefinitionId', form);
+  const selectedNodeId = Form.useWatch('nodeId', form);
   const unit = units.find((item) => item.id === currentUnitId);
-  const activeNodes = nodes.filter((item) => item.enabled).sort((a, b) => a.sortOrder - b.sortOrder);
-  const baseDefinitions = definitions.filter((item) => item.enabled && item.category === 'BASE');
-  const [selectedNodeId, selectedDefinitionId] = String(allocationId ?? '').split(':');
+  const typeLabels: Record<string, string> = { PAPER: '学术论文', PATENT: '发明专利', COPYRIGHT: '软件著作权', STANDARD: '标准规范', TALENT: '人才培养' };
+  const baseDefinitions = ['PAPER', 'PATENT', 'COPYRIGHT', 'STANDARD', 'TALENT']
+    .map((type) => definitions.find((item) => item.enabled && item.category === 'BASE' && item.achievementType === type))
+    .filter((item): item is IndicatorDefinition => Boolean(item));
   const selectedNode = nodes.find((item) => item.id === selectedNodeId);
   const selectedDefinition = definitions.find((item) => item.id === selectedDefinitionId);
   const selectedAllocation = allocations.find((item) => item.status === 'PUBLISHED' && item.unitId === currentUnitId
@@ -52,7 +54,7 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
               <Select
                 placeholder="选择课题"
                 disabled={lockOwnership}
-                onChange={() => form.setFieldsValue({ unitIndicatorAllocationId: undefined, indicatorDefinitionId: undefined, achievementType: undefined, nodeId: undefined })}
+                onChange={() => form.setFieldsValue({ indicatorDefinitionId: undefined, achievementType: undefined })}
               >
                 {topics.map((t) => (
                   <Option key={t.id} value={t.id}>{t.name}</Option>
@@ -67,33 +69,25 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
             <Form.Item name="unitId" hidden rules={[{ required: true, message: '缺少当前账号所属单位' }]}><Input /></Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item label="对应成果指标" name="unitIndicatorAllocationId" rules={[{ required: true, message: '请选择成果指标与考核节点' }]}>
+            <Form.Item label="对应成果指标" name="indicatorDefinitionId" rules={[{ required: true, message: '请选择成果指标' }]}>
               <Select
-                placeholder={topicId ? '选择成果指标与考核节点' : '请先选择课题'}
+                placeholder={topicId ? '选择成果指标' : '请先选择课题'}
                 disabled={!topicId || lockOwnership}
-                onChange={(id: string) => {
-                  const [nodeId, definitionId] = id.split(':');
+                onChange={(definitionId: string) => {
                   const definition = definitions.find((item) => item.id === definitionId);
                   form.setFieldsValue({
-                    indicatorDefinitionId: definitionId,
                     achievementType: definition?.achievementType,
-                    nodeId,
                   });
                 }}
-                options={activeNodes.flatMap((node) => baseDefinitions.map((definition) => {
-                  const allocation = allocations.find((item) => item.status === 'PUBLISHED' && item.unitId === currentUnitId
-                    && item.topicId === topicId && item.nodeId === node.id && item.indicatorDefinitionId === definition.id);
-                  return { label: `${definition.name} · ${node.name}（目标 ${allocation?.targetQuantity ?? 0}）`, value: `${node.id}:${definition.id}` };
-                }))}
+                options={baseDefinitions.map((definition) => ({ label: typeLabels[definition.achievementType] ?? definition.name, value: definition.id }))}
               />
             </Form.Item>
-            <Form.Item name="indicatorDefinitionId" hidden><Input /></Form.Item>
             <Form.Item name="achievementType" hidden><Input /></Form.Item>
-            <Form.Item name="nodeId" hidden><Input /></Form.Item>
+            <Form.Item name="nodeId" hidden rules={[{ required: true, message: '未配置有效考核节点' }]}><Input /></Form.Item>
           </Col>
           <Col span={12}>
             <Form.Item label="考核节点">
-              <Input value={selectedNode ? `${selectedNode.name}（${selectedNode.deadline}）` : '请先选择成果指标'} disabled />
+              <Input value={selectedNode ? `${selectedNode.name}（${selectedNode.deadline}，系统自动归属）` : '未配置有效考核节点'} disabled />
             </Form.Item>
           </Col>
           <Col span={12}>
