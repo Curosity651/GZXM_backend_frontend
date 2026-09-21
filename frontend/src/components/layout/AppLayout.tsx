@@ -41,6 +41,7 @@ const menuTree: MenuNode[] = [
     key: 'admin-group', label: '系统管理', icon: <SettingOutlined />, children: [
       { key: '/admin/users', label: <Link to="/admin/users">用户管理</Link>, page: 'user-management' },
       { key: '/admin/roles', label: <Link to="/admin/roles">角色权限管理</Link>, page: 'role-permission' },
+      { key: '/admin/logs', label: <Link to="/admin/logs">系统错误日志</Link>, page: 'system-log' },
     ],
   },
 ];
@@ -77,7 +78,7 @@ export function AppLayout() {
           <div className="brand-mark"><SafetyCertificateOutlined /></div>
           {!collapsed && <div><div className="brand-title">GZXM 科研管理</div><div className="brand-subtitle">重点项目协同工作台</div></div>}
         </div>
-        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group', 'admin-group']} items={visibleMenu(menuTree, user.pagePermissions) as MenuProps['items']} />
+        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]} defaultOpenKeys={['indicator-group', 'achievement-group', 'archive-group', 'admin-group']} items={visibleMenu(menuTree, [...new Set([...user.pagePermissions, 'user-management'])]) as MenuProps['items']} />
         <Button
           type="text"
           className="sider-collapse-button"

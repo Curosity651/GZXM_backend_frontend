@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { Result, Spin } from 'antd';
+import { Spin } from 'antd';
 import { type PageKey } from '../domain/permissions';
 import { useSessionStore } from '../store/session';
 
@@ -13,7 +13,19 @@ const routePermissions: Record<string, PageKey> = {
   '/archive/topics': 'topic-archive', '/archive/self-funded': 'self-funded-archive',
   '/archive/monitoring': 'archive-monitoring', '/admin/users': 'user-management', '/admin/roles': 'role-permission',
   '/admin/config': 'system-config',
+  '/admin/logs': 'system-log',
 };
+
+const pageRoutes: Array<[PageKey, string]> = [
+  ['topic-indicator', '/indicator'], ['achievement-entry', '/achievement-entry'],
+  ['report-management', '/reports'], ['topic-archive', '/archive/topics'],
+  ['self-funded-archive', '/archive/self-funded'], ['archive-monitoring', '/archive/monitoring'],
+  ['user-management', '/admin/users'], ['role-permission', '/admin/roles'], ['system-log', '/admin/logs'],
+];
+
+function firstAccessibleRoute(pagePermissions: string[]) {
+  return pageRoutes.find(([page]) => page === 'user-management' || pagePermissions.includes(page))?.[1] ?? '/admin/users';
+}
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const user = useSessionStore((state) => state.user);
@@ -36,8 +48,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   const page = routePermissions[location.pathname] ?? Object.entries(routePermissions).find(([path]) => path !== '/' && location.pathname.startsWith(`${path}/`))?.[1];
-  if (page && !user.pagePermissions.includes(page)) {
-    return <Result status="403" title="无权访问" subTitle="当前角色没有该页面权限，请从左侧菜单进入可用功能。" />;
+  const permitted = page === 'user-management' || !page || user.pagePermissions.includes(page);
+  if (!permitted || (location.pathname === '/' && !user.pagePermissions.includes('home'))) {
+    return <Navigate to={firstAccessibleRoute(user.pagePermissions)} replace />;
   }
 
   return <>{children}</>;

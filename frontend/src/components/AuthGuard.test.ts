@@ -37,10 +37,9 @@ describe('AuthGuard server permissions', () => {
     expect(screen.getByText('用户管理内容')).toBeTruthy();
   });
 
-  it('rejects a page absent from the current server session', () => {
+  it('keeps the self-profile page available even when it is absent from configurable permissions', () => {
     useSessionStore.setState({ user: user(['home']), status: 'authenticated' });
     renderProtectedPage();
-    expect(screen.getByText('无权访问')).toBeTruthy();
-    expect(screen.queryByText('用户管理内容')).toBeNull();
+    expect(screen.getByText('用户管理内容')).toBeTruthy();
   });
 });

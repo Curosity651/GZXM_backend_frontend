@@ -1,8 +1,12 @@
 import { apiRequest } from './http-client';
 
 export interface ReportRule {
-  effectiveYear: number; monthlyEnabled: boolean; monthlyOpenDay: number; monthlyDeadlineDay: number;
-  quarterlyEnabled: boolean; quarterlyOpenDay: number; quarterlyDeadlineDay: number;
+  effectiveYear: number; monthlyEnabled: boolean;
+  monthlyStartYear?: number; monthlyStartPeriod?: number; monthlyEndYear?: number; monthlyEndPeriod?: number;
+  monthlyOpenDay: number; monthlyDeadlineDay: number;
+  quarterlyEnabled: boolean;
+  quarterlyStartYear?: number; quarterlyStartPeriod?: number; quarterlyEndYear?: number; quarterlyEndPeriod?: number;
+  quarterlyOpenDay: number; quarterlyDeadlineDay: number;
   quarterlyMonths: number[]; recordVersion?: number;
 }
 export interface ApiReport {
@@ -20,10 +24,17 @@ export interface ApiApproval {
   decision: string; opinion?: string; operatorId: string; submittedVersion: number; operatedAt: string;
 }
 export interface ApiSnapshot { id: string; submittedVersion: number; submittedAt: string; payload: Record<string, unknown> }
-export interface ReportProgress {
-  total: number; draft: number; reviewing: number; approved: number; returned: number;
-  submitted: number; overdue: number; passRate: number;
+export interface ReportProgressPeriod {
+  reportId?: string; reportType: 'MONTHLY' | 'QUARTERLY'; year: number; period: number;
+  openDate: string; deadline: string;
+  status: ApiReport['status'] | 'NOT_OPEN' | 'NOT_CREATED'; timing: 'UPCOMING' | 'NORMAL' | 'OVERDUE';
+  submittedVersion: number;
 }
+export interface ReportProgressTopic {
+  topicId: string; topicCode: string; topicName: string; expected: number; submitted: number;
+  approved: number; missing: number; overdue: number; periods: ReportProgressPeriod[];
+}
+export interface ReportProgress { year: number; topics: ReportProgressTopic[] }
 
 export const reportApi = {
   list: (params: URLSearchParams = new URLSearchParams()) => apiRequest<ApiPage<ApiReport>>(`/reports?${params}`),
@@ -38,5 +49,11 @@ export const reportApi = {
   snapshots: (id: string) => apiRequest<ApiSnapshot[]>(`/reports/${id}/snapshots`),
   rule: (topicId: string, effectiveYear?: number) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule${effectiveYear ? `?effectiveYear=${effectiveYear}` : ''}`),
   saveRule: (topicId: string, rule: ReportRule) => apiRequest<ReportRule>(`/topics/${topicId}/report-rule`, { method: 'PUT', body: JSON.stringify(rule) }),
-  progress: (topicId?: string) => apiRequest<ReportProgress>(`/report-progress${topicId ? `?topicId=${topicId}` : ''}`),
+  progress: (filters: { topicId?: string; year?: number; reportType?: 'MONTHLY' | 'QUARTERLY' } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.topicId) params.set('topicId', filters.topicId);
+    if (filters.year) params.set('year', String(filters.year));
+    if (filters.reportType) params.set('reportType', filters.reportType);
+    return apiRequest<ReportProgress>(`/report-progress${params.size ? `?${params}` : ''}`);
+  },
 };

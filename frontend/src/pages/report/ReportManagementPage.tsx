@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Card, Col, Divider, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Col, Divider, Drawer, Form, Input, InputNumber, Modal, Progress, Row, Select, Space, Table, Tabs, Tag, Typography, message } from 'antd';
 import { CheckOutlined, DownOutlined, EditOutlined, EyeOutlined, FileAddOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UpOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../api/http-client';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
-import { reportApi, type ApiApproval, type ApiReport, type ReportContent, type ReportRule } from '../../api/report-api';
+import { reportApi, type ApiApproval, type ApiReport, type ReportContent, type ReportProgress, type ReportProgressPeriod, type ReportProgressTopic, type ReportRule } from '../../api/report-api';
 import { validDemonstrationProgress } from './report-validation';
 import { ReportForm, type ReportFormValues } from '../../components/report/ReportForm';
 import { ApprovalTimeline } from '../../components/common/ApprovalTimeline';
@@ -16,12 +16,18 @@ const { Text } = Typography;
 const statusNames: Record<ApiReport['status'], string> = {
   DRAFT: '草稿', INITIAL_REVIEW: '初审中', FINAL_REVIEW: '终审中', APPROVED: '已通过', RETURNED: '退回修改',
 };
+const progressStatusNames: Record<ReportProgressPeriod['status'], string> = {
+  NOT_OPEN: '尚未到填报期', NOT_CREATED: '尚未创建', DRAFT: '草稿未提交', INITIAL_REVIEW: '初审中',
+  FINAL_REVIEW: '终审中', APPROVED: '已通过', RETURNED: '退回修改',
+};
 
 export function ReportManagementPage() {
   const [user, setUser] = useState<ApiCurrentUser>();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [reports, setReports] = useState<ApiReport[]>([]);
-  const [progressStats, setProgressStats] = useState({ total: 0, draft: 0, reviewing: 0, approved: 0, returned: 0, submitted: 0, overdue: 0, passRate: 0 });
+  const [progress, setProgress] = useState<ReportProgress>({ year: new Date().getFullYear(), topics: [] });
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressFilters, setProgressFilters] = useState<{ topicId?: string; year: number; reportType?: 'MONTHLY' | 'QUARTERLY' }>({ year: new Date().getFullYear() });
   const [selected, setSelected] = useState<ApiReport>();
   const [creating, setCreating] = useState(false);
   const [configuring, setConfiguring] = useState(false);
@@ -39,6 +45,8 @@ export function ReportManagementPage() {
   const [contentForm] = Form.useForm<ReportFormValues>();
   const [ruleForm] = Form.useForm<ReportRule>();
   const createValues = Form.useWatch([], createForm) as { topicId?: string; reportType?: ApiReport['reportType']; year?: number; period?: number } | undefined;
+  const monthlyRuleEnabled = Form.useWatch('monthlyEnabled', ruleForm);
+  const quarterlyRuleEnabled = Form.useWatch('quarterlyEnabled', ruleForm);
   const pendingDefaultInitialized = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -63,9 +71,11 @@ export function ReportManagementPage() {
   }, [filters]);
   useEffect(() => { void refresh(); }, [refresh]);
   const refreshProgress = useCallback(async () => {
-    try { setProgressStats(await reportApi.progress()); }
+    setProgressLoading(true);
+    try { setProgress(await reportApi.progress(progressFilters)); }
     catch (error) { message.error(error instanceof Error ? error.message : '进度统计加载失败'); }
-  }, []);
+    finally { setProgressLoading(false); }
+  }, [progressFilters]);
   useEffect(() => { void refreshProgress(); }, [refreshProgress]);
   const canSubmit = Boolean(user && ['INTERNAL_TOPIC_UNIT', 'EXTERNAL_TOPIC_UNIT'].includes(user.roleCode) && user.actionPermissions.includes('report.submit'));
   const canConfigure = user?.roleCode === 'RESEARCH_ASSISTANT' && user.actionPermissions.includes('report.rule.manage');
@@ -181,8 +191,10 @@ export function ReportManagementPage() {
   const openRule = async (topicId: string, effectiveYear = ruleYear) => {
     setRuleTopic(topicId);
     try { ruleForm.setFieldsValue(await reportApi.rule(topicId, effectiveYear)); }
-    catch { ruleForm.setFieldsValue({ effectiveYear, monthlyEnabled: true, monthlyOpenDay: 1,
-      monthlyDeadlineDay: 25, quarterlyEnabled: true, quarterlyOpenDay: 1, quarterlyDeadlineDay: 25,
+    catch { ruleForm.setFieldsValue({ effectiveYear, monthlyEnabled: true, monthlyStartYear: effectiveYear, monthlyStartPeriod: 1,
+      monthlyEndYear: effectiveYear, monthlyEndPeriod: 12, monthlyOpenDay: 1,
+      monthlyDeadlineDay: 25, quarterlyEnabled: true, quarterlyStartYear: effectiveYear, quarterlyStartPeriod: 1,
+      quarterlyEndYear: effectiveYear, quarterlyEndPeriod: 4, quarterlyOpenDay: 1, quarterlyDeadlineDay: 25,
       quarterlyMonths: [3, 6, 9, 12], recordVersion: 0 }); }
     setConfiguring(true);
   };
@@ -216,12 +228,50 @@ export function ReportManagementPage() {
   };
   const ruleStatusText = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? '已配置' : topicId && ruleStatuses[topicId] === false ? '未配置' : '检查中';
   const ruleStatusColor = (topicId?: string) => topicId && ruleStatuses[topicId] === true ? 'success' : topicId && ruleStatuses[topicId] === false ? 'default' : 'processing';
+  const progressStatusColor = (status: ReportProgressPeriod['status']) => status === 'APPROVED' ? 'green'
+    : status === 'NOT_CREATED' ? 'red' : status === 'DRAFT' || status === 'RETURNED' ? 'orange'
+      : status === 'INITIAL_REVIEW' ? 'purple' : status === 'FINAL_REVIEW' ? 'blue' : 'default';
+  const renderProgressPeriods = (topic: ReportProgressTopic, type: ReportProgressPeriod['reportType']) => {
+    const periods = topic.periods.filter((period) => period.reportType === type);
+    if (!periods.length) return <Alert type="info" showIcon message={`当前年度未配置${type === 'MONTHLY' ? '月报' : '季报'}填报范围`} />;
+    return <Table<ReportProgressPeriod> size="small" rowKey={(row) => `${row.reportType}-${row.year}-${row.period}`}
+      dataSource={periods} pagination={false} columns={[
+        { title: '报告期次', width: 190, render: (_: unknown, row) => row.reportType === 'MONTHLY' ? `${row.year} 年 ${row.period} 月` : `${row.year} 年第 ${row.period} 季度` },
+        { title: '开放日期', dataIndex: 'openDate', width: 130 },
+        { title: '截止日期', dataIndex: 'deadline', width: 130 },
+        { title: '当前状态', width: 150, render: (_: unknown, row) => <Tag color={progressStatusColor(row.status)}>{progressStatusNames[row.status]}</Tag> },
+        { title: '时效', width: 110, render: (_: unknown, row) => row.timing === 'UPCOMING' ? '—' : row.timing === 'OVERDUE' ? <Tag color="red">已逾期</Tag> : <Tag color="green">正常</Tag> },
+      ]} />;
+  };
 
   return <>
-    <Card title="月季报进度" extra={<Button icon={<ReloadOutlined />} onClick={() => void refreshProgress()}>刷新</Button>} style={{ marginBottom: 16 }}><Row gutter={[12, 12]}>
-      {[["已发起报告", progressStats.total], ['草稿', progressStats.draft], ['审核中', progressStats.reviewing], ['已通过', progressStats.approved], ['退回修改', progressStats.returned], ['逾期', progressStats.overdue]].map(([label, value]) => <Col flex="1 1 140px" key={String(label)}><Statistic title={label} value={value} /></Col>)}
-      <Col flex="1 1 220px"><Text type="secondary">审批通过率</Text><Progress percent={progressStats.passRate} status={progressStats.passRate >= 100 ? 'success' : 'active'} /></Col>
-    </Row></Card>
+    <Card className="report-progress-card" title={<div><div>月季报进度</div><Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>汇总统计独立于下方报告列表筛选，点击课题查看缺少的具体期次</Text></div>}
+      extra={<Space wrap>
+        <Text>课题</Text><Select allowClear placeholder="全部课题" value={progressFilters.topicId} style={{ width: 280 }}
+          onChange={(value) => setProgressFilters((current) => ({ ...current, topicId: value }))}
+          options={topics.map((topic) => ({ value: topic.id, label: `${topic.code} ${topic.name}` }))} />
+        <Text>年度</Text><InputNumber min={2000} max={2100} value={progressFilters.year} style={{ width: 110 }}
+          onChange={(value) => value && setProgressFilters((current) => ({ ...current, year: value }))} />
+        <Text>类型</Text><Select allowClear placeholder="全部" value={progressFilters.reportType} style={{ width: 110 }}
+          onChange={(value) => setProgressFilters((current) => ({ ...current, reportType: value }))}
+          options={[{ value: 'MONTHLY', label: '月报' }, { value: 'QUARTERLY', label: '季报' }]} />
+        <Button icon={<ReloadOutlined />} loading={progressLoading} onClick={() => void refreshProgress()}>刷新</Button>
+      </Space>} style={{ marginBottom: 16 }}>
+      <Table<ReportProgressTopic> loading={progressLoading} rowKey="topicId" size="small" dataSource={progress.topics} pagination={false}
+        locale={{ emptyText: '当前筛选范围内暂无月季报规则' }}
+        expandable={{ expandRowByClick: true, expandedRowRender: (topic) => <Tabs defaultActiveKey={progressFilters.reportType === 'QUARTERLY' ? 'quarterly' : 'monthly'} items={[
+          { key: 'monthly', label: `月报（${topic.periods.filter((row) => row.reportType === 'MONTHLY' && row.submittedVersion > 0).length}/${topic.periods.filter((row) => row.reportType === 'MONTHLY').length}）`, children: renderProgressPeriods(topic, 'MONTHLY') },
+          { key: 'quarterly', label: `季报（${topic.periods.filter((row) => row.reportType === 'QUARTERLY' && row.submittedVersion > 0).length}/${topic.periods.filter((row) => row.reportType === 'QUARTERLY').length}）`, children: renderProgressPeriods(topic, 'QUARTERLY') },
+        ].filter((item) => !progressFilters.reportType || item.key === (progressFilters.reportType === 'MONTHLY' ? 'monthly' : 'quarterly'))} /> }}
+        columns={[
+          { title: '课题汇总', render: (_: unknown, row) => <Space><Text strong>{row.topicName}</Text><Tag color="blue">{row.topicCode}</Tag></Space> },
+          { title: '应填期数', dataIndex: 'expected', width: 100 },
+          { title: '已提交', dataIndex: 'submitted', width: 90 },
+          { title: '已通过', dataIndex: 'approved', width: 90 },
+          { title: '提交进度', width: 210, render: (_: unknown, row) => { const rate = row.expected ? Math.round(row.submitted * 100 / row.expected) : 0; return <Space><Text strong>{rate}%</Text><Progress className="report-progress-rate" size="small" percent={rate} showInfo={false} status={rate >= 100 ? 'success' : 'active'} /></Space>; } },
+          { title: '尚未提交 / 逾期', width: 190, render: (_: unknown, row) => <Space>{row.missing > 0 ? <Tag color="orange">{row.missing} 期未提交</Tag> : <Tag color="green">全部提交</Tag>}{row.overdue > 0 && <Tag color="red">{row.overdue} 期逾期</Tag>}</Space> },
+        ]} />
+    </Card>
     <Card title={`月季报列表（${filteredReports.length}）`} extra={<Space>
       <Button icon={<ReloadOutlined />} onClick={() => void Promise.all([refresh(), refreshProgress()])}>刷新</Button>
       {canConfigure && <Button disabled={topics.length === 0} onClick={openRulePanel}>配置填报规则</Button>}
@@ -281,17 +331,57 @@ export function ReportManagementPage() {
     <Modal title={decision === 'APPROVE' ? '确认审批通过' : '退回修改'} open={Boolean(decision)} onCancel={() => { setDecision(undefined); setOpinion(''); }} onOk={() => void confirmReview()} confirmLoading={busy}>
       <Input.TextArea rows={4} value={opinion} onChange={(event) => setOpinion(event.target.value)} placeholder={decision === 'RETURN' ? '请填写明确的退回原因' : '审批意见（选填）'} />
     </Modal>
-    <Modal title="课题填报规则" open={configuring} onCancel={() => setConfiguring(false)} onOk={() => void saveRule()} confirmLoading={busy}>
+    <Modal width={1040} title="课题填报规则" open={configuring} onCancel={() => setConfiguring(false)} onOk={() => void saveRule()} confirmLoading={busy} okText="保存规则">
       <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
         <Select style={{ width: '100%' }} value={ruleTopic} onChange={value => void openRule(value, ruleYear)} options={topics.map(t => ({ value: t.id, label: <Space><span>{t.name}</span><Tag color={ruleStatusColor(t.id)}>{ruleStatusText(t.id)}</Tag></Space> }))} />
         <Tag color={ruleStatusColor(ruleTopic)} style={{ display: 'flex', alignItems: 'center', marginInlineEnd: 0, paddingInline: 12 }}>{ruleStatusText(ruleTopic)}</Tag>
       </Space.Compact>
-      <Form form={ruleForm} layout="vertical"><Form.Item name="effectiveYear" label="生效年度"><InputNumber min={2000} max={2100} style={{ width: '100%' }} onChange={changeRuleYear} /></Form.Item>
-        <Form.Item name="monthlyEnabled" label="启用月报"><Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></Form.Item>
-        <Space><Form.Item name="monthlyOpenDay" label="月报开放日"><InputNumber min={1} max={31} /></Form.Item><Form.Item name="monthlyDeadlineDay" label="月报截止日"><InputNumber min={1} max={31} /></Form.Item></Space>
-        <Form.Item name="quarterlyEnabled" label="启用季报"><Select options={[{ value: true, label: '是' }, { value: false, label: '否' }]} /></Form.Item>
-        <Space><Form.Item name="quarterlyOpenDay" label="季报开放日"><InputNumber min={1} max={31} /></Form.Item><Form.Item name="quarterlyDeadlineDay" label="季报截止日"><InputNumber min={1} max={31} /></Form.Item></Space>
-        <Form.Item name="quarterlyMonths" label="四个季度对应月份"><Select mode="multiple" maxCount={4} options={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1} 月` }))} /></Form.Item>
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} message="分别设置月报、季报需要提交的起止期次；月季报进度将据此自动计算应填、未提交和逾期期数。" />
+      <Form form={ruleForm} layout="vertical">
+        <Form.Item name="effectiveYear" label="规则生效年度" rules={[{ required: true, message: '请选择规则生效年度' }]} extra="用于查找和区分规则，应与已启用范围中最早的开始年度一致。">
+          <InputNumber min={2000} max={2100} style={{ width: 220 }} onChange={changeRuleYear} />
+        </Form.Item>
+        <Row gutter={16} align="stretch">
+          <Col xs={24} lg={12}>
+            <Card className="report-rule-section" size="small" title="月报规则" extra={<Form.Item name="monthlyEnabled" noStyle><Select style={{ width: 100 }} options={[{ value: true, label: '已启用' }, { value: false, label: '已停用' }]} /></Form.Item>}>
+              <Text type="secondary">按自然月连续生成应填期次。</Text>
+              <Divider />
+              <Text strong>提交范围</Text>
+              <Row gutter={8} style={{ marginTop: 10 }}>
+                <Col span={6}><Form.Item name="monthlyStartYear" label="开始年度" rules={monthlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!monthlyRuleEnabled} min={2000} max={2100} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={6}><Form.Item name="monthlyStartPeriod" label="开始月份" rules={monthlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><Select disabled={!monthlyRuleEnabled} options={Array.from({ length: 12 }, (_, index) => ({ value: index + 1, label: `${index + 1} 月` }))} /></Form.Item></Col>
+                <Col span={6}><Form.Item name="monthlyEndYear" label="结束年度" rules={monthlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!monthlyRuleEnabled} min={2000} max={2100} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={6}><Form.Item name="monthlyEndPeriod" label="结束月份" rules={monthlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><Select disabled={!monthlyRuleEnabled} options={Array.from({ length: 12 }, (_, index) => ({ value: index + 1, label: `${index + 1} 月` }))} /></Form.Item></Col>
+              </Row>
+              <Text strong>每期时间窗口</Text>
+              <Row gutter={8} style={{ marginTop: 10 }}>
+                <Col span={12}><Form.Item name="monthlyOpenDay" label="当月开放日" rules={monthlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!monthlyRuleEnabled} min={1} max={31} addonAfter="日" style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={12}><Form.Item name="monthlyDeadlineDay" label="当月截止日" rules={monthlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!monthlyRuleEnabled} min={1} max={31} addonAfter="日" style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+            </Card>
+          </Col>
+          <Col xs={24} lg={12}>
+            <Card className="report-rule-section" size="small" title="季报规则" extra={<Form.Item name="quarterlyEnabled" noStyle><Select style={{ width: 100 }} options={[{ value: true, label: '已启用' }, { value: false, label: '已停用' }]} /></Form.Item>}>
+              <Text type="secondary">按季度连续生成应填期次。</Text>
+              <Divider />
+              <Text strong>提交范围</Text>
+              <Row gutter={8} style={{ marginTop: 10 }}>
+                <Col span={6}><Form.Item name="quarterlyStartYear" label="开始年度" rules={quarterlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!quarterlyRuleEnabled} min={2000} max={2100} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={6}><Form.Item name="quarterlyStartPeriod" label="开始季度" rules={quarterlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><Select disabled={!quarterlyRuleEnabled} options={Array.from({ length: 4 }, (_, index) => ({ value: index + 1, label: `第 ${index + 1} 季度` }))} /></Form.Item></Col>
+                <Col span={6}><Form.Item name="quarterlyEndYear" label="结束年度" rules={quarterlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!quarterlyRuleEnabled} min={2000} max={2100} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={6}><Form.Item name="quarterlyEndPeriod" label="结束季度" rules={quarterlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><Select disabled={!quarterlyRuleEnabled} options={Array.from({ length: 4 }, (_, index) => ({ value: index + 1, label: `第 ${index + 1} 季度` }))} /></Form.Item></Col>
+              </Row>
+              <Text strong>每期时间窗口</Text>
+              <Row gutter={8} style={{ marginTop: 10 }}>
+                <Col span={12}><Form.Item name="quarterlyOpenDay" label="季末月开放日" rules={quarterlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!quarterlyRuleEnabled} min={1} max={31} addonAfter="日" style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={12}><Form.Item name="quarterlyDeadlineDay" label="季末月截止日" rules={quarterlyRuleEnabled ? [{ required: true, message: '必填' }] : []}><InputNumber disabled={!quarterlyRuleEnabled} min={1} max={31} addonAfter="日" style={{ width: '100%' }} /></Form.Item></Col>
+              </Row>
+              <Form.Item name="quarterlyMonths" label="各季度对应月份" rules={quarterlyRuleEnabled ? [{ required: true, message: '请选择 4 个对应月份' }] : []}>
+                <Select disabled={!quarterlyRuleEnabled} mode="multiple" maxCount={4} options={Array.from({ length: 12 }, (_, index) => ({ value: index + 1, label: `${index + 1} 月` }))} />
+              </Form.Item>
+            </Card>
+          </Col>
+        </Row>
       </Form>
     </Modal>
   </>;

@@ -26,13 +26,13 @@ public class DashboardController {
     @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "getDashboardSummary")
     public Map<String, Object> summary() {
-        var report = reports.progress(null, null);
+        var report = reports.progress(null, null, null);
         var archive = archives.progress(null, null, null);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("topicCount", topics.countBusinessTopics());
-        result.put("reportTotal", report.get("total"));
-        result.put("reportApproved", report.get("approved"));
-        result.put("reportOverdue", report.get("overdue"));
+        result.put("reportTotal", report.topics().stream().mapToInt(row -> row.expected()).sum());
+        result.put("reportApproved", report.topics().stream().mapToInt(row -> row.approved()).sum());
+        result.put("reportOverdue", report.topics().stream().mapToInt(row -> row.overdue()).sum());
         result.put("archiveRequired", archive.stream().mapToInt(row -> row.requiredCount()).sum());
         result.put("archiveCompleted", archive.stream().mapToInt(row -> row.completedCount()).sum());
         result.put("pendingReports", reports.list(1, 200, null, null, null, null, null, true).total());

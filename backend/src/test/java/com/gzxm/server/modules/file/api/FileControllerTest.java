@@ -36,6 +36,6 @@ class FileControllerTest {
 
     private FileService.FileContent content(String type) {
         var metadata = new FileDtos.FileView("7", "document", 3, type, null, "READY", "3", LocalDateTime.now());
-        return new FileService.FileContent(metadata, new byte[] { 1, 2, 3 });
+        return new FileService.FileContent(metadata, new java.io.ByteArrayInputStream(new byte[] { 1, 2, 3 }));
     }
 }

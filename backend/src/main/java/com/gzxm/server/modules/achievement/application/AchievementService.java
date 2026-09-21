@@ -20,10 +20,11 @@ import java.util.*;
 @Service
 public class AchievementService {
     private static final List<String> ASSISTANT_VISIBLE_STATES=List.of(
-            "PRE_INITIAL","PRE_FINAL","FORMAL_INITIAL","FORMAL_FINAL",
-            "WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","EFFECTIVE");
+            "PRE_INITIAL","PRE_FINAL","PRE_RETURNED","FORMAL_DRAFT","FORMAL_INITIAL","FORMAL_FINAL","FORMAL_RETURNED",
+            "WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_INITIAL","SUPPLEMENT_FINAL","SUPPLEMENT_RETURNED","EFFECTIVE");
     private static final List<String> LEADER_VISIBLE_STATES=List.of(
-            "PRE_FINAL","FORMAL_FINAL","WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_FINAL","EFFECTIVE");
+            "PRE_FINAL","FORMAL_DRAFT","FORMAL_FINAL","FORMAL_RETURNED",
+            "WAIT_PUBLICATION","WAIT_GRANT","WAIT_CERTIFICATE","SUPPLEMENT_FINAL","SUPPLEMENT_RETURNED","EFFECTIVE");
     private final AchievementMapper records;
     private final AchievementMaterialMapper materials;
     private final TopicQueryService topics;

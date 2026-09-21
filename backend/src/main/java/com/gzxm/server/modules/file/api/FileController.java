@@ -12,8 +12,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import org.springframework.core.io.InputStreamResource;
 
 @RestController
 @RequestMapping("/api/v1/files")
@@ -55,14 +57,14 @@ public class FileController {
     @PreAuthorize("hasAuthority('file.upload')")
     @Operation(operationId = "uploadFileContent")
     void uploadContent(@PathVariable long fileId, @RequestParam long expires, @RequestParam String signature,
-                       @RequestHeader("Content-Type") String contentType, @RequestBody byte[] content) {
+                       @RequestHeader("Content-Type") String contentType, InputStream content) {
         service.uploadContent(fileId, expires, signature, content, contentType);
     }
 
     @GetMapping("/{fileId}/content")
     @PreAuthorize("hasAuthority('file.download')")
     @Operation(operationId = "readFileContent")
-    ResponseEntity<byte[]> readContent(@PathVariable long fileId, @RequestParam long expires,
+    ResponseEntity<InputStreamResource> readContent(@PathVariable long fileId, @RequestParam long expires,
                                        @RequestParam String signature, @RequestParam(defaultValue = "false") boolean preview) {
         var content = service.readContent(fileId, expires, signature);
         MediaType mediaType;
@@ -76,8 +78,9 @@ public class FileController {
                 ? ContentDisposition.inline() : ContentDisposition.attachment();
         return ResponseEntity.ok()
                 .contentType(mediaType)
+                .contentLength(content.metadata().size())
                 .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Disposition", disposition.filename(content.metadata().originalName(), StandardCharsets.UTF_8).build().toString())
-                .body(content.bytes());
+                .body(new InputStreamResource(content.stream()));
     }
 }

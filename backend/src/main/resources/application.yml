@@ -61,6 +61,13 @@ app:
     root: ${FILE_STORAGE_ROOT:${FILE_MOCK_ROOT:./storage/files}}
     upload-ticket-ttl: ${FILE_UPLOAD_TICKET_TTL:15m}
     signed-url-ttl: ${FILE_SIGNED_URL_TTL:10m}
+    signing-secret: ${FILE_SIGNING_SECRET:}
+    webdav:
+      base-url: ${NAS_WEBDAV_BASE_URL:}
+      username: ${NAS_WEBDAV_USERNAME:}
+      password: ${NAS_WEBDAV_PASSWORD:}
+      connect-timeout: ${NAS_WEBDAV_CONNECT_TIMEOUT:5s}
+      request-timeout: ${NAS_WEBDAV_REQUEST_TIMEOUT:120s}
 
 logging:
   level:

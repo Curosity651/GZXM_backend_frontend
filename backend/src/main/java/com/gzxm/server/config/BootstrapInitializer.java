@@ -46,21 +46,21 @@ public class BootstrapInitializer implements ApplicationRunner {
         Map<String, RoleEntity> roleMap = seedRoles();
         assignNewRole(existingRoles, "SYSTEM_ADMIN", roleMap.get("SYSTEM_ADMIN"), permissionMap.keySet(), permissionMap);
         assignNewRole(existingRoles, "PROJECT_TECH_LEADER", roleMap.get("PROJECT_TECH_LEADER"), Set.of(
-                "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
+                "page:user-management", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "page:self-funded-archive", "page:archive-monitoring", "topic.manage", "indicator.manage", "topic-indicator.publish",
                 "achievement.final.approve", "report.final.approve", "archive.topic.submit", "self-funded.manage",
                 "file.upload", "file.download"), permissionMap);
         assignNewRole(existingRoles, "RESEARCH_ASSISTANT", roleMap.get("RESEARCH_ASSISTANT"), Set.of(
-                "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
+                "page:user-management", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "page:self-funded-archive", "page:archive-monitoring", "topic.manage", "indicator.manage", "topic-indicator.publish",
                 "achievement.initial.approve", "report.initial.approve", "report.rule.manage", "archive.topic.submit",
                 "self-funded.manage", "file.upload", "file.download"), permissionMap);
         assignNewRole(existingRoles, "INTERNAL_TOPIC_UNIT", roleMap.get("INTERNAL_TOPIC_UNIT"), Set.of(
-                "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
+                "page:user-management", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "page:self-funded-archive", "topic-unit.manage", "unit-allocation.manage", "unit-allocation.publish",
                 "achievement.submit", "report.submit", "archive.topic.submit", "self-funded.manage", "file.upload", "file.download"), permissionMap);
         assignNewRole(existingRoles, "EXTERNAL_TOPIC_UNIT", roleMap.get("EXTERNAL_TOPIC_UNIT"), Set.of(
-                "page:home", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
+                "page:user-management", "page:topic-indicator", "page:achievement-entry", "page:report-management", "page:topic-archive",
                 "topic-unit.manage", "unit-allocation.manage", "unit-allocation.publish", "achievement.submit", "report.submit",
                 "archive.topic.submit", "file.upload", "file.download"), permissionMap);
         seedAdmin(roleMap.get("SYSTEM_ADMIN"));
@@ -79,6 +79,7 @@ public class BootstrapInitializer implements ApplicationRunner {
         page(seeds, "role-permission", "角色权限管理", "系统管理", false);
         page(seeds, "dictionary", "字典管理", "系统管理", false);
         page(seeds, "system-config", "系统配置", "系统管理", false);
+        page(seeds, "system-log", "系统错误日志", "系统管理", true);
         action(seeds, "topic.manage", "维护课题", "科研指标", false);
         action(seeds, "indicator.manage", "维护指标", "科研指标", false);
         action(seeds, "topic-indicator.publish", "下发课题指标", "科研指标", false);

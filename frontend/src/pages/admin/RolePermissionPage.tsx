@@ -43,20 +43,21 @@ export function RolePermissionPage() {
   const openForm = (role: ApiRole) => {
     if (role.code === 'SYSTEM_ADMIN') return;
     setEditing(role);
-    editForm.setFieldsValue({ pagePermissions: role.pagePermissions, actionPermissions: role.actionPermissions, enabled: role.enabled });
+    editForm.setFieldsValue({ pagePermissions: [...new Set([...role.pagePermissions.filter((page) => page !== 'home'), 'user-management'])], actionPermissions: role.actionPermissions, enabled: role.enabled });
     setOpen(true);
   };
   const save = async () => {
     if (!editing) return;
     const values = await editForm.validateFields(); setSaving(true);
     try {
-      await systemApi.updateRole(editing.id, values);
+      await systemApi.updateRole(editing.id, { ...values, pagePermissions: [...new Set([...values.pagePermissions.filter((page) => page !== 'home'), 'user-management'])] });
       message.success('角色权限已更新'); setOpen(false); editForm.resetFields(); await load();
     } catch (error) { message.error(error instanceof Error ? error.message : '角色权限保存失败'); }
     finally { setSaving(false); }
   };
   const resetFilters = () => { filterForm.resetFields(); setFilters({}); };
-  const permissionLocked = (permission: ApiPermission) => editing?.code === 'EXTERNAL_TOPIC_UNIT' && permission.lockedForExternal;
+  const permissionLocked = (permission: ApiPermission) => permission.code === 'home' || permission.code === 'user-management'
+    || editing?.code === 'EXTERNAL_TOPIC_UNIT' && permission.lockedForExternal;
 
   return <div className="role-management-page">
     <Card className="role-filter-card"><Form form={filterForm} colon={false} onFinish={setFilters}><div className="role-filter-grid">
@@ -78,7 +79,7 @@ export function RolePermissionPage() {
     <Modal title={`编辑角色权限${editing ? ` · ${editing.name}` : ''}`} open={open} width={900} onCancel={() => { setOpen(false); editForm.resetFields(); }} onOk={() => void save()} confirmLoading={saving}>
       <Form form={editForm} layout="vertical">
         <Row gutter={16}><Col span={10}><Form.Item label="角色名称"><Input disabled value={editing?.name} /></Form.Item></Col><Col span={10}><Form.Item label="角色说明"><Input disabled value={editing?.description} /></Form.Item></Col><Col span={4}><Form.Item name="enabled" label="启用" valuePropName="checked"><Switch /></Form.Item></Col></Row>
-        <Form.Item name="pagePermissions" label="页面权限" rules={[{ required: true, message: '请至少选择一个页面' }]}><Checkbox.Group className="permission-checkbox-group"><div className="permission-group-grid">{Object.entries(groupedPages).map(([group, items]) => <Card className="permission-group-card" size="small" title={group} key={group}><div className="permission-option-list">{items.map((item) => <Checkbox key={item.code} value={item.code} disabled={permissionLocked(item)}>{item.name}{permissionLocked(item) ? '（外部单位禁止）' : ''}</Checkbox>)}</div></Card>)}</div></Checkbox.Group></Form.Item>
+        <Form.Item name="pagePermissions" label="页面权限" rules={[{ required: true, message: '请至少选择一个页面' }]}><Checkbox.Group className="permission-checkbox-group"><div className="permission-group-grid">{Object.entries(groupedPages).map(([group, items]) => <Card className="permission-group-card" size="small" title={group} key={group}><div className="permission-option-list">{items.map((item) => <Checkbox key={item.code} value={item.code} disabled={permissionLocked(item)}>{item.name}{item.code === 'home' ? '（仅系统管理员）' : item.code === 'user-management' ? '（个人资料必需）' : permissionLocked(item) ? '（外部单位禁止）' : ''}</Checkbox>)}</div></Card>)}</div></Checkbox.Group></Form.Item>
         <Form.Item name="actionPermissions" label="操作权限"><Checkbox.Group className="permission-checkbox-group"><div className="permission-group-grid">{Object.entries(groupedActions).map(([group, items]) => <Card className="permission-group-card" size="small" title={group} key={group}><div className="permission-option-list">{items.map((item) => <Checkbox key={item.code} value={item.code} disabled={permissionLocked(item)}>{item.name}{permissionLocked(item) ? '（外部单位禁止）' : ''}</Checkbox>)}</div></Card>)}</div></Checkbox.Group></Form.Item>
       </Form>
     </Modal>

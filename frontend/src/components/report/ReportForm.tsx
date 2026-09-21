@@ -82,7 +82,7 @@ export function ReportForm<T extends ReportFormValues>({ form, disabled = false 
     >
       <Input.TextArea
         rows={5}
-        placeholder="项目方面：收到国拨经费XX万元，占总国拨经费X%，已完成经费转拨XX万元，支出经费XX万元，经费执行率为X%；配套经费到位XX万元，占总配套经费X%，支出经费XX万元，经费执行率为X%。"
+        placeholder="项目方面：收到国拨经费XX万元，占总国拨经费X%，已完成经费转拨XX万元，支出经费XX万元，经费执行率为X%；配套经费到位XX万元，占总配套经费X%，支出经费XX万元，经费执行率为X%。（提示：如单位无法设立独立账户并将配套经费打入独立账户管理，则配套到位金额为实际支出配套经费金额）。"
       />
     </Form.Item>
     <Form.Item

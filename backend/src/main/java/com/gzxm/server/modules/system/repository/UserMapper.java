@@ -8,6 +8,9 @@ import org.apache.ibatis.annotations.Select;
 import java.util.Set;
 
 public interface UserMapper extends BaseMapper<UserEntity> {
+    @Select("SELECT * FROM sys_user WHERE id=#{id} FOR UPDATE")
+    UserEntity lockById(long id);
+
     @Select("""
             SELECT u.*, r.code AS role_code
             FROM sys_user u

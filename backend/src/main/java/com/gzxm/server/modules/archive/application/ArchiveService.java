@@ -24,18 +24,169 @@ public class ArchiveService {
     private final TopicService topicService;
     private final SecurityContextFacade security;
     private final FileService fileService;
-    private record Requirement(String name, boolean required) {}
-    private static final Map<String, List<Requirement>> TEMPLATES = Map.of(
-            "NATIONAL", List.of(new Requirement("申报评审过程材料", false), new Requirement("保密协议", false),
-                    new Requirement("实验任务书及实验记录", false), new Requirement("知识产权证明材料", true),
-                    new Requirement("项目成果统计分析文件", false), new Requirement("经费执行情况报告", false)),
-            "TECHNOLOGY", List.of(new Requirement("项目立项文件", true), new Requirement("合同及技术协议", true),
-                    new Requirement("实施方案及过程报告", true), new Requirement("成果证明材料", true),
-                    new Requirement("验收证书及验收报告", true)),
-            "RENOVATION", List.of(new Requirement("项目建议书及批复", true), new Requirement("招投标及合同材料", true),
-                    new Requirement("施工及设备调试记录", false), new Requirement("竣工验收及结算材料", true)),
-            "INFRASTRUCTURE", List.of(new Requirement("立项及可研材料", true), new Requirement("招投标及合同材料", true),
-                    new Requirement("设备到货与安装调试记录", false), new Requirement("竣工验收材料", true)));
+    private record Requirement(String category, String name, boolean required) {}
+    private static Requirement required(String category, String name) { return new Requirement(category, name, true); }
+    private static Requirement ifPresent(String category, String name) { return new Requirement(category, name, false); }
+    private static final Map<String, List<Requirement>> TEMPLATES = archiveTemplates();
+
+    private static Map<String, List<Requirement>> archiveTemplates() {
+        Map<String, List<Requirement>> templates = new HashMap<>();
+        templates.put("NATIONAL", nationalTemplate());
+        templates.put("RENOVATION", renovationTemplate());
+        templates.put("TECHNOLOGY", technologyTemplate());
+        templates.put("INFRASTRUCTURE", infrastructureTemplate());
+        return Map.copyOf(templates);
+    }
+
+    private static List<Requirement> nationalTemplate() {
+        List<Requirement> rows = new ArrayList<>();
+        String category = "项目申报立项";
+        rows.addAll(List.of(
+                ifPresent(category, "年度指南、申报书"), ifPresent(category, "申报立项评审材料及视频资料"),
+                ifPresent(category, "预算评审报告"), ifPresent(category, "申报立项评审过程材料及项目申报单位投诉材料"),
+                ifPresent(category, "立项批复（含预算）"), ifPresent(category, "保密协议"),
+                ifPresent(category, "任务合同书（含预算书）"),
+                ifPresent(category, "上级部门批示指示文件、重要往来函件、会议纪要、突发情况过程文件等")));
+        category = "项目过程管理";
+        rows.addAll(List.of(
+                ifPresent(category, "实验任务书、实验大纲"), ifPresent(category, "实验、探测、测试、观测、调查、考察等原始记录及综合分析报告"),
+                ifPresent(category, "各类协议、合同及样机、样品、标本等实物目录"), ifPresent(category, "设计文件和图纸"),
+                ifPresent(category, "计算文件、数据处理文件及声像文件"), ifPresent(category, "项目调整、变更材料"),
+                ifPresent(category, "变更批复及调整过程材料"), ifPresent(category, "监督评估报告"),
+                ifPresent(category, "年度执行情况报告、检查报告（含经费使用报告）"), ifPresent(category, "产业化年度报告"),
+                ifPresent(category, "与其他单位的协作协议、合同等相关文件"),
+                ifPresent(category, "阶段执行情况报告、检查报告、总结报告及处理结果"),
+                ifPresent(category, "专项管理会议纪要、会议记录、备忘录等")));
+        category = "项目综合绩效评价";
+        rows.addAll(List.of(
+                ifPresent(category, "综合绩效评价申请书、承诺书、年度计划及总体实施绩效报告"),
+                ifPresent(category, "综合绩效评价通知"),
+                ifPresent(category, "上级部门批示指示文件、重要往来函件、会议纪要、突发情况过程文件等"),
+                ifPresent(category, "自评价报告及相关材料"), ifPresent(category, "科技报告"),
+                required(category, "知识产权报告及知识产权证明材料"),
+                ifPresent(category, "重要成果关键指标或重大效益第三方检测、测试、评估报告"),
+                ifPresent(category, "现场测试报告"), ifPresent(category, "用户使用报告及成果产业化证明材料"),
+                ifPresent(category, "专家打分表、专家意见、专家签到表、专家承诺书等评审材料"),
+                ifPresent(category, "综合绩效评价结论书及过程材料"), ifPresent(category, "任务评价报告、技术报告"),
+                ifPresent(category, "整改评价会形成材料"), ifPresent(category, "财务收支执行情况报告及附表"),
+                ifPresent(category, "预算调整申请报告及相关批复"), ifPresent(category, "财务抽查报告及整改报告"),
+                ifPresent(category, "审计报告及审计底稿"), ifPresent(category, "财务综合绩效评价报告"),
+                ifPresent(category, "项目（课题）年度财务决算报告"), ifPresent(category, "资金落实和拨付证明"),
+                ifPresent(category, "账户对账单"), ifPresent(category, "中央、地方、自筹及其他渠道资金核算明细账"),
+                ifPresent(category, "资金归垫申请及附件"), ifPresent(category, "财务专家打分表、专家意见等"),
+                ifPresent(category, "设备台账及设备盘点表"), ifPresent(category, "正式评价整改情况报告及附件"),
+                ifPresent(category, "后续支出情况报告及附件"), ifPresent(category, "产业化年度报告")));
+        category = "项目成果管理";
+        rows.addAll(List.of(
+                ifPresent(category, "成果统计分析文件"), ifPresent(category, "科技报告"),
+                ifPresent(category, "知识产权清单"), ifPresent(category, "科学数据汇交及情况说明文件"),
+                ifPresent(category, "样机、样品、标本等实物汇总目录及图片"),
+                ifPresent(category, "科研成果介绍及批准的宣传文件"), ifPresent(category, "奖牌、奖杯、奖状等实物或影印件")));
+        rows.add(ifPresent("其他重要材料", "领导视察材料、违规违纪材料、投诉举报及处理材料等"));
+        return List.copyOf(rows);
+    }
+
+    private static List<Requirement> renovationTemplate() {
+        List<Requirement> rows = new ArrayList<>();
+        String category = "项目前期";
+        rows.addAll(List.of(ifPresent(category, "立项评审会议纪要（如有）"), required(category, "立项申请书"),
+                ifPresent(category, "可研报告"), ifPresent(category, "可研估算"), required(category, "项目可研批复文件"),
+                ifPresent(category, "可研变更申请表（如有）"), ifPresent(category, "变更后的可研报告（如有）"),
+                ifPresent(category, "三重一大决策流程")));
+        rows.add(required("项目出库与下达", "项目批文"));
+        category = "项目设计";
+        rows.addAll(List.of(ifPresent(category, "初步设计文件"), ifPresent(category, "初步设计审查会签到表"),
+                ifPresent(category, "设计审查纪要或批复文件"), ifPresent(category, "审定概算书"),
+                required(category, "技术规范书"), required(category, "技术规范书审查纪要")));
+        rows.addAll(List.of(ifPresent("项目采购", "招投标、谈判文件"), required("项目采购", "中标（成交）通知书")));
+        category = "合同签订";
+        rows.addAll(List.of(required(category, "合同会签审批表"), required(category, "合同及附件"),
+                ifPresent(category, "非法定代表人授权委托书（如有）"), ifPresent(category, "合同补充协议或变更材料（如有）")));
+        category = "项目实施";
+        rows.addAll(List.of(ifPresent(category, "乙方实施人员资格证明"), required(category, "乙方实施人员社保证明"),
+                ifPresent(category, "实施过程往来函件"), ifPresent(category, "项目调整文件（如有）"),
+                ifPresent(category, "设备到货验收记录（如有）"), required(category, "项目实施方案"),
+                ifPresent(category, "开工报告（如有）"), required(category, "需求规格说明书"),
+                ifPresent(category, "概要设计说明书（如有）"), ifPresent(category, "详细设计说明书（如有）"),
+                ifPresent(category, "第三方测试技术服务计划书（如有）"), required(category, "功能测试报告"),
+                required(category, "性能测试报告"), required(category, "安全评估报告或渗透测试报告"),
+                ifPresent(category, "系统安装部署方案（如有）"), ifPresent(category, "施工方案及施工图（如有）"),
+                ifPresent(category, "初始化方案（如有）"), ifPresent(category, "系统集成调试方案、调试报告、竣工图（如有）"),
+                ifPresent(category, "系统联通性及上线切换测试材料（如有）"), ifPresent(category, "数据清理方案（如有）"),
+                ifPresent(category, "数据字典、用户手册及审核材料（如有）"), ifPresent(category, "培训相关材料（如有）")));
+        rows.add(ifPresent("上线试运行", "试运行报告及试运行支持记录（如有）"));
+        category = "项目验收";
+        rows.addAll(List.of(ifPresent(category, "验收延期申请材料（如有）"), required(category, "初验申请表"),
+                required(category, "竣工验收（终验）申请"), required(category, "验收会签到表"),
+                required(category, "验收证书"), required(category, "工作报告"), required(category, "技术报告"),
+                required(category, "用户使用报告"), ifPresent(category, "服务评价（如有）"),
+                ifPresent(category, "验收活动中产生的其他材料（如有）")));
+        rows.addAll(List.of(required("项目结算", "结算表"), required("项目结算", "结算会签表"),
+                ifPresent("项目结算", "项目费用结算核减材料（如有）"), ifPresent("转固", "设备移交清单（如有）")));
+        return List.copyOf(rows);
+    }
+
+    private static List<Requirement> technologyTemplate() {
+        List<Requirement> rows = new ArrayList<>();
+        String category = "项目前期";
+        rows.addAll(List.of(ifPresent(category, "立项评审及办公会审查会议纪要"), required(category, "项目可研报告"),
+                required(category, "可研估算"), required(category, "可研批复文件"), ifPresent(category, "三重一大决策流程"),
+                required(category, "可研经费审查报告"), ifPresent(category, "可研变更申请表（如有）"),
+                ifPresent(category, "变更后的可研报告（如有）")));
+        rows.add(required("项目出库与下达", "项目批文"));
+        rows.addAll(List.of(required("项目设计", "计划任务书"), required("项目设计", "技术规范书"),
+                required("项目设计", "技术规范书评审记录")));
+        rows.addAll(List.of(ifPresent("项目采购", "招投标、谈判文件"), required("项目采购", "中标（成交）通知书")));
+        category = "合同签订";
+        rows.addAll(List.of(required(category, "合同会签审批表"), required(category, "合同及附件"),
+                ifPresent(category, "非法定代表人授权委托书（如有）"), ifPresent(category, "合同补充协议或变更材料（如有）")));
+        category = "项目实施";
+        rows.addAll(List.of(ifPresent(category, "项目调整文件（如有）"), ifPresent(category, "项目启动相关材料（如有）"),
+                ifPresent(category, "实施过程往来函件"), required(category, "实施方案"), required(category, "中期验收材料"),
+                ifPresent(category, "第三方测试技术服务计划书（如有）"), required(category, "功能测试报告"),
+                required(category, "性能测试报告"), required(category, "安全评估报告或渗透测试报告"),
+                ifPresent(category, "系统安装部署方案（如有）"), required(category, "系统试运行报告"),
+                required(category, "用户报告"), required(category, "专利、论文、软件著作权证明材料"),
+                required(category, "技术开发（服务）合同验收评审记录表"), ifPresent(category, "设备到货验收记录（如有）")));
+        category = "项目验收";
+        rows.addAll(List.of(required(category, "验收评审会通知"), required(category, "竣工验收申请书"),
+                required(category, "验收会及专家签到表"), required(category, "验收专家组意见表"),
+                required(category, "验收综合绩效评价打分表"), required(category, "验收证书"),
+                required(category, "终验工作报告"), required(category, "终验技术报告"),
+                ifPresent(category, "验收活动中产生的其他材料（如有）")));
+        rows.addAll(List.of(required("项目结算", "第三方技术服务项目委托函"), required("项目结算", "第三方经费审查报告"),
+                required("项目结算", "科技项目结算表"), required("项目结算", "结算会签表"),
+                ifPresent("项目结算", "项目费用结算核减材料（如有）"), required("转固", "无形资产增加申请单"),
+                required("后评价", "项目后评估文件")));
+        return List.copyOf(rows);
+    }
+
+    private static List<Requirement> infrastructureTemplate() {
+        List<Requirement> rows = new ArrayList<>();
+        String category = "项目前期";
+        rows.addAll(List.of(ifPresent(category, "立项评审会议纪要（如有）"), required(category, "立项申请书"),
+                ifPresent(category, "项目可研批复文件"), ifPresent(category, "可研变更申请表（如有）"),
+                ifPresent(category, "变更后的可研报告（如有）"), ifPresent(category, "三重一大决策流程")));
+        rows.add(required("项目出库与下达", "项目批文"));
+        rows.addAll(List.of(ifPresent("项目设计", "技术规范书"), ifPresent("项目设计", "技术规范书审查记录")));
+        rows.addAll(List.of(ifPresent("项目采购", "招投标、谈判文件"), required("项目采购", "中标（成交）通知书或其他合同签订依据")));
+        category = "合同签订";
+        rows.addAll(List.of(required(category, "合同会签审批表"), required(category, "合同及附件"),
+                ifPresent(category, "非法定代表人授权委托书（如有）"), ifPresent(category, "合同补充协议或变更材料（如有）")));
+        category = "项目实施";
+        rows.addAll(List.of(ifPresent(category, "实施过程往来函件"), ifPresent(category, "项目调整文件（如有）"),
+                ifPresent(category, "实施方案（如有）"), required(category, "设备到货验收记录"),
+                ifPresent(category, "竣工图、设备安装测试及安全等级保护材料（如有）"),
+                ifPresent(category, "产品说明书、合格证及设备技术资料（如有）"), ifPresent(category, "设备清册（如有）"),
+                ifPresent(category, "培训相关材料（如有）"), ifPresent(category, "实施活动中产生的其他材料（如有）")));
+        category = "项目验收";
+        rows.addAll(List.of(ifPresent(category, "验收会签到表"), ifPresent(category, "验收证书"),
+                ifPresent(category, "工作报告（如有）"), ifPresent(category, "设备安装测试报告（如有）"),
+                ifPresent(category, "用户使用报告"), ifPresent(category, "验收活动中产生的其他材料（如有）")));
+        rows.addAll(List.of(ifPresent("项目结算", "结算书"), ifPresent("项目结算", "结算会签表"),
+                ifPresent("项目结算", "项目费用结算核减材料（如有）"), ifPresent("转固", "设备移交清单（如有）")));
+        return List.copyOf(rows);
+    }
 
     public ArchiveService(JdbcTemplate db, TopicQueryService topics, TopicService topicService,
                           SecurityContextFacade security, FileService fileService) {
@@ -79,17 +230,21 @@ public class ArchiveService {
     }
 
     @Transactional
-    public Folder addNationalFolder(long topicId, long unitId, String name, Boolean required) {
+    public Folder addNationalFolder(long topicId, long unitId, String categoryName, String name, Boolean required) {
         requireNationalFolderManagement(topicId, unitId);
-        name = name.trim();
+        categoryName = normalizedCategory(categoryName); name = name.trim();
         if (name.isEmpty()) throw BusinessException.validation("ARCHIVE_FOLDER_NAME_REQUIRED", "文件夹名称不能为空");
         ensureNationalFolders(topicId, unitId);
         if (db.queryForObject("SELECT COUNT(*) FROM archive_folder WHERE owner_type='TOPIC_NATIONAL' AND owner_id=? " +
                 "AND unit_id=? AND name=? AND deleted_at IS NULL", Integer.class, topicId, unitId, name) > 0)
             throw BusinessException.conflict("ARCHIVE_FOLDER_EXISTS", "文件夹名称已存在");
-        db.update("INSERT INTO archive_folder(owner_type,owner_id,topic_id,unit_id,name,required_flag,required_quantity," +
-                "custom_flag,created_by) VALUES('TOPIC_NATIONAL',?,?,?,?,?,1,1,?)", topicId, topicId, unitId,
-                name, required == null || required, security.requireCurrentUser().id());
+        try {
+            db.update("INSERT INTO archive_folder(owner_type,owner_id,topic_id,unit_id,category_name,name,required_flag,required_quantity," +
+                    "custom_flag,created_by) VALUES('TOPIC_NATIONAL',?,?,?,?,?,?,1,1,?)", topicId, topicId, unitId,
+                    categoryName, name, required == null || required, security.requireCurrentUser().id());
+        } catch (DuplicateKeyException ex) {
+            throw BusinessException.conflict("ARCHIVE_FOLDER_EXISTS", "文件夹名称已存在");
+        }
         return folder(lastId());
     }
 
@@ -214,18 +369,22 @@ public class ArchiveService {
     }
 
     @Transactional
-    public Folder addProjectFolder(long projectId, String name, Boolean required) {
+    public Folder addProjectFolder(long projectId, String categoryName, String name, Boolean required) {
         Project project = project(projectId);
         long topicId = Long.parseLong(project.topicId()), unitId = Long.parseLong(project.ownerUnitId());
         requireFolderScope(topicId, unitId, "SELF_FUNDED", true);
-        name = name.trim();
+        categoryName = normalizedCategory(categoryName); name = name.trim();
         if (name.isEmpty()) throw BusinessException.validation("ARCHIVE_FOLDER_NAME_REQUIRED", "文件夹名称不能为空");
         if (db.queryForObject("SELECT COUNT(*) FROM archive_folder WHERE owner_type='SELF_FUNDED' AND owner_id=? " +
                 "AND unit_id=? AND name=? AND deleted_at IS NULL", Integer.class, projectId, unitId, name) > 0)
             throw BusinessException.conflict("ARCHIVE_FOLDER_EXISTS", "文件夹名称已存在");
-        db.update("INSERT INTO archive_folder(owner_type,owner_id,topic_id,unit_id,name,required_flag,required_quantity," +
-                        "custom_flag,created_by) VALUES('SELF_FUNDED',?,?,?,?,?,1,1,?)",
-                projectId, topicId, unitId, name, required == null || required, security.requireCurrentUser().id());
+        try {
+            db.update("INSERT INTO archive_folder(owner_type,owner_id,topic_id,unit_id,category_name,name,required_flag,required_quantity," +
+                            "custom_flag,created_by) VALUES('SELF_FUNDED',?,?,?,?,?,?,1,1,?)",
+                    projectId, topicId, unitId, categoryName, name, required == null || required, security.requireCurrentUser().id());
+        } catch (DuplicateKeyException ex) {
+            throw BusinessException.conflict("ARCHIVE_FOLDER_EXISTS", "文件夹名称已存在");
+        }
         return folder(lastId());
     }
 
@@ -255,8 +414,6 @@ public class ArchiveService {
     }
 
     private void ensureNationalFolders(long topicId, long unitId) {
-        if (db.queryForObject("SELECT COUNT(*) FROM archive_folder WHERE owner_type='TOPIC_NATIONAL' AND owner_id=? AND unit_id=?",
-                Integer.class, topicId, unitId) > 0) return;
         createTemplateFolders("TOPIC_NATIONAL", topicId, topicId, unitId, "NATIONAL");
     }
     private void createTemplateFolders(String ownerType, long ownerId, long topicId, long unitId, String template) {
@@ -265,9 +422,9 @@ public class ArchiveService {
         int index = 0;
         for (var item : requirements) {
             index++;
-            db.update("INSERT INTO archive_folder(owner_type,owner_id,topic_id,unit_id,name,required_flag,required_quantity," +
-                    "custom_flag,created_by) VALUES(?,?,?,?,?,?,1,0,?)", ownerType, ownerId, topicId, unitId,
-                    item.name(), item.required(), security.requireCurrentUser().id());
+            db.update("INSERT IGNORE INTO archive_folder(owner_type,owner_id,topic_id,unit_id,category_name,name,required_flag,required_quantity," +
+                    "custom_flag,created_by) VALUES(?,?,?,?,?,?,?,1,0,?)", ownerType, ownerId, topicId, unitId,
+                    item.category(), item.name(), item.required(), security.requireCurrentUser().id());
         }
     }
     private List<Folder> queryFolders(String clause, Object... args) {
@@ -277,7 +434,7 @@ public class ArchiveService {
         return db.query("SELECT f.*, (SELECT COUNT(*) FROM archive_folder_file x WHERE x.folder_id=f.id AND x.deleted_at IS NULL) " +
                 "file_count, (SELECT r.code FROM sys_user_role ur JOIN sys_role r ON r.id=ur.role_id " +
                 "WHERE ur.user_id=f.created_by) creator_role FROM archive_folder f WHERE f.deleted_at IS NULL AND " +
-                clause + " ORDER BY f.id" + (lock ? " FOR UPDATE" : ""), (rs, n) -> folder(rs), args);
+                clause + " ORDER BY f.category_name,f.id" + (lock ? " FOR UPDATE" : ""), (rs, n) -> folder(rs), args);
     }
     private Folder folder(long id) { return folder(id, false); }
     private Folder folder(long id, boolean lock) {
@@ -292,8 +449,13 @@ public class ArchiveService {
                 rs.getLong("created_by"), rs.getString("creator_role"));
         return new Folder(String.valueOf(rs.getLong("id")), String.valueOf(rs.getLong("topic_id")),
                 String.valueOf(rs.getLong("unit_id")), rs.getString("owner_type"), String.valueOf(rs.getLong("owner_id")),
-                rs.getString("name"), rs.getBoolean("required_flag"), quantity, rs.getBoolean("custom_flag"),
+                rs.getString("category_name"), rs.getString("name"), rs.getBoolean("required_flag"), quantity, rs.getBoolean("custom_flag"),
                 fileCount, fileCount >= quantity, canDelete);
+    }
+    private static String normalizedCategory(String categoryName) {
+        String value = categoryName == null ? "" : categoryName.trim();
+        if (value.isEmpty()) throw BusinessException.validation("ARCHIVE_CATEGORY_REQUIRED", "请选择或输入管理阶段");
+        return value;
     }
     private Project project(ResultSet rs) throws SQLException {
         long id = rs.getLong("id");

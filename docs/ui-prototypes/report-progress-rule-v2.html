@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>月季报规则与进度原型</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f6fb; color: #1f2329; font: 14px/1.5 Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button, select, input { font: inherit; }
+    .page { max-width: 1480px; margin: 0 auto; padding: 24px; }
+    .card { background: #fff; border: 1px solid #e5eaf2; border-radius: 14px; box-shadow: 0 4px 18px rgba(31, 56, 88, .05); margin-bottom: 18px; overflow: hidden; }
+    .card-head { min-height: 66px; padding: 14px 22px; border-bottom: 1px solid #edf0f5; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .title { font-size: 18px; font-weight: 650; }
+    .subtitle { color: #8a93a3; margin-top: 2px; }
+    .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .field { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    select, input { height: 38px; border: 1px solid #d7dce5; border-radius: 9px; background: #fff; padding: 0 12px; color: #30343b; outline: none; }
+    select:focus, input:focus { border-color: #246fe5; box-shadow: 0 0 0 2px rgba(36,111,229,.1); }
+    .w-topic { width: 260px; } .w-year { width: 112px; } .w-type { width: 120px; }
+    .btn { height: 38px; padding: 0 16px; border: 1px solid #d7dce5; border-radius: 9px; background: #fff; cursor: pointer; color: #333; }
+    .btn:hover { border-color: #246fe5; color: #246fe5; }
+    .btn.primary { color: #fff; background: #246fe5; border-color: #246fe5; }
+    .card-body { padding: 18px 22px 22px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 950px; }
+    th { background: #f7f9fc; color: #405271; font-weight: 650; text-align: left; padding: 13px 14px; border-bottom: 1px solid #e7ebf1; }
+    td { padding: 15px 14px; border-bottom: 1px solid #eef1f5; vertical-align: middle; }
+    tbody tr.summary:hover { background: #fafcff; }
+    .summary { cursor: pointer; }
+    .chevron { display: inline-block; width: 18px; color: #246fe5; transition: transform .18s; }
+    .summary.open .chevron { transform: rotate(90deg); }
+    .topic-name { font-weight: 650; }
+    .code { margin-left: 8px; padding: 2px 8px; border-radius: 6px; color: #1765d7; background: #eaf3ff; font-size: 12px; }
+    .number { font-size: 18px; font-weight: 650; }
+    .muted { color: #8b94a3; }
+    .danger { color: #d9363e; } .warning { color: #d97800; } .success { color: #159447; }
+    .tag { display: inline-flex; align-items: center; border-radius: 6px; padding: 3px 9px; font-size: 13px; white-space: nowrap; background: #f2f3f5; color: #596273; }
+    .tag.green { color: #168a45; background: #edf9f1; }
+    .tag.red { color: #d9363e; background: #fff0f0; }
+    .tag.orange { color: #c86b00; background: #fff7e8; }
+    .tag.blue { color: #1765d7; background: #eaf3ff; }
+    .tag.purple { color: #6d3dc0; background: #f5efff; }
+    .progress { width: 130px; height: 7px; background: #edf0f4; border-radius: 8px; overflow: hidden; display: inline-block; margin-left: 10px; vertical-align: middle; }
+    .progress > i { display: block; height: 100%; background: #246fe5; border-radius: inherit; }
+    .detail-row { display: none; }
+    .detail-row.open { display: table-row; }
+    .detail-cell { padding: 0 18px 20px 46px; background: #fbfcfe; }
+    .detail-panel { border: 1px solid #e4e9f1; border-radius: 12px; background: #fff; overflow: hidden; }
+    .tabs { display: flex; gap: 4px; padding: 12px 16px 0; border-bottom: 1px solid #edf0f5; }
+    .tab { border: 0; background: transparent; padding: 8px 16px 11px; color: #6b7483; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab.active { color: #246fe5; border-bottom-color: #246fe5; font-weight: 650; }
+    .inner { padding: 14px 16px 16px; }
+    .inner table { min-width: 760px; }
+    .inner th, .inner td { padding: 11px 12px; }
+    .empty-note { padding: 30px; text-align: center; color: #8a93a3; }
+    .rule-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .rule-box { border: 1px solid #e3e8f0; border-radius: 12px; overflow: hidden; }
+    .rule-title { padding: 13px 16px; background: #f7f9fc; display: flex; align-items: center; justify-content: space-between; font-weight: 650; }
+    .switch { width: 40px; height: 22px; border-radius: 20px; background: #246fe5; position: relative; }
+    .switch::after { content: ""; position: absolute; width: 18px; height: 18px; right: 2px; top: 2px; background: white; border-radius: 50%; }
+    .rule-content { padding: 18px 16px; }
+    .form-row { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .range { display: grid; grid-template-columns: 1fr 76px 1fr 76px; gap: 8px; align-items: center; }
+    .day-range { display: grid; grid-template-columns: 1fr 34px 1fr; gap: 8px; align-items: center; }
+    .tip { margin-top: 14px; padding: 11px 14px; border-radius: 9px; color: #42648d; background: #eef6ff; border: 1px solid #c9e0ff; }
+    .rule-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 18px; }
+    @media (max-width: 980px) { .rule-layout { grid-template-columns: 1fr; } .card-head { align-items: flex-start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="card-head">
+        <div><div class="title">月季报进度</div><div class="subtitle">汇总统计独立于下方报告列表筛选，点击课题查看缺少的具体期次</div></div>
+        <div class="toolbar">
+          <label class="field">课题
+            <select class="w-topic"><option>全部课题</option><option>总体架构与关键技术研究</option><option>智能电网建设的规划设计</option></select>
+          </label>
+          <label class="field">年度 <select class="w-year"><option>2026</option><option>2027</option></select></label>
+          <label class="field">类型 <select class="w-type"><option>全部</option><option>月报</option><option>季报</option></select></label>
+          <button class="btn">↻ 刷新</button>
+        </div>
+      </header>
+      <div class="card-body table-wrap">
+        <table>
+          <thead><tr><th>课题汇总</th><th style="width:110px">应填期数</th><th style="width:110px">已提交</th><th style="width:110px">已通过</th><th style="width:210px">提交进度</th><th style="width:150px">尚未提交 / 逾期</th></tr></thead>
+          <tbody>
+            <tr class="summary open" data-topic="a">
+              <td><span class="chevron">▶</span><span class="topic-name">课题1：总体架构与关键技术研究</span><span class="code">K001</span></td>
+              <td><span class="number">8</span></td><td><span class="number">6</span></td><td><span class="number">5</span></td>
+              <td><b>75%</b><span class="progress"><i style="width:75%"></i></span></td>
+              <td><span class="tag orange">2 期未提交</span> <span class="tag red">1 期逾期</span></td>
+            </tr>
+            <tr class="detail-row open" data-detail="a"><td class="detail-cell" colspan="6">
+              <div class="detail-panel">
+                <div class="tabs"><button class="tab active" data-tab="month">月报（4/6）</button><button class="tab" data-tab="quarter">季报（2/2）</button></div>
+                <div class="inner" data-panel="month">
+                  <table><thead><tr><th>报告期次</th><th>开放日期</th><th>截止日期</th><th>当前状态</th><th>时效</th></tr></thead><tbody>
+                    <tr><td>2026 年 3 月</td><td>2026-03-01</td><td>2026-03-25</td><td><span class="tag green">已通过</span></td><td><span class="success">正常</span></td></tr>
+                    <tr><td>2026 年 4 月</td><td>2026-04-01</td><td>2026-04-25</td><td><span class="tag blue">终审中</span></td><td><span class="success">正常</span></td></tr>
+                    <tr><td>2026 年 5 月</td><td>2026-05-01</td><td>2026-05-25</td><td><span class="tag red">尚未创建</span></td><td><span class="danger">已逾期</span></td></tr>
+                    <tr><td>2026 年 6 月</td><td>2026-06-01</td><td>2026-06-25</td><td><span class="tag orange">草稿未提交</span></td><td><span class="warning">临近截止</span></td></tr>
+                    <tr><td>2026 年 7 月</td><td>2026-07-01</td><td>2026-07-25</td><td><span class="tag">尚未到填报期</span></td><td>—</td></tr>
+                  </tbody></table>
+                </div>
+                <div class="inner" data-panel="quarter" hidden>
+                  <table><thead><tr><th>报告期次</th><th>开放日期</th><th>截止日期</th><th>当前状态</th><th>时效</th></tr></thead><tbody>
+                    <tr><td>2026 年第 2 季度</td><td>2026-06-01</td><td>2026-06-25</td><td><span class="tag green">已通过</span></td><td><span class="success">正常</span></td></tr>
+                    <tr><td>2026 年第 3 季度</td><td>2026-09-01</td><td>2026-09-25</td><td><span class="tag purple">初审中</span></td><td><span class="success">正常</span></td></tr>
+                  </tbody></table>
+                </div>
+              </div>
+            </td></tr>
+            <tr class="summary" data-topic="b">
+              <td><span class="chevron">▶</span><span class="topic-name">课题2：智能电网建设的规划设计</span><span class="code">K002</span></td>
+              <td><span class="number">8</span></td><td><span class="number">8</span></td><td><span class="number">7</span></td>
+              <td><b>100%</b><span class="progress"><i style="width:100%;background:#20a15a"></i></span></td>
+              <td><span class="tag green">全部提交</span></td>
+            </tr>
+            <tr class="detail-row" data-detail="b"><td class="detail-cell" colspan="6"><div class="detail-panel"><div class="empty-note">示例：展开后按相同方式展示该课题月报与季报期次</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <div><div class="title">配置填报规则</div><div class="subtitle">总体架构与关键技术研究</div></div>
+        <div class="toolbar"><label class="field">规则年度 <select class="w-year"><option>2026</option></select></label><span class="tag green">已配置</span></div>
+      </header>
+      <div class="card-body">
+        <div class="rule-layout">
+          <div class="rule-box">
+            <div class="rule-title"><span>月报规则</span><span class="switch" title="已启用"></span></div>
+            <div class="rule-content">
+              <div class="form-row"><label>填报范围</label><div class="range"><select><option>2026 年</option></select><select><option>3 月</option></select><select><option>2027 年</option></select><select><option>8 月</option></select></div></div>
+              <div class="form-row"><label>开放/截止日</label><div class="day-range"><input value="1" /><span>至</span><input value="25" /></div></div>
+              <div class="tip">系统将生成 2026 年 3 月至 2027 年 8 月的应填月报期次。</div>
+            </div>
+          </div>
+          <div class="rule-box">
+            <div class="rule-title"><span>季报规则</span><span class="switch" title="已启用"></span></div>
+            <div class="rule-content">
+              <div class="form-row"><label>填报范围</label><div class="range"><select><option>2026 年</option></select><select><option>第 2 季度</option></select><select><option>2027 年</option></select><select><option>第 3 季度</option></select></div></div>
+              <div class="form-row"><label>开放/截止日</label><div class="day-range"><input value="1" /><span>至</span><input value="25" /></div></div>
+              <div class="tip">系统将生成 2026 年第 2 季度至 2027 年第 3 季度的应填季报期次。</div>
+            </div>
+          </div>
+        </div>
+        <div class="rule-actions"><button class="btn">取消</button><button class="btn primary">保存填报规则</button></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    document.querySelectorAll('.summary').forEach(row => row.addEventListener('click', () => {
+      const detail = document.querySelector(`[data-detail="${row.dataset.topic}"]`);
+      row.classList.toggle('open'); detail.classList.toggle('open');
+    }));
+    document.querySelectorAll('.tabs').forEach(tabs => tabs.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', event => {
+      event.stopPropagation();
+      tabs.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
+      const panelRoot = tabs.parentElement;
+      panelRoot.querySelectorAll('[data-panel]').forEach(panel => { panel.hidden = panel.dataset.panel !== tab.dataset.tab; });
+    })));
+  </script>
+</body>
+</html>

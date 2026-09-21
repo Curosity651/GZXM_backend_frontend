@@ -171,9 +171,9 @@ export function AchievementEntryPage() {
       { title: '成果指标', dataIndex: 'indicatorDefinitionId', render: (value: string, row) => <span className={row.special ? 'achievement-special-indicator' : ''}>{row.special ? '其中：' : ''}{definitionMap[value]?.name ?? '未知指标'}</span> },
       { title: '累计目标', dataIndex: 'targetQuantity', width: 100, render: (value?: number) => value ?? 0 },
       { title: '已提交', width: 90, render: (_: unknown, row) => row.stages.submitted },
-      { title: '已生效', width: 90, render: (_: unknown, row) => row.stages.effective },
-      { title: '尚缺', width: 110, render: (_: unknown, row) => { const missing = Math.max((row.targetQuantity ?? 0) - row.stages.submitted, 0); return missing > 0 ? <Tag color="orange">{missing} 项</Tag> : <Tag color="green">已提交</Tag>; } },
-      { title: '完成率', width: 160, render: (_: unknown, row) => { const target = row.targetQuantity ?? 0; const rate = target > 0 ? Math.round(row.stages.submitted * 100 / target) : 0; return <Progress size="small" percent={Math.min(rate, 100)} status={rate >= 100 ? 'success' : 'active'} />; } },
+      { title: '已完成', width: 90, render: (_: unknown, row) => row.stages.effective },
+      { title: '尚缺完成', width: 110, render: (_: unknown, row) => { const missing = Math.max((row.targetQuantity ?? 0) - row.stages.effective, 0); return missing > 0 ? <Tag color="orange">{missing} 项</Tag> : <Tag color="green">已完成</Tag>; } },
+      { title: '完成率', width: 160, render: (_: unknown, row) => { const target = row.targetQuantity ?? 0; const rate = target > 0 ? Math.round(row.stages.effective * 100 / target) : 0; return <Progress size="small" percent={Math.min(rate, 100)} status={rate >= 100 ? 'success' : 'active'} />; } },
     ]} />;
 
   const renderUnitProgress = (summary: TopicProgressSummary) => <div className="achievement-unit-progress">

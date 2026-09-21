@@ -57,24 +57,32 @@ public class ReportService {
             throw BusinessException.forbidden("REPORT_RULE_ROLE_REQUIRED", "只有科研助理可配置报告规则");
         topics.lockTopic(topicId);
         validateRule(request);
+        validateRuleOverlap(topicId, request);
         var old = db.queryForList("SELECT record_version FROM topic_report_rule WHERE topic_id=? AND effective_year=? FOR UPDATE",
                 topicId, request.effectiveYear());
         if (old.isEmpty()) {
             if (request.recordVersion() != null && request.recordVersion() != 0)
                 throw BusinessException.conflict("REPORT_RULE_VERSION_CONFLICT", "规则版本不一致");
-            db.update("INSERT INTO topic_report_rule(topic_id,effective_year,monthly_enabled,monthly_open_day,monthly_deadline_day," +
-                    "quarterly_enabled,quarterly_open_day,quarterly_deadline_day,quarterly_months) VALUES(?,?,?,?,?,?,?,?,?)",
-                    topicId, request.effectiveYear(), request.monthlyEnabled(), request.monthlyOpenDay(), request.monthlyDeadlineDay(),
-                    request.quarterlyEnabled(), request.quarterlyOpenDay(), request.quarterlyDeadlineDay(), encode(request.quarterlyMonths()));
+            db.update("INSERT INTO topic_report_rule(topic_id,effective_year,monthly_enabled,monthly_start_year,monthly_start_period," +
+                    "monthly_end_year,monthly_end_period,monthly_open_day,monthly_deadline_day,quarterly_enabled,quarterly_start_year," +
+                    "quarterly_start_period,quarterly_end_year,quarterly_end_period,quarterly_open_day,quarterly_deadline_day,quarterly_months) " +
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    topicId, request.effectiveYear(), request.monthlyEnabled(), request.monthlyStartYear(), request.monthlyStartPeriod(),
+                    request.monthlyEndYear(), request.monthlyEndPeriod(), request.monthlyOpenDay(), request.monthlyDeadlineDay(),
+                    request.quarterlyEnabled(), request.quarterlyStartYear(), request.quarterlyStartPeriod(), request.quarterlyEndYear(),
+                    request.quarterlyEndPeriod(), request.quarterlyOpenDay(), request.quarterlyDeadlineDay(), encode(request.quarterlyMonths()));
         } else {
             int version = ((Number) old.getFirst().get("record_version")).intValue();
             if (request.recordVersion() == null || request.recordVersion() != version)
                 throw BusinessException.conflict("REPORT_RULE_VERSION_CONFLICT", "规则已被修改，请刷新");
-            db.update("UPDATE topic_report_rule SET monthly_enabled=?,monthly_open_day=?,monthly_deadline_day=?," +
-                    "quarterly_enabled=?,quarterly_open_day=?,quarterly_deadline_day=?,quarterly_months=?,record_version=record_version+1 " +
-                    "WHERE topic_id=? AND effective_year=?", request.monthlyEnabled(), request.monthlyOpenDay(), request.monthlyDeadlineDay(),
-                    request.quarterlyEnabled(), request.quarterlyOpenDay(), request.quarterlyDeadlineDay(), encode(request.quarterlyMonths()),
-                    topicId, request.effectiveYear());
+            db.update("UPDATE topic_report_rule SET monthly_enabled=?,monthly_start_year=?,monthly_start_period=?,monthly_end_year=?," +
+                    "monthly_end_period=?,monthly_open_day=?,monthly_deadline_day=?,quarterly_enabled=?,quarterly_start_year=?," +
+                    "quarterly_start_period=?,quarterly_end_year=?,quarterly_end_period=?,quarterly_open_day=?,quarterly_deadline_day=?," +
+                    "quarterly_months=?,record_version=record_version+1 WHERE topic_id=? AND effective_year=?",
+                    request.monthlyEnabled(), request.monthlyStartYear(), request.monthlyStartPeriod(), request.monthlyEndYear(),
+                    request.monthlyEndPeriod(), request.monthlyOpenDay(), request.monthlyDeadlineDay(), request.quarterlyEnabled(),
+                    request.quarterlyStartYear(), request.quarterlyStartPeriod(), request.quarterlyEndYear(), request.quarterlyEndPeriod(),
+                    request.quarterlyOpenDay(), request.quarterlyDeadlineDay(), encode(request.quarterlyMonths()), topicId, request.effectiveYear());
         }
         return exactRule(topicId, request.effectiveYear());
     }
@@ -85,7 +93,7 @@ public class ReportService {
         var topic = topics.lockTopic(topicId);
         requireLead(topicId);
         requireOperational(topic);
-        Rule rule = ruleForYear(topicId, request.year());
+        Rule rule = ruleForPeriod(topicId, request.reportType(), request.year(), request.period());
         LocalDate[] window = window(rule, request.reportType(), request.year(), request.period());
         if (LocalDate.now().isBefore(window[0]))
             throw BusinessException.validation("REPORT_NOT_OPEN", "报告尚未开放填报");
@@ -228,30 +236,83 @@ public class ReportService {
                 (rs, n) -> approval(rs), reportId);
     }
 
-    public Map<String, Object> progress(Long topicId, Integer year) {
-        if (topicId != null) topics.getTopic(topicId);
-        List<View> visible = db.query("SELECT " + COLUMNS + FROM + "ORDER BY r.id DESC", viewMapper).stream()
-                .filter(this::canReadProgress)
-                .filter(report -> topicId == null || report.topicId().equals(String.valueOf(topicId)))
-                .filter(report -> year == null || report.year() == year)
+    @Transactional(readOnly = true)
+    public Progress progress(Long topicId, Integer requestedYear, String reportType) {
+        int year = requestedYear == null ? LocalDate.now().getYear() : requestedYear;
+        if (year < 2000 || year > 2100)
+            throw BusinessException.validation("INVALID_REPORT_YEAR", "统计年度必须在2000至2100之间");
+        if (reportType != null && !Set.of("MONTHLY", "QUARTERLY").contains(reportType))
+            throw BusinessException.validation("INVALID_REPORT_TYPE", "报告类型不正确");
+        CurrentUser user = security.requireCurrentUser();
+        var visibleTopics = topics.listReadableTopics(topics.currentProjectId()).stream()
+                .filter(topic -> topicId == null || topic.id() == topicId)
+                .filter(topic -> user.isGlobalRole() || user.unitId() != null && topic.leadUnitId() == user.unitId())
                 .toList();
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("total", visible.size());
-        long submitted = visible.stream().filter(v -> v.submittedVersion() > 0).count();
-        long approved = visible.stream().filter(v -> "APPROVED".equals(v.status())).count();
-        result.put("draft", visible.stream().filter(v -> "DRAFT".equals(v.status())).count());
-        result.put("reviewing", visible.stream().filter(v -> Set.of("INITIAL_REVIEW", "FINAL_REVIEW").contains(v.status())).count());
-        result.put("approved", approved);
-        result.put("returned", visible.stream().filter(v -> "RETURNED".equals(v.status())).count());
-        result.put("submitted", submitted);
-        result.put("overdue", visible.stream().filter(this::isOverdue).count());
-        result.put("passRate", submitted == 0 ? 0 : Math.round(approved * 100.0 / submitted));
-        return result;
+        if (topicId != null && visibleTopics.isEmpty())
+            throw BusinessException.forbidden("REPORT_SCOPE_DENIED", "当前账号无权查看该课题月季报进度");
+        List<View> reports = db.query("SELECT " + COLUMNS + FROM + " WHERE t.report_year=? ORDER BY r.id", viewMapper, year).stream()
+                .filter(this::canReadProgress)
+                .filter(report -> reportType == null || reportType.equals(report.reportType()))
+                .toList();
+        Map<String, View> actual = new HashMap<>();
+        reports.forEach(report -> actual.put(periodKey(Long.parseLong(report.topicId()), report.reportType(), report.year(), report.period()), report));
+        List<ProgressTopic> result = new ArrayList<>();
+        for (var topic : visibleTopics) {
+            Map<String, ProgressPeriod> periods = new LinkedHashMap<>();
+            var rules = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? ORDER BY effective_year", (rs, n) -> rule(rs), topic.id());
+            for (Rule rule : rules) {
+                if (reportType == null || "MONTHLY".equals(reportType)) addExpectedPeriods(periods, actual, topic.id(), rule, "MONTHLY", year);
+                if (reportType == null || "QUARTERLY".equals(reportType)) addExpectedPeriods(periods, actual, topic.id(), rule, "QUARTERLY", year);
+            }
+            reports.stream().filter(report -> report.topicId().equals(String.valueOf(topic.id()))).forEach(report -> {
+                String key = periodKey(topic.id(), report.reportType(), report.year(), report.period());
+                periods.putIfAbsent(key, progressPeriod(report, report.reportType(), report.year(), report.period(), report.openDate(), report.deadline()));
+            });
+            List<ProgressPeriod> ordered = periods.values().stream()
+                    .sorted(Comparator.comparing(ProgressPeriod::reportType).thenComparingInt(ProgressPeriod::year).thenComparingInt(ProgressPeriod::period))
+                    .toList();
+            int submitted = (int) ordered.stream().filter(period -> period.submittedVersion() > 0).count();
+            int approved = (int) ordered.stream().filter(period -> "APPROVED".equals(period.status())).count();
+            int missing = (int) ordered.stream().filter(period -> period.submittedVersion() == 0 && !"NOT_OPEN".equals(period.status())).count();
+            int overdue = (int) ordered.stream().filter(period -> "OVERDUE".equals(period.timing())).count();
+            result.add(new ProgressTopic(String.valueOf(topic.id()), topic.code(), topic.name(), ordered.size(), submitted,
+                    approved, missing, overdue, ordered));
+        }
+        return new Progress(year, result);
     }
 
-    private boolean isOverdue(View report) {
-        return report.overdue() || (Set.of("DRAFT", "RETURNED").contains(report.status())
-                && LocalDate.now().isAfter(report.deadline()));
+    private void addExpectedPeriods(Map<String, ProgressPeriod> periods, Map<String, View> actual, long topicId,
+                                    Rule rule, String type, int year) {
+        boolean monthly = "MONTHLY".equals(type);
+        if (monthly && !rule.monthlyEnabled() || !monthly && !rule.quarterlyEnabled()) return;
+        int startYear = monthly ? rule.monthlyStartYear() : rule.quarterlyStartYear();
+        int endYear = monthly ? rule.monthlyEndYear() : rule.quarterlyEndYear();
+        if (year < startYear || year > endYear) return;
+        int maximum = monthly ? 12 : 4;
+        int start = year == startYear ? (monthly ? rule.monthlyStartPeriod() : rule.quarterlyStartPeriod()) : 1;
+        int end = year == endYear ? (monthly ? rule.monthlyEndPeriod() : rule.quarterlyEndPeriod()) : maximum;
+        for (int period = start; period <= end; period++) {
+            String key = periodKey(topicId, type, year, period);
+            View report = actual.get(key);
+            LocalDate[] window = window(rule, type, year, period);
+            periods.putIfAbsent(key, progressPeriod(report, type, year, period, window[0], window[1]));
+        }
+    }
+
+    private ProgressPeriod progressPeriod(View report, String reportType, int year, int period,
+                                          LocalDate openDate, LocalDate deadline) {
+        LocalDate today = LocalDate.now();
+        String status = report == null ? today.isBefore(openDate) ? "NOT_OPEN" : "NOT_CREATED" : report.status();
+        boolean overdue = report == null
+                ? !today.isBefore(openDate) && today.isAfter(deadline)
+                : report.overdue() || Set.of("DRAFT", "RETURNED").contains(report.status()) && today.isAfter(deadline);
+        String timing = today.isBefore(openDate) ? "UPCOMING" : overdue ? "OVERDUE" : "NORMAL";
+        return new ProgressPeriod(report == null ? null : report.id(), reportType, year, period,
+                openDate, deadline, status, timing, report == null ? 0 : report.submittedVersion());
+    }
+
+    private String periodKey(long topicId, String type, int year, int period) {
+        return topicId + ":" + type + ":" + year + ":" + period;
     }
 
     private void requireLead(long topicId) {
@@ -290,9 +351,9 @@ public class ReportService {
         if (rows.isEmpty()) throw BusinessException.notFound("REPORT_RULE_NOT_FOUND", "课题尚未配置报告规则");
         return rows.getFirst();
     }
-    private Rule ruleForYear(long topicId, int year) {
-        var rows = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? AND effective_year<=? ORDER BY effective_year DESC LIMIT 1",
-                (rs, n) -> rule(rs), topicId, year);
+    private Rule ruleForPeriod(long topicId, String type, int year, int period) {
+        var rows = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? AND effective_year<=? ORDER BY effective_year DESC",
+                (rs, n) -> rule(rs), topicId, year).stream().filter(rule -> inRange(rule, type, year, period)).toList();
         if (rows.isEmpty()) throw BusinessException.validation("REPORT_RULE_NOT_FOUND", "该年度尚无有效报告规则");
         return rows.getFirst();
     }
@@ -305,12 +366,29 @@ public class ReportService {
     private Rule rule(ResultSet rs) throws SQLException {
         try {
             List<Integer> months = json.readValue(rs.getString("quarterly_months"), new TypeReference<>() {});
-            return new Rule(rs.getInt("effective_year"), rs.getBoolean("monthly_enabled"), rs.getInt("monthly_open_day"),
-                    rs.getInt("monthly_deadline_day"), rs.getBoolean("quarterly_enabled"), rs.getInt("quarterly_open_day"),
-                    rs.getInt("quarterly_deadline_day"), months, rs.getInt("record_version"));
+            return new Rule(rs.getInt("effective_year"), rs.getBoolean("monthly_enabled"),
+                    integer(rs,"monthly_start_year"), integer(rs,"monthly_start_period"),
+                    integer(rs,"monthly_end_year"), integer(rs,"monthly_end_period"),
+                    rs.getInt("monthly_open_day"), rs.getInt("monthly_deadline_day"), rs.getBoolean("quarterly_enabled"),
+                    integer(rs,"quarterly_start_year"), integer(rs,"quarterly_start_period"),
+                    integer(rs,"quarterly_end_year"), integer(rs,"quarterly_end_period"),
+                    rs.getInt("quarterly_open_day"), rs.getInt("quarterly_deadline_day"), months, rs.getInt("record_version"));
         } catch (Exception ex) { throw new SQLException("报告规则格式错误", ex); }
     }
+    private Integer integer(ResultSet rs, String column) throws SQLException {
+        Object value = rs.getObject(column); return value == null ? null : ((Number) value).intValue();
+    }
     private void validateRule(Rule rule) {
+        if (!rule.monthlyEnabled() && !rule.quarterlyEnabled())
+            throw BusinessException.validation("REPORT_RULE_EMPTY", "月报和季报至少启用一种");
+        if (rule.monthlyEnabled()) validateRange("月报", rule.monthlyStartYear(), rule.monthlyStartPeriod(),
+                rule.monthlyEndYear(), rule.monthlyEndPeriod(), 12);
+        if (rule.quarterlyEnabled()) validateRange("季报", rule.quarterlyStartYear(), rule.quarterlyStartPeriod(),
+                rule.quarterlyEndYear(), rule.quarterlyEndPeriod(), 4);
+        int firstYear = Math.min(rule.monthlyEnabled() ? rule.monthlyStartYear() : Integer.MAX_VALUE,
+                rule.quarterlyEnabled() ? rule.quarterlyStartYear() : Integer.MAX_VALUE);
+        if (rule.effectiveYear() != firstYear)
+            throw BusinessException.validation("REPORT_RULE_EFFECTIVE_YEAR", "规则年度必须等于最早启用范围的开始年度");
         if (rule.quarterlyMonths().size() != 4 || rule.quarterlyMonths().stream().anyMatch(m -> m == null || m < 1 || m > 12)
                 || !(rule.quarterlyMonths().get(0) < rule.quarterlyMonths().get(1)
                 && rule.quarterlyMonths().get(1) < rule.quarterlyMonths().get(2)
@@ -319,10 +397,49 @@ public class ReportService {
         if (rule.monthlyOpenDay() > rule.monthlyDeadlineDay() || rule.quarterlyOpenDay() > rule.quarterlyDeadlineDay())
             throw BusinessException.validation("INVALID_REPORT_WINDOW", "开放日不能晚于截止日");
     }
+    private void validateRange(String label, Integer startYear, Integer startPeriod, Integer endYear, Integer endPeriod, int maximum) {
+        if (startYear == null || startPeriod == null || endYear == null || endPeriod == null)
+            throw BusinessException.validation("REPORT_RANGE_REQUIRED", label + "启用时必须填写开始和结束范围");
+        if (startYear < 2000 || startYear > 2100 || endYear < 2000 || endYear > 2100
+                || startPeriod < 1 || startPeriod > maximum || endPeriod < 1 || endPeriod > maximum
+                || rangeValue(startYear,startPeriod,maximum) > rangeValue(endYear,endPeriod,maximum))
+            throw BusinessException.validation("INVALID_REPORT_RANGE", label + "结束范围不能早于开始范围");
+    }
+    private void validateRuleOverlap(long topicId, Rule request) {
+        var others = db.query("SELECT * FROM topic_report_rule WHERE topic_id=? AND effective_year<>? FOR UPDATE",
+                (rs,n)->rule(rs), topicId, request.effectiveYear());
+        for (Rule other : others) {
+            if (request.monthlyEnabled() && other.monthlyEnabled() && overlaps(request.monthlyStartYear(), request.monthlyStartPeriod(),
+                    request.monthlyEndYear(), request.monthlyEndPeriod(), other.monthlyStartYear(), other.monthlyStartPeriod(),
+                    other.monthlyEndYear(), other.monthlyEndPeriod(), 12))
+                throw BusinessException.conflict("REPORT_RULE_RANGE_OVERLAP", "月报填报范围与"+other.effectiveYear()+"年度规则重叠");
+            if (request.quarterlyEnabled() && other.quarterlyEnabled() && overlaps(request.quarterlyStartYear(), request.quarterlyStartPeriod(),
+                    request.quarterlyEndYear(), request.quarterlyEndPeriod(), other.quarterlyStartYear(), other.quarterlyStartPeriod(),
+                    other.quarterlyEndYear(), other.quarterlyEndPeriod(), 4))
+                throw BusinessException.conflict("REPORT_RULE_RANGE_OVERLAP", "季报填报范围与"+other.effectiveYear()+"年度规则重叠");
+        }
+    }
+    private boolean overlaps(int aStartYear,int aStartPeriod,int aEndYear,int aEndPeriod,
+                             int bStartYear,int bStartPeriod,int bEndYear,int bEndPeriod,int maximum) {
+        int aStart=rangeValue(aStartYear,aStartPeriod,maximum), aEnd=rangeValue(aEndYear,aEndPeriod,maximum);
+        int bStart=rangeValue(bStartYear,bStartPeriod,maximum), bEnd=rangeValue(bEndYear,bEndPeriod,maximum);
+        return aStart<=bEnd && bStart<=aEnd;
+    }
+    private int rangeValue(int year,int period,int maximum) { return year*maximum+period; }
+    private boolean inRange(Rule rule,String type,int year,int period) {
+        boolean monthly="MONTHLY".equals(type);
+        if (!monthly && !"QUARTERLY".equals(type)) throw BusinessException.validation("INVALID_REPORT_TYPE", "报告类型不正确");
+        if (monthly && !rule.monthlyEnabled() || !monthly && !rule.quarterlyEnabled()) return false;
+        int maximum=monthly?12:4;
+        int start=rangeValue(monthly?rule.monthlyStartYear():rule.quarterlyStartYear(), monthly?rule.monthlyStartPeriod():rule.quarterlyStartPeriod(), maximum);
+        int end=rangeValue(monthly?rule.monthlyEndYear():rule.quarterlyEndYear(), monthly?rule.monthlyEndPeriod():rule.quarterlyEndPeriod(), maximum);
+        int value=rangeValue(year,period,maximum);
+        return value>=start && value<=end;
+    }
     private LocalDate[] window(Rule rule, String type, int year, int period) {
         boolean monthly = "MONTHLY".equals(type);
         if (!monthly && !"QUARTERLY".equals(type)) throw BusinessException.validation("INVALID_REPORT_TYPE", "报告类型不正确");
-        if (monthly && (!rule.monthlyEnabled() || period > 12) || !monthly && (!rule.quarterlyEnabled() || period > 4))
+        if (period < 1 || monthly && period > 12 || !monthly && period > 4 || !inRange(rule,type,year,period))
             throw BusinessException.validation("REPORT_PERIOD_DISABLED", "该期报告未启用");
         int month = monthly ? period : rule.quarterlyMonths().get(period - 1);
         YearMonth ym = YearMonth.of(year, month);

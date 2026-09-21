@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type Key } from 'react';
-import { Alert, Button, Card, Col, Drawer, Empty, Form, Input, InputNumber, message, Modal, Progress, Row, Select, Space, Table, Tag, Upload } from 'antd';
+import { Alert, AutoComplete, Button, Card, Col, Collapse, Drawer, Empty, Form, Input, InputNumber, message, Modal, Progress, Row, Select, Space, Table, Tag, Upload } from 'antd';
 import { DeleteOutlined, DownloadOutlined, EyeOutlined, FileAddOutlined, FileOutlined, FolderOpenOutlined, ReloadOutlined, TeamOutlined, UploadOutlined } from '@ant-design/icons';
 import { authApi, type ApiCurrentUser } from '../../api/auth-api';
 import { archiveApi, type ApiArchiveDirectory, type ApiArchiveFolder, type ApiSelfFundedProject, type SelfFundedWrite } from '../../api/archive-api';
@@ -10,6 +10,28 @@ const GLOBAL_ROLES = new Set(['SYSTEM_ADMIN', 'PROJECT_TECH_LEADER', 'RESEARCH_A
 const PROJECT_TYPE_LABELS: Record<ApiSelfFundedProject['projectType'], string> = {
   TECHNOLOGY: '科技项目', RENOVATION: '技改项目', INFRASTRUCTURE: '基建项目',
 };
+
+function folderGroups(folders: ApiArchiveFolder[]) {
+  return [...new Set(folders.map((folder) => folder.categoryName))].map((categoryName) => ({
+    categoryName,
+    folders: folders.filter((folder) => folder.categoryName === categoryName),
+  }));
+}
+
+function FolderGroups({ folders, onOpen, onDelete }: { folders: ApiArchiveFolder[]; onOpen: (folder: ApiArchiveFolder) => void; onDelete: (folder: ApiArchiveFolder) => void }) {
+  const groups = folderGroups(folders);
+  if (!groups.length) return <Empty description="暂无材料文件夹" />;
+  return <Collapse defaultActiveKey={groups.map((group) => group.categoryName)} items={groups.map((group) => ({
+    key: group.categoryName,
+    label: <Space><FolderOpenOutlined /><b>{group.categoryName}</b><Tag>{group.folders.length} 项材料</Tag></Space>,
+    children: <Row gutter={[16, 16]}>{group.folders.map((folder) => <Col xs={24} sm={12} lg={8} xl={6} key={folder.id}>
+      <Card size="small" hoverable className="archive-folder-card" onClick={() => onOpen(folder)}><Space align="start"><FolderOpenOutlined className="archive-folder-icon" /><div>
+        <div className="archive-folder-name">{folder.name}</div><div className="archive-folder-meta">{folder.custom ? '自定义材料文件夹' : '清单材料'} · {folder.required ? '必存' : '有则必存'}</div>
+        <Progress percent={folder.completed ? 100 : 0} size="small" showInfo={false} /><span className="archive-folder-count">{folder.fileCount ? `${folder.fileCount} 个文件 · 已提交` : '暂无文件'}</span>
+      </div></Space>{folder.canDelete && <Button type="text" danger size="small" className="archive-folder-delete" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); onDelete(folder); }} />}</Card>
+    </Col>)}</Row>,
+  }))} />;
+}
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -98,7 +120,7 @@ export function RealNationalArchivePage() {
   const [folders, setFolders] = useState<ApiArchiveFolder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<ApiArchiveFolder>();
   const [addFolderOpen, setAddFolderOpen] = useState(false);
-  const [folderForm] = Form.useForm<{ name: string; required: boolean }>();
+  const [folderForm] = Form.useForm<{ categoryName: string; name: string; required: boolean }>();
   const refresh = useCallback(async () => {
     try {
       const [who, topicPage, directoryList] = await Promise.all([authApi.me(), topicApi.list(), archiveApi.directories()]);
@@ -126,7 +148,7 @@ export function RealNationalArchivePage() {
     if (!selectedDirectory || !canManageSelectedUnit) return;
     try {
       const values = await folderForm.validateFields();
-      await archiveApi.addNationalFolder(selectedDirectory.topicId, selectedDirectory.unitId, values.name.trim(), values.required);
+      await archiveApi.addNationalFolder(selectedDirectory.topicId, selectedDirectory.unitId, values.categoryName.trim(), values.name.trim(), values.required);
       setAddFolderOpen(false); folderForm.resetFields(); await refreshFolders(selectedDirectory); message.success('自定义材料文件夹已创建');
     } catch (error) { if (error instanceof Error) message.error(error.message); }
   };
@@ -182,18 +204,13 @@ export function RealNationalArchivePage() {
         <Tag color={membershipLabel(selectedTopic, selectedDirectory.unitId) === '牵头单位' ? 'blue' : 'default'}>{membershipLabel(selectedTopic, selectedDirectory.unitId)}</Tag>
         <span>{canManageSelectedUnit ? '您可新增或删除自定义文件夹，并上传、补充和删除材料。' : '当前为查看权限，不可修改该单位材料。'}</span>
       </Space></div>}
-      <Row gutter={[16, 16]}>{folders.map((folder) => <Col xs={24} sm={12} lg={8} xl={6} key={folder.id}>
-        <Card size="small" hoverable className="archive-folder-card" onClick={() => setSelectedFolder(folder)}><Space align="start"><FolderOpenOutlined className="archive-folder-icon" /><div>
-          <div className="archive-folder-name">{folder.name}</div><div className="archive-folder-meta">{folder.custom ? '自定义材料文件夹' : '清单材料'} · {folder.required ? '必存' : '有则必存'}</div>
-          <Progress percent={folder.completed ? 100 : 0} size="small" showInfo={false} /><span className="archive-folder-count">{folder.fileCount ? `${folder.fileCount} 个文件 · 已提交` : '暂无文件'}</span>
-        </div></Space>{folder.canDelete && <Button type="text" danger size="small" className="archive-folder-delete" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); removeFolder(folder); }} />}</Card>
-      </Col>)}{!folders.length && <Col span={24}><Empty description="当前单位暂无材料文件夹" /></Col>}</Row>
+      <FolderGroups folders={folders} onOpen={setSelectedFolder} onDelete={removeFolder} />
     </Drawer>
     <Drawer width="78%" title={selectedFolder && selectedDirectory ? `${selectedDirectory.unitName} · ${selectedFolder.name} · 文件管理` : ''} open={Boolean(selectedFolder)} onClose={() => setSelectedFolder(undefined)}>
       {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedUnit} canUpload={Boolean(user?.actionPermissions.includes('file.upload'))} canDownload={Boolean(user?.actionPermissions.includes('file.download'))} onChanged={() => selectedDirectory && refreshFolders(selectedDirectory)} />}
     </Drawer>
     <Modal title="新增自定义材料文件夹" open={addFolderOpen} onCancel={() => { setAddFolderOpen(false); folderForm.resetFields(); }} onOk={() => void submitFolder()} okText="创建" cancelText="取消">
-      <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
+      <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="categoryName" label="所属管理阶段" rules={[{ required: true, message: '请选择或输入管理阶段' }]}><AutoComplete options={folderGroups(folders).map((group) => ({ value: group.categoryName }))} placeholder="选择已有阶段，或输入新的阶段名称" /></Form.Item><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
         <Form.Item name="required" label="材料要求" rules={[{ required: true, message: '请选择材料要求' }]}><Select options={[{ label: '必存', value: true }, { label: '有则必存', value: false }]} /></Form.Item>
       </Form>
     </Modal>
@@ -213,7 +230,7 @@ export function RealSelfFundedPage() {
   const [editing, setEditing] = useState(false);
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [form] = Form.useForm<SelfFundedWrite>();
-  const [folderForm] = Form.useForm<{ name: string; required: boolean }>();
+  const [folderForm] = Form.useForm<{ categoryName: string; name: string; required: boolean }>();
   const refresh = useCallback(async () => {
     try {
       const [who, topicPage, directoryList, projectList] = await Promise.all([authApi.me(), topicApi.list(), archiveApi.directories(), archiveApi.projects()]);
@@ -257,7 +274,7 @@ export function RealSelfFundedPage() {
     if (!selected || !canManageSelectedProject) return;
     try {
       const values = await folderForm.validateFields();
-      await archiveApi.addProjectFolder(selected.id, values.name.trim(), values.required);
+      await archiveApi.addProjectFolder(selected.id, values.categoryName.trim(), values.name.trim(), values.required);
       setAddFolderOpen(false); folderForm.resetFields(); await refreshProjectFolders(selected); message.success('自定义材料文件夹已创建');
     } catch (error) { if (error instanceof Error) message.error(error.message); }
   };
@@ -304,16 +321,13 @@ export function RealSelfFundedPage() {
     </Modal>
     <Drawer width="78%" title={selected && !editing ? `${selected.name} · 自筹材料文件夹` : ''} open={Boolean(selected && !editing)} onClose={() => { setSelected(undefined); setSelectedFolder(undefined); }}
       extra={canManageSelectedProject && <Button type="primary" icon={<FileAddOutlined />} onClick={() => { folderForm.setFieldsValue({ required: true }); setAddFolderOpen(true); }}>新增文件夹</Button>}>
-      <Row gutter={[16, 16]}>{folders.map((folder) => <Col xs={24} sm={12} lg={8} xl={6} key={folder.id}><Card size="small" hoverable className="archive-folder-card" onClick={() => setSelectedFolder(folder)}>
-        <Space align="start"><FolderOpenOutlined className="archive-folder-icon" /><div><div className="archive-folder-name">{folder.name}</div><div className="archive-folder-meta">{folder.custom ? '自定义材料文件夹' : '清单材料'} · {folder.required ? '必存材料' : '有则必存'} · 至少 {folder.requiredQuantity} 份</div>
-          <Progress percent={folder.completed ? 100 : 0} size="small" showInfo={false} /><span className="archive-folder-count">{folder.fileCount ? `${folder.fileCount} 个文件 · 已提交` : '暂无文件'}</span>
-        </div></Space>{folder.canDelete && <Button type="text" danger size="small" className="archive-folder-delete" icon={<DeleteOutlined />} onClick={(event) => { event.stopPropagation(); removeFolder(folder); }} />}</Card></Col>)}{!folders.length && <Col span={24}><Empty description="当前项目暂无材料文件夹" /></Col>}</Row>
+      <FolderGroups folders={folders} onOpen={setSelectedFolder} onDelete={removeFolder} />
     </Drawer>
     <Drawer width="78%" title={selectedFolder ? `${selectedFolder.name} · 文件管理` : ''} open={Boolean(selectedFolder)} onClose={() => setSelectedFolder(undefined)}>
       {selectedFolder && <RealFolderFileList folder={selectedFolder} editable={canManageSelectedProject} canUpload={Boolean(user?.actionPermissions.includes('file.upload'))} canDownload={Boolean(user?.actionPermissions.includes('file.download'))} onChanged={() => selected && refreshProjectFolders(selected)} />}
     </Drawer>
     <Modal title="新增自定义材料文件夹" open={addFolderOpen} onCancel={() => { setAddFolderOpen(false); folderForm.resetFields(); }} onOk={() => void submitFolder()} okText="创建" cancelText="取消">
-      <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
+      <Form form={folderForm} layout="vertical" initialValues={{ required: true }}><Form.Item name="categoryName" label="所属项目阶段" rules={[{ required: true, message: '请选择或输入项目阶段' }]}><AutoComplete options={folderGroups(folders).map((group) => ({ value: group.categoryName }))} placeholder="选择已有阶段，或输入新的阶段名称" /></Form.Item><Form.Item name="name" label="文件夹名称" rules={[{ required: true, message: '请输入文件夹名称' }]}><Input placeholder="例如：补充说明材料" maxLength={200} /></Form.Item>
         <Form.Item name="required" label="材料要求" rules={[{ required: true, message: '请选择材料要求' }]}><Select options={[{ label: '必存', value: true }, { label: '有则必存', value: false }]} /></Form.Item>
       </Form>
     </Modal>

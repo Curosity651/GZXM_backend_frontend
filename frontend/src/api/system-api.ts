@@ -43,7 +43,7 @@ export const systemApi = {
   users: (params: URLSearchParams) => apiRequest<ApiPage<ApiUser>>(`/users?${params.toString()}`),
   createUser: (data: { username: string; roleId: string; name: string; phone?: string; email?: string; enabled?: boolean; unitId?: string; unitName?: string; password: string }) =>
     apiRequest<CreateUserResponse>('/users', { method: 'POST', body: JSON.stringify(data) }),
-  updateUser: (id: string, data: { username: string; roleId: string; name: string; phone?: string; email?: string; unitId?: string; unitName?: string }) =>
+  updateUser: (id: string, data: { username: string; roleId?: string; name?: string; phone?: string; email?: string; unitId?: string; unitName?: string }) =>
     apiRequest<ApiUser>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   setUserStatus: (id: string, enabled: boolean) =>
     apiRequest<ApiUser>(`/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ enabled }) }),

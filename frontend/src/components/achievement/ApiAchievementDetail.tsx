@@ -11,7 +11,7 @@ const typeNames: Record<ApiAchievement['achievementType'], string> = {
 const statusNames: Record<string, string> = {
   DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回',
   FORMAL_DRAFT: '第二轮材料草稿', FORMAL_INITIAL: '第二轮初审中', FORMAL_FINAL: '第二轮终审中', FORMAL_RETURNED: '第二轮退回',
-  WAIT_PUBLICATION: '待补充正式刊出材料', WAIT_GRANT: '待补充授权材料', WAIT_CERTIFICATE: '待补充予以发布材料', SUPPLEMENT_INITIAL: '第三轮初审中', SUPPLEMENT_FINAL: '第三轮终审中', SUPPLEMENT_RETURNED: '第三轮退回', EFFECTIVE: '已完成',
+  WAIT_PUBLICATION: '待补充正式刊出材料', WAIT_GRANT: '已受理（待补充授权材料）', WAIT_CERTIFICATE: '待补充予以发布材料', SUPPLEMENT_INITIAL: '第三轮初审中', SUPPLEMENT_FINAL: '第三轮终审中', SUPPLEMENT_RETURNED: '第三轮退回', EFFECTIVE: '已完成',
 };
 
 function stage(achievement: ApiAchievement) {

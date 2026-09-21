@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @MapperScan({
         "com.gzxm.server.common.audit",
+        "com.gzxm.server.modules.systemlog.repository",
         "com.gzxm.server.modules.system.repository",
         "com.gzxm.server.modules.file.repository"
 })

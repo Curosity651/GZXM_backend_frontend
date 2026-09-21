@@ -316,7 +316,7 @@ export type PagePermissionKey =
   | 'achievement-entry'
   | 'report-management'
   | 'topic-archive' | 'self-funded-archive' | 'archive-monitoring'
-  | 'user-management' | 'role-permission' | 'dictionary' | 'system-config';
+  | 'user-management' | 'role-permission' | 'dictionary' | 'system-config' | 'system-log';
 
 export type ActionPermissionKey =
   | 'topic.manage' | 'indicator.manage' | 'topic-indicator.publish'

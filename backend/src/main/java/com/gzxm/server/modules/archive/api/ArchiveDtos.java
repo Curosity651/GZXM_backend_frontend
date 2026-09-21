@@ -9,9 +9,10 @@ public final class ArchiveDtos {
     public record Directory(String topicId, String topicName, String unitId, String unitName,
                             int folderCount, int requiredCount, int completedCount, double completionRate) {}
     public record Folder(String id, String topicId, String unitId, String ownerType, String ownerId,
-                         String name, boolean required, int requiredQuantity, boolean custom,
+                         String categoryName, String name, boolean required, int requiredQuantity, boolean custom,
                          int fileCount, boolean completed, boolean canDelete) {}
-    public record FolderCreate(@NotBlank @Size(max = 200) String name, Boolean required) {}
+    public record FolderCreate(@NotBlank @Size(max = 200) String categoryName,
+                               @NotBlank @Size(max = 200) String name, Boolean required) {}
     public record FileLink(@NotBlank String fileId) {}
     public record ProjectWrite(@NotBlank String topicId, @NotBlank @Size(max = 100) String code,
                                @NotBlank @Size(max = 300) String name, @NotBlank String projectType,

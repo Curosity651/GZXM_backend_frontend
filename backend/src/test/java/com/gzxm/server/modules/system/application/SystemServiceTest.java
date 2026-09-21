@@ -38,7 +38,7 @@ class SystemServiceTest {
 
     @Test
     void externalRoleCannotBeGrantedSelfFundedPermission() {
-        when(roles.selectById(5L)).thenReturn(role(5, "EXTERNAL_TOPIC_UNIT"));
+        when(roles.lockById(5L)).thenReturn(role(5, "EXTERNAL_TOPIC_UNIT"));
         when(permissions.selectList(any())).thenReturn(List.of(permission("page:self-funded-archive", "PAGE", true)));
 
         assertThatThrownBy(() -> service.updateRolePermissions(5,
@@ -49,7 +49,7 @@ class SystemServiceTest {
 
     @Test
     void systemAdminCannotLoseSystemManagementPermission() {
-        when(roles.selectById(1L)).thenReturn(role(1, "SYSTEM_ADMIN"));
+        when(roles.lockById(1L)).thenReturn(role(1, "SYSTEM_ADMIN"));
         when(permissions.selectList(any())).thenReturn(List.of(permission("page:home", "PAGE", false)));
 
         assertThatThrownBy(() -> service.updateRolePermissions(1,
@@ -104,7 +104,7 @@ class SystemServiceTest {
     @Test
     void platformAndTopicUnitRolesCannotBeExchangedDirectly() {
         UserEntity user = new UserEntity(); user.setId(41L); user.setAccountType("PLATFORM");
-        when(users.selectById(41L)).thenReturn(user);
+        when(users.lockById(41L)).thenReturn(user);
         when(relations.findRoleId(41L)).thenReturn(2L);
         when(roles.selectById(2L)).thenReturn(role(2, "RESEARCH_ASSISTANT"));
         when(roles.selectById(4L)).thenReturn(role(4, "INTERNAL_TOPIC_UNIT"));

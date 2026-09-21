@@ -15,6 +15,7 @@ export const PAGE_PERMISSION_OPTIONS: { value: PageKey; label: string; group: st
   { value: 'role-permission', label: '角色权限管理', group: '系统管理' },
   { value: 'dictionary', label: '字典管理', group: '系统管理' },
   { value: 'system-config', label: '系统配置', group: '系统管理' },
+  { value: 'system-log', label: '系统错误日志', group: '系统管理' },
 ];
 
 export const ACTION_PERMISSION_OPTIONS: { value: ActionKey; label: string; group: string }[] = [
@@ -42,18 +43,18 @@ export const ALL_ACTION_PERMISSIONS = ACTION_PERMISSION_OPTIONS.map((item) => it
 const pagePermissions: Record<UserRole, PageKey[] | 'ALL'> = {
   系统管理员: 'ALL',
   项目技术负责人: [
-    'home', 'topic-indicator', 'achievement-entry',
-    'report-management', 'topic-archive', 'self-funded-archive', 'archive-monitoring',
+    'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive',
+    'self-funded-archive', 'archive-monitoring', 'user-management',
   ],
   科研助理: [
-    'home', 'topic-indicator', 'achievement-entry',
-    'report-management', 'topic-archive', 'self-funded-archive', 'archive-monitoring',
+    'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive',
+    'self-funded-archive', 'archive-monitoring', 'user-management',
   ],
   内部课题单位: [
-    'home', 'topic-indicator', 'achievement-entry',
-    'report-management', 'topic-archive', 'self-funded-archive',
+    'topic-indicator', 'achievement-entry', 'report-management',
+    'topic-archive', 'self-funded-archive', 'user-management',
   ],
-  外部课题单位: ['home', 'topic-indicator', 'achievement-entry', 'report-management', 'topic-archive'],
+  外部课题单位: ['topic-indicator', 'achievement-entry', 'report-management', 'topic-archive', 'user-management'],
 };
 
 const actionPermissions: Record<ActionKey, UserRole[]> = {

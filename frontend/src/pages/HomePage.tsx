@@ -23,7 +23,7 @@ const achievementStatusLabels: Record<string, string> = {
   DRAFT: '预审草稿', PRE_INITIAL: '预审初审中', PRE_FINAL: '预审终审中', PRE_RETURNED: '预审退回',
   FORMAL_DRAFT: '第二轮材料草稿', FORMAL_INITIAL: '第二轮初审中', FORMAL_FINAL: '第二轮终审中', FORMAL_RETURNED: '第二轮退回',
   WAIT_PUBLICATION: '等待正式刊出材料', WAIT_GRANT: '等待授权材料', WAIT_CERTIFICATE: '等待予以发布材料', SUPPLEMENT_INITIAL: '第三轮初审中',
-  SUPPLEMENT_FINAL: '补充材料终审中', SUPPLEMENT_RETURNED: '补充材料退回', EFFECTIVE: '已生效',
+  SUPPLEMENT_FINAL: '补充材料终审中', SUPPLEMENT_RETURNED: '补充材料退回', EFFECTIVE: '已完成',
 };
 const reportStatusLabels: Record<string, string> = {
   DRAFT: '草稿', INITIAL_REVIEW: '初审中', FINAL_REVIEW: '终审中', APPROVED: '已通过', RETURNED: '退回修改',
@@ -95,7 +95,7 @@ export function HomePage() {
   const effective = topicSummaries.reduce((sum, topic) => sum + topic.completed, 0);
   const metricCards = [
     { title: '课题数量', value: summary?.topicCount ?? topics.length, icon: <RiseOutlined />, color: '#1677ff' },
-    { title: '生效成果', value: effective, icon: <FileDoneOutlined />, color: '#00a870' },
+    { title: '已完成成果', value: effective, icon: <FileDoneOutlined />, color: '#00a870' },
     { title: '已通过报告', value: summary?.reportApproved ?? 0, icon: <CheckCircleOutlined />, color: '#7b61ff' },
     { title: '已提交材料项', value: summary?.archiveCompleted ?? 0, icon: <FolderOpenOutlined />, color: '#fa8c16' },
     { title: '当前待审批', value: tasks.length, icon: <ClockCircleOutlined />, color: '#eb2f96' },

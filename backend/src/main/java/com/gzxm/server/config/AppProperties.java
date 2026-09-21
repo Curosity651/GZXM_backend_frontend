@@ -13,5 +13,8 @@ public record AppProperties(Security security, Bootstrap bootstrap, File file) {
     public record Bootstrap(boolean enabled, String adminUsername, String adminPassword) {}
 
     public record File(String provider, Path root, Duration uploadTicketTtl,
-                       Duration signedUrlTtl) {}
+                       Duration signedUrlTtl, Webdav webdav, String signingSecret) {
+        public record Webdav(String baseUrl, String username, String password,
+                             Duration connectTimeout, Duration requestTimeout) {}
+    }
 }

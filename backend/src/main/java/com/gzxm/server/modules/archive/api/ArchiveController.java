@@ -37,7 +37,7 @@ public class ArchiveController {
     @ResponseStatus(HttpStatus.CREATED) @PreAuthorize("hasAuthority('archive.topic.submit')")
     @Operation(operationId = "createNationalCustomFolder")
     public Folder addFolder(@PathVariable String topicId, @PathVariable String unitId, @Valid @RequestBody FolderCreate request) {
-        var result = service.addNationalFolder(TopicService.id(topicId), TopicService.id(unitId), request.name(), request.required());
+        var result = service.addNationalFolder(TopicService.id(topicId), TopicService.id(unitId), request.categoryName(), request.name(), request.required());
         audit.success("archive.folder.create", "ARCHIVE_FOLDER", result.id()); return result;
     }
     @DeleteMapping("/archive/folders/{folderId}") @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -89,7 +89,7 @@ public class ArchiveController {
     @PreAuthorize("hasAuthority('self-funded.manage')")
     @Operation(operationId = "createSelfFundedCustomFolder")
     public Folder addProjectFolder(@PathVariable String projectId, @Valid @RequestBody FolderCreate request) {
-        var result = service.addProjectFolder(TopicService.id(projectId), request.name(), request.required());
+        var result = service.addProjectFolder(TopicService.id(projectId), request.categoryName(), request.name(), request.required());
         audit.success("self-funded.folder.create", "ARCHIVE_FOLDER", result.id()); return result;
     }
     @GetMapping("/archive-progress") @PreAuthorize("isAuthenticated()")

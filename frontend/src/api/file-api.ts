@@ -18,8 +18,13 @@ function authorizedHeaders(extra?: HeadersInit): Headers {
 }
 
 async function errorMessage(response: Response): Promise<string> {
-  try { return ((await response.json()) as { detail?: string }).detail ?? `请求失败：${response.status}`; }
-  catch { return `请求失败：${response.status}`; }
+  const traceId = response.headers.get('X-Trace-Id');
+  try {
+    const problem = (await response.json()) as { detail?: string; traceId?: string };
+    const message = problem.detail ?? `请求失败：${response.status}`;
+    return problem.traceId || traceId ? `${message}（追踪号：${problem.traceId ?? traceId}）` : message;
+  }
+  catch { return `请求失败：${response.status}${traceId ? `（追踪号：${traceId}）` : ''}`; }
 }
 
 export const fileApi = {

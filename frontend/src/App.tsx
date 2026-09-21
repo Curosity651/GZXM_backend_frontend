@@ -13,6 +13,7 @@ import { TopicArchivePage } from './pages/archive/TopicArchivePage';
 import { SelfFundedProjectPage } from './pages/archive/SelfFundedProjectPage';
 import { UserManagementPage } from './pages/admin/UserManagementPage';
 import { RolePermissionPage } from './pages/admin/RolePermissionPage';
+import { SystemLogPage } from './pages/admin/SystemLogPage';
 import { ReportManagementPage } from './pages/report/ReportManagementPage';
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
             <Route path="archive/monitoring" element={<ArchiveMonitoringPage />} />
             <Route path="admin/users" element={<UserManagementPage />} />
             <Route path="admin/roles" element={<RolePermissionPage />} />
+            <Route path="admin/logs" element={<SystemLogPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

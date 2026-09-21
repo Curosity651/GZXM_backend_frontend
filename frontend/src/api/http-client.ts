@@ -6,6 +6,7 @@ export interface ApiProblem {
   status: number;
   detail?: string;
   code?: string;
+  traceId?: string;
   fieldErrors?: Array<{ field: string; message: string }>;
 }
 
@@ -13,7 +14,8 @@ export class ApiError extends Error {
   readonly problem: ApiProblem;
 
   constructor(problem: ApiProblem) {
-    super(problem.detail ?? problem.title ?? `请求失败（${problem.status}）`);
+    const message = problem.detail ?? problem.title ?? `请求失败（${problem.status}）`;
+    super(problem.traceId ? `${message}（追踪号：${problem.traceId}）` : message);
     this.problem = problem;
   }
 }

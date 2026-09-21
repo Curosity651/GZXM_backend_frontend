@@ -87,9 +87,10 @@ public class DefaultAchievementProgressQuery implements AchievementProgressQuery
         return mapper.facts(context.topicId(),context.cumulativeNodeIds(),context.units().stream().map(Unit::id).toList());
     }
     private boolean visibleTo(CurrentUser user,Fact fact,long topicId) {
-        if("RESEARCH_ASSISTANT".equals(user.roleCode())) return ASSISTANT_VISIBLE_STATES.contains(fact.status());
-        if("PROJECT_TECH_LEADER".equals(user.roleCode())) return LEADER_VISIBLE_STATES.contains(fact.status());
-        if(user.isGlobalRole() || Objects.equals(user.unitId(),fact.unitId())) return true;
+        // Progress is an operational aggregate, not the review inbox. Global project roles must
+        // see every state so drafts/returns still contribute to "initiated" and unit progress.
+        if(user.isGlobalRole()) return true;
+        if(Objects.equals(user.unitId(),fact.unitId())) return true;
         return topics.isLeadUnit(topicId,user.unitId()) && !Set.of("DRAFT","FORMAL_DRAFT").contains(fact.status());
     }
     private boolean matches(Fact fact,Definition definition,JsonNode detail) {

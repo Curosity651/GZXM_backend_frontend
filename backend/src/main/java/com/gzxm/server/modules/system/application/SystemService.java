@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gzxm.server.common.api.PageResult;
 import com.gzxm.server.common.exception.BusinessException;
+import com.gzxm.server.common.security.CurrentUser;
 import com.gzxm.server.modules.system.api.SystemDtos.*;
 import com.gzxm.server.modules.system.domain.*;
 import com.gzxm.server.modules.system.repository.*;
@@ -59,6 +60,19 @@ public class SystemService {
         return toUserView(user);
     }
 
+    public PageResult<UserView> listUsersFor(CurrentUser current, long page, long size, String keyword, Long roleId, Boolean enabled) {
+        if ("SYSTEM_ADMIN".equals(current.roleCode())) return listUsers(page, size, keyword, roleId, enabled);
+        UserView self = getUser(current.id());
+        boolean matches = (!StringUtils.hasText(keyword) || self.username().contains(keyword.trim()) || self.name().contains(keyword.trim()))
+                && roleId == null && (enabled == null || enabled == self.enabled());
+        return PageResult.of(matches ? List.of(self) : List.of(), page, size, matches ? 1 : 0);
+    }
+
+    public UserView getUserFor(CurrentUser current, long id) {
+        requireSelfOrAdministrator(current, id);
+        return getUser(id);
+    }
+
     @Transactional
     public CreateUserResponse createUser(CreateUserRequest request) {
         RoleEntity role = requireRole(parseId(request.roleId(), "roleId"));
@@ -86,7 +100,7 @@ public class SystemService {
 
     @Transactional
     public UserView updateUser(long id, UpdateUserRequest request) {
-        UserEntity user = requireUser(id);
+        UserEntity user = requireUserLocked(id);
         Long oldRoleId = relations.findRoleId(id);
         RoleEntity oldRole = oldRoleId == null ? null : requireRole(oldRoleId);
         RoleEntity nextRole = StringUtils.hasText(request.roleId()) ? requireRole(parseId(request.roleId(), "roleId")) : oldRole;
@@ -127,8 +141,37 @@ public class SystemService {
     }
 
     @Transactional
+    public UserView updateSelfProfile(CurrentUser current, long id, UpdateUserRequest request) {
+        requireSelfOrAdministrator(current, id);
+        if ("SYSTEM_ADMIN".equals(current.roleCode())) return updateUser(id, request);
+        if (request.roleId() != null || request.name() != null || request.unitId() != null || request.unitName() != null)
+            throw BusinessException.forbidden("SELF_PROFILE_FIELD_DENIED", "本人只能修改用户名、手机号和邮箱");
+        if (!StringUtils.hasText(request.username()))
+            throw BusinessException.validation("USERNAME_REQUIRED", "用户名不能为空");
+        UserEntity user = requireUserLocked(id);
+        String username = request.username().trim();
+        boolean usernameChanged = !username.equals(user.getUsername());
+        try {
+            user.setUsername(username);
+            user.setPhone(trimToNull(request.phone()));
+            user.setEmail(trimToNull(request.email()));
+            if (usernameChanged) user.setTokenVersion(user.getTokenVersion() + 1);
+            user.setUpdatedAt(LocalDateTime.now());
+            users.updateById(user);
+        } catch (DuplicateKeyException ex) {
+            throw BusinessException.conflict("USERNAME_EXISTS", "用户名已存在");
+        }
+        return toUserView(user);
+    }
+
+    public void requireSelfOrAdministrator(CurrentUser current, long id) {
+        if (!"SYSTEM_ADMIN".equals(current.roleCode()) && current.id() != id)
+            throw BusinessException.forbidden("USER_SCOPE_DENIED", "只能查看或修改自己的账号");
+    }
+
+    @Transactional
     public UserView setStatus(long id, boolean enabled) {
-        UserEntity user = requireUser(id);
+        UserEntity user = requireUserLocked(id);
         user.setEnabled(enabled);
         user.setTokenVersion(user.getTokenVersion() + 1);
         user.setUpdatedAt(LocalDateTime.now());
@@ -140,7 +183,7 @@ public class SystemService {
 
     @Transactional
     public void changePassword(long id, String password) {
-        UserEntity user = requireUser(id);
+        UserEntity user = requireUserLocked(id);
         user.setPasswordHash(passwordEncoder.encode(password));
         user.setTokenVersion(user.getTokenVersion() + 1);
         user.setUpdatedAt(LocalDateTime.now());
@@ -156,10 +199,12 @@ public class SystemService {
 
     @Transactional
     public RoleView updateRolePermissions(long id, RolePermissionRequest request) {
-        RoleEntity role = requireRole(id);
+        RoleEntity role = requireRoleLocked(id);
         List<String> allCodes = new ArrayList<>();
         allCodes.addAll(request.pagePermissions().stream().map(code -> "page:" + code).toList());
         allCodes.addAll(request.actionPermissions());
+        if (!"SYSTEM_ADMIN".equals(role.getCode()) && allCodes.contains("page:home"))
+            throw BusinessException.validation("HOME_ADMIN_ONLY", "工作台仅允许系统管理员访问");
         List<PermissionEntity> selected = permissions.selectList(new LambdaQueryWrapper<PermissionEntity>()
                 .in(PermissionEntity::getCode, allCodes).eq(PermissionEntity::getEnabled, true));
         if (selected.size() != new HashSet<>(allCodes).size()) {
@@ -245,8 +290,20 @@ public class SystemService {
         return user;
     }
 
+    private UserEntity requireUserLocked(long id) {
+        UserEntity user = users.lockById(id);
+        if (user == null || user.getDeletedAt() != null) throw BusinessException.notFound("USER_NOT_FOUND", "用户不存在");
+        return user;
+    }
+
     private RoleEntity requireRole(long id) {
         RoleEntity role = roles.selectById(id);
+        if (role == null) throw BusinessException.notFound("ROLE_NOT_FOUND", "角色不存在");
+        return role;
+    }
+
+    private RoleEntity requireRoleLocked(long id) {
+        RoleEntity role = roles.lockById(id);
         if (role == null) throw BusinessException.notFound("ROLE_NOT_FOUND", "角色不存在");
         return role;
     }

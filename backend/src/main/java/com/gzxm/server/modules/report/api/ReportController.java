@@ -12,7 +12,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -87,8 +86,9 @@ public class ReportController {
 
     @GetMapping("/report-progress") @PreAuthorize("isAuthenticated()")
     @Operation(operationId = "getReportProgress")
-    public Map<String, Object> progress(@RequestParam(required = false) String topicId,
-                                        @RequestParam(required = false) Integer year) {
-        return service.progress(topicId == null ? null : TopicService.id(topicId), year);
+    public Progress progress(@RequestParam(required = false) String topicId,
+                             @RequestParam(required = false) Integer year,
+                             @RequestParam(required = false) String reportType) {
+        return service.progress(topicId == null ? null : TopicService.id(topicId), year, reportType);
     }
 }
