@@ -45,7 +45,7 @@ public class AchievementWorkflowService {
         var replay=replay(id,user.id(),key,"ACTION",request,AchievementView.class);
         if(replay!=null) return new Outcome<>(replay,true);
         achievements.writable(topic);version(row,request.recordVersion());
-        var assignment=assignments.requireAssigned(row.getTopicId(),row.getNodeId(),row.getIndicatorDefinitionId());
+        var assignment=assignments.requireEligible(row.getTopicId(),row.getNodeId(),row.getIndicatorDefinitionId());
         if(!row.getAchievementType().equals(assignment.achievementType())) throw BusinessException.conflict("ACHIEVEMENT_TYPE_CHANGED","指标类型已变更");
         String next=AchievementWorkflow.action(row.getStatus(),request.action(),row.getAchievementType());
         boolean submitting=request.action().startsWith("SUBMIT_");

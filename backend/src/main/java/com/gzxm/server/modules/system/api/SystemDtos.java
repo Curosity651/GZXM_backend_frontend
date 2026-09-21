@@ -11,21 +11,24 @@ import java.util.List;
 public final class SystemDtos {
     private SystemDtos() {}
 
-    public record UserView(String id, String username, String name, String unitId, String unitName,
-                           String roleId, String roleName, String phone, String email,
+    public record UserView(String id, String username, String principalName, String principalPhone,
+                           String principalEmail, String contactName, String contactPhone, String contactEmail,
+                           String unitId, String unitName, String roleId, String roleName,
                            boolean enabled, LocalDateTime createdAt) {}
 
     public record CreateUserRequest(@NotBlank String username,
                                     @NotBlank String roleId,
-                                    @NotBlank String name, String phone,
-                                    @Email String email, Boolean enabled,
+                                    @NotBlank String principalName, String principalPhone,
+                                    @Email String principalEmail, @NotBlank String contactName,
+                                    String contactPhone, @Email String contactEmail, Boolean enabled,
                                     String unitId, String unitName,
                                     @NotBlank @Size(min = 8, max = 72) String password) {}
 
     public record CreateUserResponse(UserView user) {}
 
-    public record UpdateUserRequest(String username, String roleId, String name, String phone, @Email String email,
-                                    String unitId, String unitName) {}
+    public record UpdateUserRequest(String username, String roleId, String principalName, String principalPhone,
+                                    @Email String principalEmail, String contactName, String contactPhone,
+                                    @Email String contactEmail, String unitId, String unitName) {}
     public record StatusRequest(boolean enabled) {}
     public record PasswordChangeRequest(@NotBlank @Size(min = 8, max = 72) String password) {}
 
@@ -42,6 +45,7 @@ public final class SystemDtos {
 
     public record UnitView(String id, String code, String name, boolean internal, boolean enabled,
                            boolean topicUnitEligible) {}
-    public record TopicUserView(String id, String username, String name, String unitId, String unitName,
+    public record TopicUserView(String id, String username, String principalName, String contactName,
+                                String contactPhone, String contactEmail, String unitId, String unitName,
                                 boolean enabled) {}
 }

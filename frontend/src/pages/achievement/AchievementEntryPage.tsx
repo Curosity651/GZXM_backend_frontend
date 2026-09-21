@@ -21,7 +21,7 @@ const editableStatuses = new Set(['DRAFT', 'PRE_RETURNED', 'FORMAL_DRAFT', 'FORM
 const detailKeys = ['abstract', 'keywords', 'researchDirection', 'remarks', 'paperStatus', 'paperFormType', 'paperType', 'journalName', 'cnNumber', 'issn', 'doi', 'firstAuthor', 'correspondingAuthor', 'allAuthors', 'signingUnitList', 'submissionDate', 'externalSubmissionNumber', 'acceptanceDate', 'publicationDate', 'projectLabeling', 'englishTitle', 'journalLevel', 'isChineseCoreJournal', 'isPowerGridFirstAuthor', 'patentStatus', 'patentScope', 'applicantList', 'firstInventor', 'inventorList', 'applicationNumber', 'applicationDate', 'publicationNumber', 'receiptDate', 'grantDate', 'grantPublicationNumber', 'technicalField', 'ownershipDescription', 'isPowerGridFirstApplicant', 'copyrightStatus', 'softwareFullName', 'version', 'copyrightOwnerList', 'firstCopyrightOwner', 'developers', 'softwareMainFunctions', 'completionDate', 'registrationApplicationDate', 'registrationNumber', 'copyrightPublicationDate', 'firstPublicationDate', 'developmentMode', 'softwareCategory', 'hardwareEnvironment', 'developmentOperatingSystem', 'softwareDevelopmentEnvironment', 'operatingPlatform', 'softwareSupportEnvironment', 'developmentLanguage', 'sourceCodeQuantity', 'developmentPurpose', 'industryField', 'technicalFeatures', 'isPowerGridFirstCopyrightOwner', 'standardLevel', 'leadingUnit', 'participatingUnits', 'drafters', 'responsibleOrganization', 'currentStage', 'draftSubmissionDate', 'draftCommitDate', 'studentName', 'educationLevel', 'trainingUnit', 'supervisorName', 'thesisTitle', 'enrollmentDate', 'expectedGraduationDate', 'actualGraduationDate', 'trainingStatus'];
 
 interface FormValues extends Record<string, unknown> {
-  unitIndicatorAllocationId: string; topicId: string; unitId: string; nodeId: string;
+  unitIndicatorAllocationId: string; topicId: string; unitId: string; nodeId: string; indicatorDefinitionId: string;
   achievementType: ApiAchievement['achievementType']; title: string; responsiblePerson: string;
 }
 
@@ -95,7 +95,7 @@ export function AchievementEntryPage() {
     if (canSubmit && user.unitId) {
       const calls = businessTopics.flatMap((topic) => nodeRows.filter((node) => node.enabled).map((node) => indicatorApi.allocations(topic.id, node.id)));
       const settled = await Promise.allSettled(calls);
-      setAllocations(settled.flatMap((result) => result.status === 'fulfilled' ? result.value.rows : []).filter((item) => item.unitId === user.unitId && item.targetQuantity > 0));
+      setAllocations(settled.flatMap((result) => result.status === 'fulfilled' ? result.value.rows : []).filter((item) => item.unitId === user.unitId));
     }
   }, [canSubmit, progressFilters.nodeId, user.roleCode, user.unitId]);
   const loadRows = useCallback(async () => {
@@ -121,8 +121,8 @@ export function AchievementEntryPage() {
   const topicMap = useMemo(() => Object.fromEntries(progressTopics.map((item) => [item.id, item])), [progressTopics]);
   const unitMap = useMemo(() => Object.fromEntries(units.map((item) => [item.id, item.name])), [units]);
   const visibleUnitOptions = units.filter((unit) => rows.some((row) => row.unitId === unit.id));
-  const selectedAllocation = allocations.find((item) => item.id === allocationId);
-  const selectedType = editing?.achievementType ?? (selectedAllocation ? definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.achievementType as ApiAchievement['achievementType'] : undefined);
+  const selectedDefinitionId = String(allocationId ?? '').split(':')[1];
+  const selectedType = editing?.achievementType ?? definitions.find((item) => item.id === selectedDefinitionId)?.achievementType as ApiAchievement['achievementType'] | undefined;
   const workflowStage: 'PRE' | 'FORMAL' | 'SUPPLEMENT' = editing && ['FORMAL_DRAFT', 'FORMAL_RETURNED'].includes(editing.status) ? 'FORMAL'
     : editing && ['WAIT_PUBLICATION', 'WAIT_GRANT', 'WAIT_CERTIFICATE', 'SUPPLEMENT_RETURNED'].includes(editing.status) ? 'SUPPLEMENT' : 'PRE';
   const visibleRows = rows.filter((item) => matchesAchievementPhase(item.status, filters.status)
@@ -151,19 +151,17 @@ export function AchievementEntryPage() {
           allocated: unitBase.some((row) => row.targetPublished),
           target: unitBase.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0),
           stages: unitStages,
-          details: groupIndicatorRows(unitBase, unitSpecial)
-            .filter((row) => (row.targetQuantity ?? 0) > 0 || row.stages.submitted > 0),
+          details: groupIndicatorRows(unitBase, unitSpecial),
         };
       });
       return {
         topicId,
         target: selectedBase.reduce((sum, row) => sum + (row.targetQuantity ?? 0), 0),
         stages,
-        details: groupIndicatorRows(selectedBase, selectedSpecial)
-          .filter((row) => (row.targetQuantity ?? 0) > 0 || row.stages.submitted > 0),
+        details: groupIndicatorRows(selectedBase, selectedSpecial),
         units: unitRows,
       };
-    }).filter((summary) => summary.target > 0 || summary.stages.submitted > 0);
+    });
   }, [progress]);
   const renderIndicatorProgress = (details: TopicProgressSummary['details']) => <Table size="small"
     rowKey={(row) => `${row.scope}-${row.unitId ?? ''}-${row.indicatorDefinitionId}-${row.special}`}
@@ -180,9 +178,7 @@ export function AchievementEntryPage() {
     <Alert type="info" showIcon message="按单位查看成果提交情况；展开单位可查看各项指标明细。" />
     <Table<UnitProgressSummary> size="small" rowKey="key" dataSource={summary.units} pagination={false}
       locale={{ emptyText: '当前权限范围内暂无单位分配数据' }}
-      expandable={{ expandRowByClick: true, expandedRowRender: (unit) => unit.allocated
-        ? renderIndicatorProgress(unit.details)
-        : <Alert type="warning" showIcon message="牵头单位尚未提交该单位的指标分配方案" /> }}
+      expandable={{ expandRowByClick: true, expandedRowRender: (unit) => <>{!unit.allocated && <Alert type="warning" showIcon style={{ marginBottom: 10 }} message="该单位尚未下发指标，以下目标按 0 展示，已提交成果仍正常统计。" />}{renderIndicatorProgress(unit.details)}</> }}
       columns={[
         { title: '单位', dataIndex: 'unitId', render: (value: string) => <Text strong>{unitMap[value] ?? value}</Text> },
         { title: '提交状态', width: 120, render: (_: unknown, unit) => {
@@ -206,16 +202,14 @@ export function AchievementEntryPage() {
     setEditing(undefined); setPendingFiles({}); form.resetFields();
     form.setFieldsValue({
       unitId: user.unitId,
-      responsiblePerson: user.contactName || user.username,
+      responsiblePerson: user.principalName || user.username,
       projectLabeling: `${import.meta.env.VITE_PROJECT_NAME ?? '国家科技重大专项示范'}（${import.meta.env.VITE_PROJECT_CODE ?? 'GZ-2025-001'}）`,
     });
     setFormOpen(true);
   };
   const openEdit = (row: ApiAchievement) => {
     setEditing(row); setPendingFiles({});
-    const allocation = allocations.find((item) => item.topicId === row.topicId && item.unitId === row.unitId
-      && item.nodeId === row.nodeId && item.indicatorDefinitionId === row.indicatorDefinitionId);
-    form.setFieldsValue({ unitIndicatorAllocationId: allocation?.id, topicId: row.topicId, unitId: row.unitId, nodeId: row.nodeId,
+    form.setFieldsValue({ unitIndicatorAllocationId: `${row.nodeId}:${row.indicatorDefinitionId}`, indicatorDefinitionId: row.indicatorDefinitionId, topicId: row.topicId, unitId: row.unitId, nodeId: row.nodeId,
       achievementType: row.achievementType, title: row.title, responsiblePerson: row.responsiblePerson, ...row.detail });
     setFormOpen(true);
   };
@@ -230,15 +224,16 @@ export function AchievementEntryPage() {
   const save = async () => {
     try {
       const values = await form.validateFields();
-      const allocation = editing ? { topicId: editing.topicId, nodeId: editing.nodeId, indicatorDefinitionId: editing.indicatorDefinitionId } : selectedAllocation;
-      if (!allocation) return message.warning('请选择已下发的成果指标');
+      const ownership = editing ? { topicId: editing.topicId, nodeId: editing.nodeId, indicatorDefinitionId: editing.indicatorDefinitionId }
+        : { topicId: values.topicId, nodeId: values.nodeId, indicatorDefinitionId: values.indicatorDefinitionId };
+      if (!ownership.topicId || !ownership.nodeId || !ownership.indicatorDefinitionId) return message.warning('请选择成果指标与考核节点');
       const uploaded = await Promise.all(Object.entries(pendingFiles).map(async ([materialType, file]) => ({ materialType, file: await fileApi.upload(file, 'ACHIEVEMENT') })));
       const materialAttachments = editing ? [
         ...editing.materialLinks.filter((item) => item.active && !pendingFiles[item.materialType]).map((item) => ({ fileId: item.fileId, materialType: item.materialType })),
         ...uploaded.map((item) => ({ fileId: item.file.id, materialType: item.materialType })),
       ] : uploaded.map((item) => ({ fileId: item.file.id, materialType: item.materialType }));
       const detailValues = Object.fromEntries(detailKeys.filter((key) => values[key] !== undefined && values[key] !== '').map((key) => [key, values[key]]));
-      const body: AchievementWrite = { topicId: allocation.topicId, nodeId: allocation.nodeId, indicatorDefinitionId: allocation.indicatorDefinitionId, title: values.title, responsiblePerson: values.responsiblePerson, detail: detailValues, recordVersion: editing?.recordVersion, materialAttachments };
+      const body: AchievementWrite = { topicId: ownership.topicId, nodeId: ownership.nodeId, indicatorDefinitionId: ownership.indicatorDefinitionId, title: values.title, responsiblePerson: values.responsiblePerson, detail: detailValues, recordVersion: editing?.recordVersion, materialAttachments };
       if (editing) await achievementApi.update(editing.id, body); else await achievementApi.create(body);
       message.success(editing ? '成果已保存' : '成果已创建'); setFormOpen(false); await loadRows();
     } catch (error) { message.error(error instanceof Error ? error.message : '保存失败'); }

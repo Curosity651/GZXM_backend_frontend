@@ -46,6 +46,7 @@ public class SystemService {
                 .isNull(UserEntity::getDeletedAt)
                 .eq(enabled != null, UserEntity::getEnabled, enabled)
                 .and(StringUtils.hasText(keyword), q -> q.like(UserEntity::getUsername, keyword)
+                        .or().like(UserEntity::getPrincipalName, keyword)
                         .or().like(UserEntity::getContactName, keyword))
                 .orderByDesc(UserEntity::getCreatedAt);
         if (roleId != null) {
@@ -63,7 +64,8 @@ public class SystemService {
     public PageResult<UserView> listUsersFor(CurrentUser current, long page, long size, String keyword, Long roleId, Boolean enabled) {
         if ("SYSTEM_ADMIN".equals(current.roleCode())) return listUsers(page, size, keyword, roleId, enabled);
         UserView self = getUser(current.id());
-        boolean matches = (!StringUtils.hasText(keyword) || self.username().contains(keyword.trim()) || self.name().contains(keyword.trim()))
+        boolean matches = (!StringUtils.hasText(keyword) || self.username().contains(keyword.trim())
+                || self.principalName().contains(keyword.trim()) || self.contactName().contains(keyword.trim()))
                 && roleId == null && (enabled == null || enabled == self.enabled());
         return PageResult.of(matches ? List.of(self) : List.of(), page, size, matches ? 1 : 0);
     }
@@ -80,9 +82,12 @@ public class SystemService {
         UserEntity user = new UserEntity();
         user.setUsername(request.username().trim());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setContactName(request.name().trim());
-        user.setPhone(trimToNull(request.phone()));
-        user.setEmail(trimToNull(request.email()));
+        user.setPrincipalName(request.principalName().trim());
+        user.setPrincipalPhone(trimToNull(request.principalPhone()));
+        user.setPrincipalEmail(trimToNull(request.principalEmail()));
+        user.setContactName(request.contactName().trim());
+        user.setPhone(trimToNull(request.contactPhone()));
+        user.setEmail(trimToNull(request.contactEmail()));
         user.setUnitId(unitId);
         user.setAccountType(UNIT_ROLES.contains(role.getCode()) ? "TOPIC_UNIT" : "PLATFORM");
         user.setEnabled(request.enabled() == null || request.enabled());
@@ -118,7 +123,10 @@ public class SystemService {
                 String username = request.username().trim();
                 user.setUsername(username);
             }
-            if (StringUtils.hasText(request.name())) user.setContactName(request.name().trim());
+            if (StringUtils.hasText(request.principalName())) user.setPrincipalName(request.principalName().trim());
+            user.setPrincipalPhone(trimToNull(request.principalPhone()));
+            user.setPrincipalEmail(trimToNull(request.principalEmail()));
+            if (StringUtils.hasText(request.contactName())) user.setContactName(request.contactName().trim());
             if ("TOPIC_UNIT".equals(user.getAccountType()) && nextRole != null
                     && (StringUtils.hasText(request.unitId()) || StringUtils.hasText(request.unitName()))) {
                 Long nextUnitId = resolveAccountUnit(request.unitId(), request.unitName(), nextRole);
@@ -126,8 +134,8 @@ public class SystemService {
                     throw BusinessException.conflict("USER_UNIT_ASSIGNED", "该用户已承担课题，请先解除课题人员关系后再修改单位");
                 user.setUnitId(nextUnitId);
             }
-            user.setPhone(trimToNull(request.phone()));
-            user.setEmail(trimToNull(request.email()));
+            user.setPhone(trimToNull(request.contactPhone()));
+            user.setEmail(trimToNull(request.contactEmail()));
             if (roleChanged) user.setTokenVersion(user.getTokenVersion() + 1);
             user.setUpdatedAt(LocalDateTime.now());
             users.updateById(user);
@@ -144,17 +152,21 @@ public class SystemService {
     public UserView updateSelfProfile(CurrentUser current, long id, UpdateUserRequest request) {
         requireSelfOrAdministrator(current, id);
         if ("SYSTEM_ADMIN".equals(current.roleCode())) return updateUser(id, request);
-        if (request.roleId() != null || request.name() != null || request.unitId() != null || request.unitName() != null)
-            throw BusinessException.forbidden("SELF_PROFILE_FIELD_DENIED", "本人只能修改用户名、手机号和邮箱");
+        if (request.roleId() != null || request.principalName() != null || request.principalPhone() != null
+                || request.principalEmail() != null || request.unitId() != null || request.unitName() != null)
+            throw BusinessException.forbidden("SELF_PROFILE_FIELD_DENIED", "本人只能修改用户名、联系人及其联系方式");
         if (!StringUtils.hasText(request.username()))
             throw BusinessException.validation("USERNAME_REQUIRED", "用户名不能为空");
+        if (!StringUtils.hasText(request.contactName()))
+            throw BusinessException.validation("CONTACT_NAME_REQUIRED", "联系人不能为空");
         UserEntity user = requireUserLocked(id);
         String username = request.username().trim();
         boolean usernameChanged = !username.equals(user.getUsername());
         try {
             user.setUsername(username);
-            user.setPhone(trimToNull(request.phone()));
-            user.setEmail(trimToNull(request.email()));
+            user.setContactName(request.contactName().trim());
+            user.setPhone(trimToNull(request.contactPhone()));
+            user.setEmail(trimToNull(request.contactEmail()));
             if (usernameChanged) user.setTokenVersion(user.getTokenVersion() + 1);
             user.setUpdatedAt(LocalDateTime.now());
             users.updateById(user);
@@ -254,11 +266,12 @@ public class SystemService {
                         .eq(unitId != null, UserEntity::getUnitId, unitId)
                         .inSql(UserEntity::getId, "SELECT ur.user_id FROM sys_user_role ur JOIN sys_role r ON r.id=ur.role_id " +
                                 "WHERE r.enabled=1 AND r.code IN ('INTERNAL_TOPIC_UNIT','EXTERNAL_TOPIC_UNIT')")
-                        .orderByAsc(UserEntity::getUnitId).orderByAsc(UserEntity::getContactName))
+                        .orderByAsc(UserEntity::getUnitId).orderByAsc(UserEntity::getPrincipalName))
                 .stream().map(user -> {
                     var unit = unitDirectory.get(user.getUnitId());
-                    return new TopicUserView(String.valueOf(user.getId()), user.getUsername(), user.getContactName(),
-                            String.valueOf(user.getUnitId()), unit == null ? null : unit.getName(), true);
+                    return new TopicUserView(String.valueOf(user.getId()), user.getUsername(), user.getPrincipalName(),
+                            user.getContactName(), user.getPhone(), user.getEmail(), String.valueOf(user.getUnitId()),
+                            unit == null ? null : unit.getName(), true);
                 }).toList();
     }
 
@@ -266,10 +279,11 @@ public class SystemService {
         Long roleId = relations.findRoleId(user.getId());
         RoleEntity role = roleId == null ? null : roles.selectById(roleId);
         UnitEntity unit = user.getUnitId() == null ? null : units.selectById(user.getUnitId());
-        return new UserView(String.valueOf(user.getId()), user.getUsername(), user.getContactName(),
+        return new UserView(String.valueOf(user.getId()), user.getUsername(), user.getPrincipalName(),
+                user.getPrincipalPhone(), user.getPrincipalEmail(), user.getContactName(), user.getPhone(), user.getEmail(),
                 user.getUnitId() == null ? null : String.valueOf(user.getUnitId()), unit == null ? null : unit.getName(),
                 role == null ? null : String.valueOf(role.getId()), role == null ? null : role.getName(),
-                user.getPhone(), user.getEmail(), Boolean.TRUE.equals(user.getEnabled()), user.getCreatedAt());
+                Boolean.TRUE.equals(user.getEnabled()), user.getCreatedAt());
     }
 
     private RoleView toRoleView(RoleEntity role) {

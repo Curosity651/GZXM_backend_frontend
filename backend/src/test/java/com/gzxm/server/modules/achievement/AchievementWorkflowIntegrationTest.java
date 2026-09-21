@@ -31,7 +31,8 @@ class AchievementWorkflowIntegrationTest {
     @DynamicPropertySource static void database(DynamicPropertyRegistry registry) {
         String url=System.getenv("GZXM_TOPIC_TEST_MYSQL_URL");
         if(url==null || url.isBlank()) {
-            container=new MySQLContainer<>("mysql:8.4").withDatabaseName("gzxm_topic_test_achievements");container.start();
+            container=new MySQLContainer<>("mysql:8.4").withDatabaseName("gzxm_topic_test_achievements")
+                    .withCommand("--log-bin-trust-function-creators=1");container.start();
             registry.add("spring.datasource.url",container::getJdbcUrl);registry.add("spring.datasource.username",container::getUsername);registry.add("spring.datasource.password",container::getPassword);
         } else {
             if(!url.matches("jdbc:mysql://(127\\.0\\.0\\.1|localhost):[0-9]+/gzxm_topic_test_[a-zA-Z0-9_]+(\\?.*)?")) throw new IllegalArgumentException("Use a local gzxm_topic_test_* database only");
@@ -49,11 +50,13 @@ class AchievementWorkflowIntegrationTest {
         cleanupHistory();
         for(String table:List.of("achievement_workflow_operation","achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
                 "topic_indicator_publication","topic_indicator_draft_target","topic_indicator_draft","topic_indicator","time_node","indicator_definition",
-                "biz_topic_unit_membership","biz_topic","biz_project","sys_unit","audit_log")) jdbc.update("DELETE FROM "+table);
+                "biz_topic_user_assignment","biz_topic_unit_membership","biz_topic","biz_project","audit_log","sys_user","sys_unit")) jdbc.update("DELETE FROM "+table);
         jdbc.update("INSERT INTO biz_project(id,code,name) VALUES(1,'P','Synthetic project')");
         for(int i=1;i<=4;i++) jdbc.update("INSERT INTO sys_unit(id,code,name,internal_flag) VALUES(?,?,?,?)",i,"U"+i,"Synthetic unit "+i,i!=3);
+        for(int i=1;i<=4;i++) jdbc.update("INSERT IGNORE INTO sys_user(id,username,password_hash,principal_name,contact_name,unit_id,account_type) VALUES(?,?,?,'Synthetic principal','Synthetic contact',?,'TOPIC_UNIT')",100+i,"synthetic-"+i,"test",i);
         jdbc.update("INSERT INTO biz_topic(id,project_id,code,name,lead_unit_id,created_by,updated_by) VALUES(1,1,'T','Synthetic topic',1,101,101)");
         for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_unit_membership(id,topic_id,unit_id,membership_type,created_by,updated_by) VALUES(?,1,?,?,101,101)",i,i,i==1?"LEAD":"PARTICIPANT");
+        for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_user_assignment(membership_id,user_id,created_by,updated_by) VALUES(?,?,101,101)",i,100+i);
         jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order) VALUES(1,1,'MID','Mid','2027-01-01',1),(2,1,'END','End','2028-01-01',2)");
         String[] types={"PAPER","PATENT","COPYRIGHT","STANDARD","TALENT"};
         for(int i=1;i<=5;i++) {
@@ -191,10 +194,10 @@ class AchievementWorkflowIntegrationTest {
     }
     @Test void snapshotFailureRollsBackEverythingAndRetryCanSucceed() throws Exception {
         String id=create(1,2).path("id").asText();var request=actionBody(id,"SUBMIT_PRE_REVIEW");String retryKey=key();
-        jdbc.execute("CREATE TRIGGER fail_achievement_snapshot BEFORE INSERT ON submission_snapshot FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic snapshot failure'");
+        jdbc.execute("ALTER TABLE submission_snapshot ADD CONSTRAINT chk_fail_achievement_snapshot CHECK (business_type<>'ACHIEVEMENT')");
         try {
             call(post("/api/v1/achievements/"+id+"/actions").header("Idempotency-Key",retryKey).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isInternalServerError());
-        } finally {jdbc.execute("DROP TRIGGER fail_achievement_snapshot");}
+        } finally {jdbc.execute("ALTER TABLE submission_snapshot DROP CHECK chk_fail_achievement_snapshot");}
         assertThat(current(id).path("status").asText()).isEqualTo("DRAFT");assertThat(current(id).path("recordVersion").asInt()).isEqualTo(1);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM achievement_workflow_operation",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action_code='achievement.action'",Integer.class)).isZero();
@@ -264,9 +267,9 @@ class AchievementWorkflowIntegrationTest {
     }
     @Test void failedOperationPersistenceRollsBackApprovalAndStatus() throws Exception {
         String id=create(1,2).path("id").asText();action(id,"SUBMIT_PRE_REVIEW");var request=reviewBody(id,"APPROVE");String retryKey=key();
-        jdbc.execute("CREATE TRIGGER fail_achievement_operation BEFORE INSERT ON achievement_workflow_operation FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic operation failure'");
+        jdbc.execute("ALTER TABLE achievement_workflow_operation ADD CONSTRAINT chk_fail_achievement_operation CHECK (operation_kind<>'REVIEW')");
         try {reviewCall(id,"RESEARCH_ASSISTANT",request,retryKey).andExpect(status().isInternalServerError());}
-        finally {jdbc.execute("DROP TRIGGER fail_achievement_operation");}
+        finally {jdbc.execute("ALTER TABLE achievement_workflow_operation DROP CHECK chk_fail_achievement_operation");}
         assertThat(current(id).path("status").asText()).isEqualTo("PRE_INITIAL");assertThat(current(id).path("recordVersion").asInt()).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM approval_record WHERE business_type='ACHIEVEMENT'",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action_code='achievement.review'",Integer.class)).isZero();

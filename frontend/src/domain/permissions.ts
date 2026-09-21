@@ -22,7 +22,7 @@ export const ACTION_PERMISSION_OPTIONS: { value: ActionKey; label: string; group
   { value: 'topic.manage', label: '维护课题', group: '科研指标' },
   { value: 'indicator.manage', label: '维护指标', group: '科研指标' },
   { value: 'topic-indicator.publish', label: '下发课题指标', group: '科研指标' },
-  { value: 'topic-unit.manage', label: '维护课题承担单位', group: '科研指标' },
+  { value: 'topic-unit.manage', label: '维护课题参与单位', group: '科研指标' },
   { value: 'unit-allocation.manage', label: '维护单位指标', group: '科研指标' },
   { value: 'unit-allocation.publish', label: '下发单位指标', group: '科研指标' },
   { value: 'achievement.submit', label: '提交成果', group: '成果管理' },

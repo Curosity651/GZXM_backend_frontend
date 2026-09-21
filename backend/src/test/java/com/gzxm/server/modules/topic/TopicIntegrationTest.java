@@ -40,7 +40,9 @@ class TopicIntegrationTest {
     static void database(DynamicPropertyRegistry registry) {
         String url = System.getenv("GZXM_TOPIC_TEST_MYSQL_URL");
         if (url == null || url.isBlank()) {
-            container = new MySQLContainer<>("mysql:8.4").withDatabaseName("gzxm_topic_test_container");
+            container = new MySQLContainer<>("mysql:8.4")
+                    .withDatabaseName("gzxm_topic_test_container")
+                    .withCommand("--log-bin-trust-function-creators=1");
             container.start();
             registry.add("spring.datasource.url", container::getJdbcUrl);
             registry.add("spring.datasource.username", container::getUsername);
@@ -135,6 +137,7 @@ class TopicIntegrationTest {
         jdbc.update("DELETE FROM topic_indicator");
         jdbc.update("DELETE FROM time_node");
         jdbc.update("DELETE FROM indicator_definition");
+        jdbc.update("DELETE FROM biz_topic_user_assignment");
         jdbc.update("DELETE FROM biz_topic_unit_membership");
         jdbc.update("DELETE FROM biz_topic");
         jdbc.update("DELETE FROM biz_project");
@@ -147,6 +150,7 @@ class TopicIntegrationTest {
             jdbc.update("INSERT INTO sys_unit(id,code,name,internal_flag,enabled) VALUES(?,?,?,?,?)",
                     unit, "TEST-U" + unit, "Synthetic unit " + unit, unit != 3, unit != 5);
         }
+        jdbc.update("INSERT INTO sys_user(id,username,password_hash,principal_name,contact_name,account_type,enabled) VALUES(101,'synthetic-assistant','unused','Synthetic assistant','Synthetic assistant','PLATFORM',1)");
         jdbc.update("INSERT IGNORE INTO sys_role(id,code,name,built_in,enabled) VALUES(9001,'INTERNAL_TOPIC_UNIT','Synthetic internal topic unit',1,1)");
         jdbc.update("INSERT IGNORE INTO sys_role(id,code,name,built_in,enabled) VALUES(9002,'EXTERNAL_TOPIC_UNIT','Synthetic external topic unit',1,1)");
         for (int unit = 1; unit <= 5; unit++) {
@@ -293,7 +297,9 @@ class TopicIntegrationTest {
         call(get("/api/v1/topics/" + id), "SYSTEM_ADMIN", null).andExpect(status().isOk());
         call(post("/api/v1/topics/" + id + "/members").content("{\"unitId\":\"2\"}"), "INTERNAL_TOPIC_UNIT", 1L).andExpect(status().isConflict());
         call(put("/api/v1/topics/" + id + "/members/" + member + "/status").content("{\"enabled\":true}"), "INTERNAL_TOPIC_UNIT", 1L).andExpect(status().isOk());
-        call(get("/api/v1/topics/" + id), "INTERNAL_TOPIC_UNIT", 2L).andExpect(status().isOk());
+        // Disabling a membership deliberately revokes its user assignments. Restoring the unit
+        // relationship alone must not silently restore access for previously assigned users.
+        call(get("/api/v1/topics/" + id), "INTERNAL_TOPIC_UNIT", 2L).andExpect(status().isForbidden());
     }
 
     @ParameterizedTest
@@ -646,9 +652,9 @@ class TopicIntegrationTest {
     void failedPublicationRollsBackHistoryEffectiveRowsAndPublishedRevision() throws Exception {
         String topic=indicatorTopic();
         saveTarget(topic,1,0,"[{\"indicatorDefinitionId\":\"1\",\"targetQuantity\":2},{\"indicatorDefinitionId\":\"2\",\"targetQuantity\":1}]").andExpect(status().isOk());
-        jdbc.execute("CREATE TRIGGER fail_indicator_test BEFORE INSERT ON topic_indicator FOR EACH ROW BEGIN IF NEW.indicator_definition_id=2 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic failure'; END IF; END");
+        jdbc.execute("ALTER TABLE topic_indicator ADD CONSTRAINT chk_fail_indicator_test CHECK (indicator_definition_id<>2)");
         try { publishTarget(topic,1,1,"rollback-publication").andExpect(status().isInternalServerError()); }
-        finally { jdbc.execute("DROP TRIGGER fail_indicator_test"); }
+        finally { jdbc.execute("ALTER TABLE topic_indicator DROP CHECK chk_fail_indicator_test"); }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator_publication",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM topic_indicator",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT published_draft_version FROM topic_indicator_draft",Integer.class)).isZero();
@@ -691,7 +697,11 @@ class TopicIntegrationTest {
     }
 
     private TopicWriteRequest write(String code, String lead, List<String> participants, Integer version) {
-        return new TopicWriteRequest(code, "Synthetic topic", null, lead, participants, java.util.Map.of(), null, null, version);
+        var assignments = new LinkedHashMap<String, List<String>>();
+        assignments.put(lead, List.of(Long.toString(9100 + Long.parseLong(lead))));
+        if (participants != null) for (String participant : participants)
+            assignments.put(participant, List.of(Long.toString(9100 + Long.parseLong(participant))));
+        return new TopicWriteRequest(code, "Synthetic topic", null, lead, participants, assignments, null, null, version);
     }
 
     private long memberId(String topic, long unit) {
@@ -707,7 +717,7 @@ class TopicIntegrationTest {
                 "SELECT * FROM biz_topic_unit_membership WHERE unit_id=? AND enabled=1",
                 (rs, row) -> new CurrentUser.TopicMembership(rs.getLong("id"), rs.getLong("topic_id"), rs.getLong("unit_id"),
                         rs.getString("membership_type"), rs.getBoolean("enabled")), unit);
-        return new CurrentUser(101, "synthetic-actor", unit, role,
+        return new CurrentUser(unit == null ? 101 : 9100 + unit, "synthetic-actor", unit, role,
                 Set.of("topic.manage", "topic-unit.manage", "indicator.manage", "topic-indicator.publish", "ROLE_" + role), memberships, 0);
     }
 

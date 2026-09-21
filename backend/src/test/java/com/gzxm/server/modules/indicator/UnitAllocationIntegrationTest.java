@@ -29,7 +29,8 @@ class UnitAllocationIntegrationTest {
     static void database(DynamicPropertyRegistry registry) {
         String url=System.getenv("GZXM_TOPIC_TEST_MYSQL_URL");
         if(url==null || url.isBlank()) {
-            container=new MySQLContainer<>("mysql:8.4").withDatabaseName("gzxm_topic_test_allocations");
+            container=new MySQLContainer<>("mysql:8.4").withDatabaseName("gzxm_topic_test_allocations")
+                    .withCommand("--log-bin-trust-function-creators=1");
             container.start();
             registry.add("spring.datasource.url",container::getJdbcUrl);
             registry.add("spring.datasource.username",container::getUsername);
@@ -56,11 +57,13 @@ class UnitAllocationIntegrationTest {
     void fixtures() {
         for(String table:List.of("achievement_workflow_operation","achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
                 "topic_indicator_publication","topic_indicator_draft_target","topic_indicator_draft","topic_indicator",
-                "time_node","indicator_definition","biz_topic_unit_membership","biz_topic","biz_project","sys_unit","audit_log")) jdbc.update("DELETE FROM "+table);
+                "time_node","indicator_definition","biz_topic_user_assignment","biz_topic_unit_membership","biz_topic","biz_project","audit_log","sys_user","sys_unit")) jdbc.update("DELETE FROM "+table);
         jdbc.update("INSERT INTO biz_project(id,code,name) VALUES(1,'P','Synthetic project')");
         for(int i=1;i<=5;i++) jdbc.update("INSERT INTO sys_unit(id,code,name,internal_flag,enabled) VALUES(?,?,?,?,?)",i,"U"+i,"Synthetic unit "+i,i!=3,i!=5);
         jdbc.update("INSERT INTO biz_topic(id,project_id,code,name,lead_unit_id,created_by,updated_by) VALUES(1,1,'T','Synthetic topic',1,101,101)");
         for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_unit_membership(id,topic_id,unit_id,membership_type,created_by,updated_by) VALUES(?,1,?,?,101,101)",i,i,i==1?"LEAD":"PARTICIPANT");
+        for(int i=1;i<=4;i++) jdbc.update("INSERT INTO sys_user(id,username,password_hash,principal_name,contact_name,unit_id,account_type) VALUES(?,?,?,'Synthetic principal','Synthetic contact',?,'TOPIC_UNIT')",100+i,"synthetic-allocation-"+i,"unused",i);
+        for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_user_assignment(membership_id,user_id,created_by,updated_by) VALUES(?,?,101,101)",i,100+i);
         jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order,enabled) VALUES(1,1,'MID','Mid','2027-01-01',1,1),(2,1,'END','End','2028-01-01',2,1),(3,1,'OFF','Off','2029-01-01',3,0)");
         jdbc.update("INSERT INTO indicator_definition(id,code,name,achievement_type,category,unit_name) VALUES(1,'BASE','Papers','PAPER','BASE','count'),(2,'SPECIAL','Special papers','PAPER','SPECIAL','count')");
         jdbc.update("INSERT INTO topic_indicator(id,project_id,topic_id,node_id,indicator_definition_id,target_quantity,status,publish_version) VALUES(1,1,1,1,1,5,'PUBLISHED',1),(2,1,1,2,1,10,'PUBLISHED',1)");
@@ -264,9 +267,9 @@ class UnitAllocationIntegrationTest {
     @Test
     void secondRowFailureRollsBackPublicationAndAllowsRetry() throws Exception {
         save(1,0,rows(1,2,2)).andExpect(status().isOk());
-        jdbc.execute("CREATE TRIGGER fail_allocation_test BEFORE INSERT ON unit_indicator_allocation FOR EACH ROW BEGIN IF NEW.unit_id=2 THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='synthetic allocation failure'; END IF; END");
+        jdbc.execute("ALTER TABLE unit_indicator_allocation ADD CONSTRAINT chk_fail_allocation_test CHECK (unit_id<>2)");
         try { publish(1,1,"rollback-allocation-key").andExpect(status().isInternalServerError()); }
-        finally { jdbc.execute("DROP TRIGGER fail_allocation_test"); }
+        finally { jdbc.execute("ALTER TABLE unit_indicator_allocation DROP CHECK chk_fail_allocation_test"); }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM unit_allocation_publication",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM unit_indicator_allocation",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT published_draft_version FROM unit_allocation_draft",Integer.class)).isZero();

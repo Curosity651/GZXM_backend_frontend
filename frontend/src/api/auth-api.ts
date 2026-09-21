@@ -3,6 +3,7 @@ import { apiRequest } from './http-client';
 export interface ApiCurrentUser {
   id: string;
   username: string;
+  principalName?: string;
   contactName?: string;
   unitId?: string;
   unitName?: string;

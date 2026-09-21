@@ -15,6 +15,9 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
+import java.util.Set;
+
+import com.gzxm.server.common.security.CurrentUser;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -77,7 +80,8 @@ class SystemServiceTest {
         when(relations.findRoleId(41L)).thenReturn(5L);
 
         var result = service.createUser(new CreateUserRequest(
-                "qinghua_zhang", "5", "张老师", "13800000000", "teacher@example.com", true,
+                "qinghua_zhang", "5", "张老师", "13800000000", "principal@example.com",
+                "李老师", "13900000000", "contact@example.com", true,
                 null, "清华大学", "Password123"));
 
         assertThat(result.user().username()).isEqualTo("qinghua_zhang");
@@ -96,6 +100,8 @@ class SystemServiceTest {
             assertThat(user.getUnitId()).isEqualTo(31L);
             assertThat(user.getAccountType()).isEqualTo("TOPIC_UNIT");
             assertThat(user.getPasswordHash()).isEqualTo("hashed-password");
+            assertThat(user.getPrincipalName()).isEqualTo("张老师");
+            assertThat(user.getContactName()).isEqualTo("李老师");
         });
         verify(relations).assignRole(41L, 5L);
         verify(passwordEncoder).encode("Password123");
@@ -110,10 +116,37 @@ class SystemServiceTest {
         when(roles.selectById(4L)).thenReturn(role(4, "INTERNAL_TOPIC_UNIT"));
 
         assertThatThrownBy(() -> service.updateUser(41L,
-                new UpdateUserRequest("assistant", "4", "科研助理", null, null, null, null)))
+                new UpdateUserRequest("assistant", "4", "科研助理", null, null,
+                        "联系人", null, null, null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).code()).isEqualTo("USER_ROLE_CATEGORY_CHANGE_DENIED");
         verify(relations, never()).assignRole(41L, 4L);
+    }
+
+    @Test
+    void ordinaryUserCanUpdateOwnContactButNotResponsiblePerson() {
+        UserEntity user = new UserEntity();
+        user.setId(41L); user.setUsername("member"); user.setPrincipalName("负责人");
+        user.setContactName("原联系人"); user.setEnabled(true); user.setTokenVersion(0);
+        when(users.lockById(41L)).thenReturn(user);
+
+        var current = new CurrentUser(41, "member", null, "INTERNAL_TOPIC_UNIT", Set.of(), List.of(), 0);
+        var updated = service.updateSelfProfile(current, 41,
+                new UpdateUserRequest("member-new", null, null, null, null,
+                        "新联系人", "13800000000", "contact@example.com", null, null));
+
+        assertThat(updated.contactName()).isEqualTo("新联系人");
+        assertThat(updated.contactPhone()).isEqualTo("13800000000");
+        assertThat(user.getPrincipalName()).isEqualTo("负责人");
+        assertThat(user.getTokenVersion()).isEqualTo(1);
+        verify(users).updateById(user);
+
+        assertThatThrownBy(() -> service.updateSelfProfile(current, 41,
+                new UpdateUserRequest("member-new", null, "越权修改", null, null,
+                        "新联系人", null, null, null, null)))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).code())
+                .isEqualTo("SELF_PROFILE_FIELD_DENIED");
     }
 
     private RoleEntity role(long id, String code) {

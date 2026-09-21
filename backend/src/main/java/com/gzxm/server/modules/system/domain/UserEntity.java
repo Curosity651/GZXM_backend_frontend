@@ -15,6 +15,9 @@ public class UserEntity {
     private Long id;
     private String username;
     private String passwordHash;
+    private String principalName;
+    private String principalPhone;
+    private String principalEmail;
     private String contactName;
     private String phone;
     private String email;

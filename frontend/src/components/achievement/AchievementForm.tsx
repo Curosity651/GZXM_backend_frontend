@@ -30,14 +30,13 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
   const topicId = Form.useWatch('topicId', form);
   const allocationId = Form.useWatch('unitIndicatorAllocationId', form);
   const unit = units.find((item) => item.id === currentUnitId);
-  const baseDefinitionIds = new Set(definitions.filter((item) => item.enabled && item.category === 'BASE').map((item) => item.id));
-  const availableAllocations = allocations.filter((item) => item.status === 'PUBLISHED'
-    && item.targetQuantity > 0
-    && item.unitId === currentUnitId
-    && item.topicId === topicId
-    && baseDefinitionIds.has(item.indicatorDefinitionId));
-  const selectedAllocation = allocations.find((item) => item.id === allocationId);
-  const selectedNode = nodes.find((item) => item.id === selectedAllocation?.nodeId);
+  const activeNodes = nodes.filter((item) => item.enabled).sort((a, b) => a.sortOrder - b.sortOrder);
+  const baseDefinitions = definitions.filter((item) => item.enabled && item.category === 'BASE');
+  const [selectedNodeId, selectedDefinitionId] = String(allocationId ?? '').split(':');
+  const selectedNode = nodes.find((item) => item.id === selectedNodeId);
+  const selectedDefinition = definitions.find((item) => item.id === selectedDefinitionId);
+  const selectedAllocation = allocations.find((item) => item.status === 'PUBLISHED' && item.unitId === currentUnitId
+    && item.topicId === topicId && item.nodeId === selectedNodeId && item.indicatorDefinitionId === selectedDefinitionId);
 
   return (
     <div>
@@ -55,11 +54,7 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
                 disabled={lockOwnership}
                 onChange={() => form.setFieldsValue({ unitIndicatorAllocationId: undefined, indicatorDefinitionId: undefined, achievementType: undefined, nodeId: undefined })}
               >
-                {topics.filter((item) => allocations.some((allocation) => allocation.status === 'PUBLISHED'
-                  && allocation.targetQuantity > 0
-                  && allocation.unitId === currentUnitId
-                  && allocation.topicId === item.id
-                  && baseDefinitionIds.has(allocation.indicatorDefinitionId))).map((t) => (
+                {topics.map((t) => (
                   <Option key={t.id} value={t.id}>{t.name}</Option>
                 ))}
               </Select>
@@ -72,24 +67,24 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
             <Form.Item name="unitId" hidden rules={[{ required: true, message: '缺少当前账号所属单位' }]}><Input /></Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item label="对应成果指标" name="unitIndicatorAllocationId" rules={[{ required: true, message: '请选择当前单位已下发的成果指标' }]}>
+            <Form.Item label="对应成果指标" name="unitIndicatorAllocationId" rules={[{ required: true, message: '请选择成果指标与考核节点' }]}>
               <Select
-                placeholder={topicId ? '选择已下发的成果指标' : '请先选择课题'}
+                placeholder={topicId ? '选择成果指标与考核节点' : '请先选择课题'}
                 disabled={!topicId || lockOwnership}
-                onChange={(id) => {
-                  const allocation = allocations.find((item) => item.id === id);
-                  const definition = definitions.find((item) => item.id === allocation?.indicatorDefinitionId);
+                onChange={(id: string) => {
+                  const [nodeId, definitionId] = id.split(':');
+                  const definition = definitions.find((item) => item.id === definitionId);
                   form.setFieldsValue({
-                    indicatorDefinitionId: allocation?.indicatorDefinitionId,
+                    indicatorDefinitionId: definitionId,
                     achievementType: definition?.achievementType,
-                    nodeId: allocation?.nodeId,
+                    nodeId,
                   });
                 }}
-                options={availableAllocations.map((allocation) => {
-                  const definition = definitions.find((item) => item.id === allocation.indicatorDefinitionId);
-                  const node = nodes.find((item) => item.id === allocation.nodeId);
-                  return { label: `${definition?.name ?? definition?.achievementType ?? '成果指标'} · ${node?.name ?? allocation.nodeId}（目标 ${allocation.targetQuantity}）`, value: allocation.id };
-                })}
+                options={activeNodes.flatMap((node) => baseDefinitions.map((definition) => {
+                  const allocation = allocations.find((item) => item.status === 'PUBLISHED' && item.unitId === currentUnitId
+                    && item.topicId === topicId && item.nodeId === node.id && item.indicatorDefinitionId === definition.id);
+                  return { label: `${definition.name} · ${node.name}（目标 ${allocation?.targetQuantity ?? 0}）`, value: `${node.id}:${definition.id}` };
+                }))}
               />
             </Form.Item>
             <Form.Item name="indicatorDefinitionId" hidden><Input /></Form.Item>
@@ -103,7 +98,7 @@ export function AchievementForm({ form, topics, units, lockOwnership = false, de
           </Col>
           <Col span={12}>
             <Form.Item label="本单位下发目标">
-              <Input value={selectedAllocation ? `${selectedAllocation.targetQuantity} ${definitions.find((item) => item.id === selectedAllocation.indicatorDefinitionId)?.unit ?? '项'}` : '—'} disabled />
+              <Input value={selectedDefinition ? `${selectedAllocation?.targetQuantity ?? 0} ${selectedDefinition.unit}` : '—'} disabled />
             </Form.Item>
           </Col>
           <Col span={12}>

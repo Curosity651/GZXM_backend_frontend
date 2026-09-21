@@ -246,7 +246,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
   saveTopicMembership: (membership, operatorId) => {
     const operator = get().users.find((item) => item.id === operatorId);
     const allowed = Boolean(operator && isTopicOperational(get().topics.find((item) => item.id === membership.topicId)) && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
-    if (!allowed) throw new Error('没有维护该课题承担单位的权限');
+    if (!allowed) throw new Error('没有维护该课题参与单位的权限');
     set((state) => ({
       topicMemberships: state.topicMemberships.some((item) => item.id === membership.id) ? state.topicMemberships.map((item) => item.id === membership.id ? membership : item) : [...state.topicMemberships, membership],
       users: state.users.map((user) => user.unitId === membership.unitId && membership.enabled ? { ...user, dataScope: 'TOPICS', topicIds: [...new Set([...(user.topicIds ?? []), membership.topicId])], topicId: user.topicId ?? membership.topicId } : user),
@@ -256,7 +256,7 @@ const stateCreator: StateCreator<AppState> = (set, get) => ({
     const membership = get().topicMemberships.find((item) => item.id === id);
     const operator = get().users.find((item) => item.id === operatorId);
     const allowed = Boolean(membership && operator && isTopicOperational(get().topics.find((item) => item.id === membership.topicId)) && (canPerform(operator, get().roles, 'topic.manage') || (canPerform(operator, get().roles, 'topic-unit.manage') && isTopicLead(operator, membership.topicId, get().topicMemberships))));
-    if (!allowed) throw new Error('没有维护该课题承担单位的权限');
+    if (!allowed) throw new Error('没有维护该课题参与单位的权限');
     set((state) => {
       const membership = state.topicMemberships.find((item) => item.id === id);
       if (!membership || membership.membershipType === 'LEAD') return {};

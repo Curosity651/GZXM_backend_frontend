@@ -118,7 +118,7 @@ export function RealIndicatorConfigPage() {
       <Table loading={loading} rowKey="id" dataSource={rows} pagination={false} columns={[
         { title: '课题', render: (_: unknown, row: ApiTopic) => <Space direction="vertical" size={0}><span><Tag color="blue">{row.code}</Tag><b>{row.name}</b></span><Typography.Text type="secondary">{row.summary || '暂无研究内容摘要'}</Typography.Text></Space> },
         { title: '牵头单位', render: (_: unknown, row: ApiTopic) => unitMap[row.leadUnitId] ?? row.leadUnitId },
-        { title: '承担单位', render: (_: unknown, row: ApiTopic) => `${row.members.filter((member) => member.enabled && member.membershipType === 'PARTICIPANT').length} 个` },
+        { title: '参与单位', render: (_: unknown, row: ApiTopic) => `${row.members.filter((member) => member.enabled && member.membershipType === 'PARTICIPANT').length} 个` },
         { title: '状态', render: (_: unknown, row: ApiTopic) => <Tag color={row.enabled ? statusColor[row.status] : 'default'}>{row.enabled ? statusLabel[row.status] : '已停用'}</Tag> },
         { title: '操作', width: 330, render: (_: unknown, row: ApiTopic) => topicActions(row) },
       ]} />
@@ -328,8 +328,6 @@ export function RealTopicIndicatorConfigPage() {
       if (!Object.keys(targetMap).length) return `${node.name}的课题指标尚未提交`;
       const stageValues = allocationsByNode[node.id] ?? {};
       for (const definition of definitions) {
-        for (const member of activeMembers) if (stageValues[`${member.unitId}:${definition.id}`] === undefined)
-          return `${node.name} / ${unitMap[member.unitId] ?? member.unitName} / ${definition.name}尚未填写`;
         const sum = activeMembers.reduce((total, member) => total + (stageValues[`${member.unitId}:${definition.id}`] ?? 0), 0);
         if (sum !== (targetMap[definition.id] ?? 0))
           return `${node.name} / ${definition.name}：要求分配 ${targetMap[definition.id] ?? 0}${definition.unit}，当前已分配 ${sum}${definition.unit}`;
@@ -393,8 +391,7 @@ export function RealTopicIndicatorConfigPage() {
     const targets = Object.fromEntries((allocationTargetsByNode[stageId] ?? []).map((target) => [target.indicatorDefinitionId, target.targetQuantity]));
     const values = allocationsByNode[stageId] ?? {};
     return Object.keys(targets).length > 0 && definitions.every((definition) =>
-      activeMembers.every((member) => values[`${member.unitId}:${definition.id}`] !== undefined)
-      && activeMembers.reduce((sum, member) => sum + (values[`${member.unitId}:${definition.id}`] ?? 0), 0) === (targets[definition.id] ?? 0));
+      activeMembers.reduce((sum, member) => sum + (values[`${member.unitId}:${definition.id}`] ?? 0), 0) === (targets[definition.id] ?? 0));
   };
   const completedStages = nodes.filter((node) => stageComplete(node.id)).length;
 
@@ -417,14 +414,13 @@ export function RealTopicIndicatorConfigPage() {
         } },
         ...activeMembers.map((member: TopicMember) => ({ title: unitMap[member.unitId] ?? member.unitName, children: [
           { title: '本阶段', width: 110, render: (_: unknown, row: IndicatorTarget) => <InputNumber min={0} precision={0} disabled={!canManageAllocations || !nodeId}
-            placeholder="未填" value={allocations[`${member.unitId}:${row.indicatorDefinitionId}`]}
-            onChange={(value) => nodeId && setAllocationsByNode({ ...allocationsByNode, [nodeId]: { ...allocations, [`${member.unitId}:${row.indicatorDefinitionId}`]: value ?? undefined } })} /> },
+            value={allocations[`${member.unitId}:${row.indicatorDefinitionId}`] ?? 0}
+            onChange={(value) => nodeId && setAllocationsByNode({ ...allocationsByNode, [nodeId]: { ...allocations, [`${member.unitId}:${row.indicatorDefinitionId}`]: value ?? 0 } })} /> },
           { title: '累计', width: 90, render: (_: unknown, row: IndicatorTarget) => <Typography.Text style={{ color: '#1677ff', fontWeight: 600 }}>{cumulativeAllocation(member.unitId, row.indicatorDefinitionId)}</Typography.Text> },
         ] })),
         { title: '此阶段分配情况', fixed: 'right', width: 170, render: (_: unknown, row: IndicatorTarget) => {
-          const filled = activeMembers.every((member) => allocations[`${member.unitId}:${row.indicatorDefinitionId}`] !== undefined);
           const assigned = activeMembers.reduce((sum, member) => sum + (allocations[`${member.unitId}:${row.indicatorDefinitionId}`] ?? 0), 0);
-          const complete = filled && assigned === row.targetQuantity;
+          const complete = assigned === row.targetQuantity;
           return <Typography.Text type={complete ? 'success' : 'warning'}>{complete ? '已完成' : '未完成'} {assigned}/{row.targetQuantity}</Typography.Text>;
         } },
       ]} />
@@ -447,11 +443,11 @@ export function RealTopicIndicatorConfigPage() {
           <Form.Item name="leadUnitId" label="牵头单位" rules={[{ required: true, message: '请选择牵头单位' }]}><Select showSearch optionFilterProp="label" options={eligibleTopicUnits.map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
           {selectedLeadUnitId && <Form.Item label="牵头人员" required><Select mode="multiple" value={memberUserIds[selectedLeadUnitId] ?? []}
             onChange={(value) => setMemberUserIds((current) => ({ ...current, [selectedLeadUnitId]: value }))}
-            placeholder="请选择该单位的牵头人员" options={topicUsers.filter((item) => item.unitId === selectedLeadUnitId).map((item) => ({ value: item.id, label: `${item.name}（${item.username}）` }))} /></Form.Item>}
-          <Form.Item name="participantUnitIds" label="承担单位"><Select mode="multiple" options={eligibleTopicUnits.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
-          {selectedParticipantUnitIds.map((unitId: string) => <Form.Item key={unitId} label={`${units.find((unit) => unit.id === unitId)?.name ?? '承担单位'}人员`} required>
+            placeholder="请选择该单位的牵头人员" options={topicUsers.filter((item) => item.unitId === selectedLeadUnitId).map((item) => ({ value: item.id, label: `${item.principalName}（${item.username}）` }))} /></Form.Item>}
+          <Form.Item name="participantUnitIds" label="参与单位"><Select mode="multiple" options={eligibleTopicUnits.filter((unit) => unit.id !== selectedLeadUnitId).map((unit) => ({ value: unit.id, label: unit.name }))} /></Form.Item>
+          {selectedParticipantUnitIds.map((unitId: string) => <Form.Item key={unitId} label={`${units.find((unit) => unit.id === unitId)?.name ?? '参与单位'}人员`} required>
             <Select mode="multiple" value={memberUserIds[unitId] ?? []} onChange={(value) => setMemberUserIds((current) => ({ ...current, [unitId]: value }))}
-              placeholder="请选择该单位的承担人员" options={topicUsers.filter((item) => item.unitId === unitId).map((item) => ({ value: item.id, label: `${item.name}（${item.username}）` }))} />
+              placeholder="请选择该单位的参与人员" options={topicUsers.filter((item) => item.unitId === unitId).map((item) => ({ value: item.id, label: `${item.principalName}（${item.username}）` }))} />
           </Form.Item>)}
           <Row gutter={12}><Col span={12}><Form.Item name="startDate" label="开始日期"><Input type="date" /></Form.Item></Col><Col span={12}><Form.Item name="endDate" label="结束日期"><Input type="date" /></Form.Item></Col></Row>
           <Form.Item name="summary" label="研究内容摘要"><Input.TextArea rows={4} /></Form.Item>

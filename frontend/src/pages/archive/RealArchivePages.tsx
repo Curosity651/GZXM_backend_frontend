@@ -106,7 +106,7 @@ function RealFolderFileList({ folder, editable, canUpload, canDownload, onChange
 }
 
 function membershipLabel(topic: ApiTopic | undefined, unitId: string) {
-  return topic?.members.find((item) => item.unitId === unitId && item.enabled)?.membershipType === 'LEAD' ? '牵头单位' : '承担单位';
+  return topic?.members.find((item) => item.unitId === unitId && item.enabled)?.membershipType === 'LEAD' ? '牵头单位' : '参与单位';
 }
 
 export function RealNationalArchivePage() {

@@ -46,11 +46,13 @@ class AchievementIntegrationTest {
     @BeforeEach void fixtures() {
         for(String table:List.of("achievement_workflow_operation","achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
                 "topic_indicator_publication","topic_indicator_draft_target","topic_indicator_draft","topic_indicator","time_node","indicator_definition",
-                "biz_topic_unit_membership","biz_topic","biz_project","sys_unit","audit_log")) jdbc.update("DELETE FROM "+table);
+                "biz_topic_user_assignment","biz_topic_unit_membership","biz_topic","biz_project","audit_log","sys_user","sys_unit")) jdbc.update("DELETE FROM "+table);
         jdbc.update("INSERT INTO biz_project(id,code,name) VALUES(1,'P','Synthetic project')");
         for(int i=1;i<=4;i++) jdbc.update("INSERT INTO sys_unit(id,code,name,internal_flag) VALUES(?,?,?,?)",i,"U"+i,"Synthetic unit "+i,i!=3);
+        for(int i=1;i<=4;i++) jdbc.update("INSERT IGNORE INTO sys_user(id,username,password_hash,principal_name,contact_name,unit_id,account_type) VALUES(?,?,?,'Synthetic principal','Synthetic contact',?,'TOPIC_UNIT')",100+i,"synthetic-"+i,"test",i);
         jdbc.update("INSERT INTO biz_topic(id,project_id,code,name,lead_unit_id,created_by,updated_by) VALUES(1,1,'T','Synthetic topic',1,101,101)");
         for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_unit_membership(id,topic_id,unit_id,membership_type,created_by,updated_by) VALUES(?,1,?,?,101,101)",i,i,i==1?"LEAD":"PARTICIPANT");
+        for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_user_assignment(membership_id,user_id,created_by,updated_by) VALUES(?,?,101,101)",i,100+i);
         jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order) VALUES(1,1,'MID','Mid','2027-01-01',1),(2,1,'END','End','2028-01-01',2)");
         String[] types={"PAPER","PATENT","COPYRIGHT","STANDARD","TALENT"};
         for(int i=1;i<=5;i++) {
@@ -104,13 +106,14 @@ class AchievementIntegrationTest {
             call(post("/api/v1/achievements").content(request.toString()),"EXTERNAL_TOPIC_UNIT",3L).andExpect(status().isCreated());
         }
     }
-    @Test void rejectsUnassignedSpecialWrongNodeDisabledAndOutsiderCreation() throws Exception {
+    @Test void permitsUnassignedAndZeroTargetButRejectsSpecialDisabledAndOutsiderCreation() throws Exception {
         jdbc.update("UPDATE unit_indicator_allocation SET status='DRAFT' WHERE unit_id=2");
-        call(post("/api/v1/achievements").content(body(1).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
+        call(post("/api/v1/achievements").content(body(1).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isCreated());
         jdbc.update("UPDATE unit_indicator_allocation SET status='PUBLISHED' WHERE unit_id=2");
         jdbc.update("UPDATE indicator_definition SET category='SPECIAL' WHERE id=1");
         call(post("/api/v1/achievements").content(body(1).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isUnprocessableEntity());
-        var request=body(2).put("nodeId","2");call(post("/api/v1/achievements").content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
+        jdbc.update("UPDATE indicator_definition SET category='BASE' WHERE id=1");
+        var request=body(2).put("nodeId","2");call(post("/api/v1/achievements").content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isCreated());
         jdbc.update("UPDATE sys_unit SET enabled=0 WHERE id=2");
         call(post("/api/v1/achievements").content(body(2).toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isForbidden());
         call(post("/api/v1/achievements").content(body(2).toString()),"INTERNAL_TOPIC_UNIT",4L).andExpect(status().isForbidden());
@@ -149,10 +152,10 @@ class AchievementIntegrationTest {
         request.put("indicatorDefinitionId","1");request.remove("recordVersion");
         call(put("/api/v1/achievements/"+id).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
     }
-    @Test void missingFileCapabilityFailsClosedAndRollsBackDraft() throws Exception {
+    @Test void missingFileReferenceFailsClosedAndRollsBackDraft() throws Exception {
         var request=body(1);request.set("materialAttachments",json.readTree("[{\"fileId\":\"123\",\"materialType\":\"论文附件\"}]"));
-        call(post("/api/v1/achievements").content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("FILE_REFERENCE_CAPABILITY_UNAVAILABLE"));
+        call(post("/api/v1/achievements").content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("FILE_NOT_FOUND"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM achievement",Integer.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM achievement_material",Integer.class)).isZero();
         request.remove("materialAttachments");request.set("materialFileIds",json.readTree("[\"123\"]"));
@@ -164,7 +167,7 @@ class AchievementIntegrationTest {
         jdbc.update("UPDATE achievement SET record_version=1000 WHERE id=?",id);
         var request=body(1).put("recordVersion",1000).put("title","Must roll back");
         request.set("materialAttachments",json.readTree("[{\"fileId\":\"123\",\"materialType\":\"论文附件\"}]"));
-        call(put("/api/v1/achievements/"+id).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isServiceUnavailable());
+        call(put("/api/v1/achievements/"+id).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isNotFound());
         call(get("/api/v1/achievements/"+id),"INTERNAL_TOPIC_UNIT",2L).andExpect(jsonPath("$.recordVersion").value(1000))
                 .andExpect(jsonPath("$.title").value("Synthetic achievement"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE action_code='achievement.update'",Integer.class)).isZero();
@@ -195,12 +198,12 @@ class AchievementIntegrationTest {
         jdbc.update("UPDATE biz_topic SET status='ACTIVE'");jdbc.update("UPDATE achievement SET status='SUBMITTED'");
         call(put("/api/v1/achievements/"+id).content(request.toString()),"INTERNAL_TOPIC_UNIT",2L).andExpect(status().isConflict());
     }
-    @Test void formalSubmissionCannotBypassMissingProductionFileCapability() throws Exception {
+    @Test void formalSubmissionRequiresConfiguredMaterials() throws Exception {
         String id=create(5,2).path("id").asText();
         jdbc.update("UPDATE achievement SET status='FORMAL_DRAFT',detail_json=? WHERE id=?","{\"actualGraduationDate\":\"2026-01-01\"}",id);
         call(post("/api/v1/achievements/"+id+"/actions").header("Idempotency-Key","formal-without-files")
                 .content("{\"action\":\"SUBMIT_FORMAL\",\"recordVersion\":1}"),"INTERNAL_TOPIC_UNIT",2L)
-                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("FILE_REFERENCE_CAPABILITY_UNAVAILABLE"));
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("ACHIEVEMENT_MATERIALS_REQUIRED"));
         assertThat(jdbc.queryForObject("SELECT status FROM achievement WHERE id=?",String.class,id)).isEqualTo("FORMAL_DRAFT");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM achievement_workflow_operation",Integer.class)).isZero();
     }

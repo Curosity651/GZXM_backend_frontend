@@ -49,11 +49,13 @@ class AchievementProgressIntegrationTest {
         cleanupHistory();
         for(String table:List.of("achievement_workflow_operation","achievement_material","achievement","unit_allocation_publication","unit_allocation_draft_item","unit_allocation_draft","unit_indicator_allocation",
                 "topic_indicator_publication","topic_indicator_draft_target","topic_indicator_draft","topic_indicator","time_node","indicator_definition",
-                "biz_topic_unit_membership","biz_topic","biz_project","sys_unit","audit_log")) jdbc.update("DELETE FROM "+table);
+                "biz_topic_user_assignment","biz_topic_unit_membership","biz_topic","biz_project","audit_log","sys_user","sys_unit")) jdbc.update("DELETE FROM "+table);
         jdbc.update("INSERT INTO biz_project(id,code,name) VALUES(1,'P','Synthetic project')");
         for(int i=1;i<=4;i++) jdbc.update("INSERT INTO sys_unit(id,code,name,internal_flag) VALUES(?,?,?,?)",i,"U"+i,"Synthetic unit "+i,i!=3);
         jdbc.update("INSERT INTO biz_topic(id,project_id,code,name,lead_unit_id,created_by,updated_by) VALUES(1,1,'T','Synthetic topic',1,101,101)");
         for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_unit_membership(id,topic_id,unit_id,membership_type,created_by,updated_by) VALUES(?,1,?,?,101,101)",i,i,i==1?"LEAD":"PARTICIPANT");
+        for(int i=1;i<=4;i++) jdbc.update("INSERT INTO sys_user(id,username,password_hash,principal_name,contact_name,unit_id,account_type) VALUES(?,?,?,'Synthetic principal','Synthetic contact',?,'TOPIC_UNIT')",100+i,"synthetic-progress-"+i,"unused",i);
+        for(int i=1;i<=3;i++) jdbc.update("INSERT INTO biz_topic_user_assignment(membership_id,user_id,created_by,updated_by) VALUES(?,?,101,101)",i,100+i);
         jdbc.update("INSERT INTO time_node(id,project_id,code,name,deadline,sort_order) VALUES(1,1,'MID','Mid','2027-01-01',1),(2,1,'END','End','2028-01-01',2)");
         String[] types={"PAPER","PATENT","COPYRIGHT","STANDARD","TALENT"};
         for(int i=1;i<=5;i++) {
@@ -116,8 +118,8 @@ class AchievementProgressIntegrationTest {
     @Test void progressUsesTheSameRoleVisibilityAsAchievementLists() throws Exception {
         fact(1,2,1,1,"DRAFT",false,"{}");fact(2,2,1,1,"PRE_INITIAL",false,"{}");
         assertThat(statistics("SYSTEM_ADMIN",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
-        assertThat(statistics("RESEARCH_ASSISTANT",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(1);
-        assertThat(statistics("PROJECT_TECH_LEADER",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isZero();
+        assertThat(statistics("RESEARCH_ASSISTANT",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
+        assertThat(statistics("PROJECT_TECH_LEADER",null,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
         assertThat(statistics("INTERNAL_TOPIC_UNIT",2L,"nodeId=1&topicId=1").path("baseStages").path("initiated").asLong()).isEqualTo(2);
     }
     @Test void overlappingSpecialsDoNotInflateBaseAndBooleanStringsDoNotMatch() throws Exception {
@@ -139,6 +141,7 @@ class AchievementProgressIntegrationTest {
     }
     @Test void zeroAndUnpublishedTargetsAreDistinctAndNeverProduceFakePercentages() throws Exception {
         fact(1,2,1,1,"EFFECTIVE",true,"{}");
+        jdbc.update("UPDATE unit_indicator_allocation SET target_quantity=0 WHERE unit_id=2 AND indicator_definition_id=1");
         jdbc.update("UPDATE unit_indicator_allocation SET status='DRAFT' WHERE unit_id=2 AND indicator_definition_id=2");
         var result=statistics("INTERNAL_TOPIC_UNIT",2L,"topicId=1&nodeId=1");
         var zero=row(result,"UNIT","2","1");var absent=row(result,"UNIT","2","2");

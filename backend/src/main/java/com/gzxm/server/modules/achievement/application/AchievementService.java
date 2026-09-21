@@ -71,7 +71,7 @@ public class AchievementService {
         var user=writer();
         long topicId=TopicService.id(request.topicId()),nodeId=TopicService.id(request.nodeId()),definitionId=TopicService.id(request.indicatorDefinitionId());
         writable(topics.lockTopic(topicId));
-        var assignment=assignments.requireAssigned(topicId,nodeId,definitionId);
+        var assignment=assignments.requireEligible(topicId,nodeId,definitionId);
         var row=new AchievementEntity();
         row.setProjectId(assignment.projectId());row.setTopicId(topicId);row.setNodeId(nodeId);row.setIndicatorDefinitionId(definitionId);
         row.setMembershipId(assignment.membershipId());row.setUnitId(assignment.unitId());row.setAchievementType(assignment.achievementType());
@@ -92,7 +92,7 @@ public class AchievementService {
         if(request.recordVersion()==null || !Objects.equals(request.recordVersion(),row.getRecordVersion())) throw conflict("ACHIEVEMENT_VERSION_CONFLICT","请携带最新recordVersion");
         if(row.getTopicId()!=TopicService.id(request.topicId()) || row.getNodeId()!=TopicService.id(request.nodeId())
                 || row.getIndicatorDefinitionId()!=TopicService.id(request.indicatorDefinitionId())) throw conflict("ACHIEVEMENT_OWNERSHIP_IMMUTABLE","创建后的课题、节点和指标归属不可更换");
-        var assignment=assignments.requireAssigned(row.getTopicId(),row.getNodeId(),row.getIndicatorDefinitionId());
+        var assignment=assignments.requireEligible(row.getTopicId(),row.getNodeId(),row.getIndicatorDefinitionId());
         if(!assignment.achievementType().equals(row.getAchievementType())) throw conflict("ACHIEVEMENT_TYPE_CHANGED","指标类型已变更，请先核对配置");
         if(row.getRecordVersion()==Integer.MAX_VALUE) throw conflict("ACHIEVEMENT_VERSION_EXHAUSTED","版本已达上限");
         apply(row,request);row.setUpdatedBy(user.id());

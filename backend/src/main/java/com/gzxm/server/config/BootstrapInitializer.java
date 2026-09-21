@@ -134,7 +134,7 @@ public class BootstrapInitializer implements ApplicationRunner {
         if (admin != null) return;
         admin = new UserEntity();
         admin.setUsername(properties.bootstrap().adminUsername()); admin.setPasswordHash(encoder.encode(properties.bootstrap().adminPassword()));
-        admin.setContactName("系统管理员"); admin.setAccountType("PLATFORM"); admin.setEnabled(true); admin.setTokenVersion(0);
+        admin.setPrincipalName("系统管理员"); admin.setContactName("系统管理员"); admin.setAccountType("PLATFORM"); admin.setEnabled(true); admin.setTokenVersion(0);
         admin.setCreatedAt(LocalDateTime.now()); admin.setUpdatedAt(LocalDateTime.now()); users.insert(admin);
         relations.assignRole(admin.getId(), adminRole.getId());
     }

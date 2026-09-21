@@ -21,7 +21,7 @@ export function IndicatorMonitoringPage() {
     })}</Row>
     <Card title="课题—单位指标完成情况"><Table rowKey={(row) => `${row.topicId}-${row.unitId}`} dataSource={summaries} pagination={false} columns={[
       { title: '课题', dataIndex: 'topicName', render: (value, row) => <Space><Tag>{row.topicCode}</Tag><Text strong>{value}</Text></Space> },
-      { title: '承担单位', dataIndex: 'unitName' },
+      { title: '参与单位', dataIndex: 'unitName' },
       { title: '目标数量', dataIndex: 'planned', width: 110 }, { title: '完成数量', dataIndex: 'completed', width: 110 },
       { title: '指标缺口', dataIndex: 'gap', width: 100, render: (value) => value ? <Tag color="red">缺 {value}</Tag> : <Tag color="green">已达标</Tag> },
       { title: '完成率', dataIndex: 'rate', width: 260, render: (value) => <Progress percent={value} status={value < 50 ? 'exception' : 'active'} /> },

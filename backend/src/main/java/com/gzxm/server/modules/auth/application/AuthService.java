@@ -68,7 +68,7 @@ public class AuthService {
         authorities.add("ROLE_" + roleCode);
         List<CurrentUser.TopicMembership> memberships = user.getUnitId() == null ? List.of() : relations.findMemberships(user.getId());
         var unit = user.getUnitId() == null ? null : units.selectById(user.getUnitId());
-        return new CurrentUser(user.getId(), user.getUsername(), user.getContactName(), user.getUnitId(),
+        return new CurrentUser(user.getId(), user.getUsername(), user.getPrincipalName(), user.getContactName(), user.getUnitId(),
                 unit == null ? null : unit.getName(), roleCode,
                 Set.copyOf(authorities), List.copyOf(memberships), user.getTokenVersion());
     }

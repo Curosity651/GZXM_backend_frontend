@@ -4,8 +4,8 @@ import { DownOutlined, EditOutlined, KeyOutlined, PlusOutlined, ReloadOutlined, 
 import { systemApi, type ApiRole, type ApiUnit, type ApiUser } from '../../api/system-api';
 import { useSessionStore } from '../../store/session';
 
-interface UserFilters { username?: string; roleId?: string; contactName?: string; unitName?: string; enabled?: boolean; phone?: string; email?: string }
-interface UserForm { username: string; roleId: string; name: string; unitName?: string; phone?: string; email?: string; enabled?: boolean; password?: string; confirmPassword?: string }
+interface UserFilters { username?: string; roleId?: string; principalName?: string; contactName?: string; unitName?: string; enabled?: boolean; contactPhone?: string; contactEmail?: string }
+interface UserForm { username: string; roleId: string; principalName: string; principalPhone?: string; principalEmail?: string; contactName: string; contactPhone?: string; contactEmail?: string; unitName?: string; enabled?: boolean; password?: string; confirmPassword?: string }
 interface PasswordForm { password: string; confirmPassword: string }
 
 export function UserManagementPage() {
@@ -46,14 +46,16 @@ export function UserManagementPage() {
   useEffect(() => { void load({}); }, [load]);
 
   const visibleUsers = useMemo(() => users.filter((user) => {
+    const principal = filters.principalName?.trim().toLowerCase();
     const contact = filters.contactName?.trim().toLowerCase();
-    const phone = filters.phone?.trim();
-    const email = filters.email?.trim().toLowerCase();
+    const phone = filters.contactPhone?.trim();
+    const email = filters.contactEmail?.trim().toLowerCase();
     const unitName = filters.unitName?.trim().toLowerCase();
-    return (!contact || user.name.toLowerCase().includes(contact))
-      && (!phone || user.phone?.includes(phone))
+    return (!principal || user.principalName.toLowerCase().includes(principal))
+      && (!contact || user.contactName.toLowerCase().includes(contact))
+      && (!phone || user.contactPhone?.includes(phone))
       && (!unitName || user.unitName?.toLowerCase().includes(unitName))
-      && (!email || user.email?.toLowerCase().includes(email));
+      && (!email || user.contactEmail?.toLowerCase().includes(email));
   }), [filters, users]);
   const activeRoles = roles.filter((role) => role.enabled || role.id === editing?.roleId);
   const editingRole = roles.find((role) => role.id === editing?.roleId);
@@ -73,15 +75,15 @@ export function UserManagementPage() {
       if (editing) {
         const usernameChanged = values.username.trim() !== editing.username;
         await systemApi.updateUser(editing.id, isAdministrator
-          ? { username: values.username.trim(), roleId: values.roleId, name: values.name.trim(), unitName: values.unitName, phone: values.phone, email: values.email }
-          : { username: values.username.trim(), phone: values.phone, email: values.email });
+          ? { username: values.username.trim(), roleId: values.roleId, principalName: values.principalName.trim(), principalPhone: values.principalPhone, principalEmail: values.principalEmail, contactName: values.contactName.trim(), contactPhone: values.contactPhone, contactEmail: values.contactEmail, unitName: values.unitName }
+          : { username: values.username.trim(), contactName: values.contactName.trim(), contactPhone: values.contactPhone, contactEmail: values.contactEmail });
         if (isAdministrator && values.enabled !== undefined && values.enabled !== editing.enabled) await systemApi.setUserStatus(editing.id, values.enabled);
         message.success('账号信息已更新');
         if (!isAdministrator && usernameChanged) {
           setOpen(false); editForm.resetFields(); expireSession(); return;
         }
       } else {
-        await systemApi.createUser({ username: values.username.trim(), roleId: values.roleId, name: values.name.trim(), unitName: values.unitName, phone: values.phone, email: values.email, enabled: true, password: values.password! });
+        await systemApi.createUser({ username: values.username.trim(), roleId: values.roleId, principalName: values.principalName.trim(), principalPhone: values.principalPhone, principalEmail: values.principalEmail, contactName: values.contactName.trim(), contactPhone: values.contactPhone, contactEmail: values.contactEmail, unitName: values.unitName, enabled: true, password: values.password! });
         message.success('账号已创建，可使用设置的密码登录');
       }
       setOpen(false); editForm.resetFields(); await load(filters);
@@ -110,20 +112,23 @@ export function UserManagementPage() {
     {isAdministrator && <Card className="user-filter-card"><Form form={filterForm} colon={false} onFinish={search}><div className="user-filter-grid">
       <Form.Item label="用户名" name="username"><Input allowClear placeholder="请输入用户名或姓名" /></Form.Item>
       <Form.Item label="角色" name="roleId"><Select allowClear placeholder="请选择角色" options={roles.map((role) => ({ label: role.name, value: role.id }))} /></Form.Item>
-      <Form.Item label="联系人" name="contactName"><Input allowClear placeholder="请输入联系人姓名" /></Form.Item>
+      <Form.Item label="负责人" name="principalName"><Input allowClear placeholder="请输入负责人姓名" /></Form.Item>
       <Form.Item label="所属单位" name="unitName"><Input allowClear placeholder="请输入单位名称" /></Form.Item>
       <Form.Item label="状态" name="enabled"><Select allowClear placeholder="请选择状态" options={[{ label: '启用', value: true }, { label: '停用', value: false }]} /></Form.Item>
-      {expanded && <><Form.Item label="手机号" name="phone"><Input allowClear /></Form.Item><Form.Item label="邮箱" name="email"><Input allowClear /></Form.Item></>}
+      {expanded && <><Form.Item label="联系人" name="contactName"><Input allowClear /></Form.Item><Form.Item label="联系人手机号" name="contactPhone"><Input allowClear /></Form.Item><Form.Item label="联系人邮箱" name="contactEmail"><Input allowClear /></Form.Item></>}
       <div className="user-filter-actions"><Space><Button type="primary" htmlType="submit" icon={<SearchOutlined />}>查询</Button><Button onClick={resetFilters}>重置</Button><Button type="link" onClick={() => setExpanded((value) => !value)} icon={expanded ? <UpOutlined /> : <DownOutlined />} iconPosition="end">{expanded ? '收起' : '展开'}</Button></Space></div>
     </div></Form></Card>}
-    <Card className="user-list-card"><div className="user-list-toolbar"><div><Typography.Title level={4}>{isAdministrator ? '用户列表' : '个人账号'}</Typography.Title><Typography.Text type="secondary">{isAdministrator ? `共 ${visibleUsers.length} 个用户` : '可修改用户名、手机号、邮箱和登录密码'}</Typography.Text></div><Space>{isAdministrator && <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建用户</Button>}<Tooltip title="刷新列表"><Button icon={<ReloadOutlined />} onClick={() => void load(filters)} /></Tooltip></Space></div>
+    <Card className="user-list-card"><div className="user-list-toolbar"><div><Typography.Title level={4}>{isAdministrator ? '用户列表' : '个人账号'}</Typography.Title><Typography.Text type="secondary">{isAdministrator ? `共 ${visibleUsers.length} 个用户` : '可修改用户名、联系人及其联系方式和登录密码'}</Typography.Text></div><Space>{isAdministrator && <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建用户</Button>}<Tooltip title="刷新列表"><Button icon={<ReloadOutlined />} onClick={() => void load(filters)} /></Tooltip></Space></div>
       <Table loading={loading} rowKey="id" dataSource={visibleUsers} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }} scroll={{ x: 1020 }} columns={[
         { title: '用户名', dataIndex: 'username', width: 180, fixed: 'left' },
         { title: '所属单位', dataIndex: 'unitName', width: 190, render: (value) => value || '—' },
         { title: '角色', dataIndex: 'roleName', width: 160, render: (value) => <Tag color="blue">{value ?? '未分配'}</Tag> },
-        { title: '联系人', dataIndex: 'name', width: 160 },
-        { title: '手机号', dataIndex: 'phone', width: 130, render: (value) => value || '—' },
-        { title: '邮箱', dataIndex: 'email', width: 210, render: (value) => value || '—' },
+        { title: '负责人', dataIndex: 'principalName', width: 140 },
+        { title: '负责人手机号', dataIndex: 'principalPhone', width: 140, render: (value) => value || '—' },
+        { title: '负责人邮箱', dataIndex: 'principalEmail', width: 190, render: (value) => value || '—' },
+        { title: '联系人', dataIndex: 'contactName', width: 140 },
+        { title: '联系人手机号', dataIndex: 'contactPhone', width: 140, render: (value) => value || '—' },
+        { title: '联系人邮箱', dataIndex: 'contactEmail', width: 190, render: (value) => value || '—' },
         { title: '状态', dataIndex: 'enabled', width: 90, render: (value, user) => isAdministrator ? <Switch checked={value} disabled={user.id === currentUser?.id} onChange={(checked) => void changeStatus(user, checked)} /> : <Tag color={value ? 'green' : 'default'}>{value ? '启用' : '停用'}</Tag> },
         { title: '操作', width: 220, fixed: 'right', render: (_, user) => <Space><Button type="link" size="small" icon={<EditOutlined />} onClick={() => openForm(user)}>编辑</Button><Button type="link" size="small" icon={<KeyOutlined />} onClick={() => { setPasswordUser(user); passwordForm.resetFields(); }}>修改密码</Button></Space> },
       ]} />
@@ -139,8 +144,8 @@ export function UserManagementPage() {
           const internal = roleCode === 'INTERNAL_TOPIC_UNIT';
           return <Form.Item label="所属单位" name="unitName" rules={[{ required: true, message: '请选择或输入所属单位' }]}><AutoComplete allowClear placeholder="选择已有单位或直接输入新单位名称" options={units.filter((unit) => unit.internal === internal).map((unit) => ({ label: unit.name, value: unit.name }))} /></Form.Item>;
         }}</Form.Item>
-        <Form.Item label="联系人" name="name" rules={[{ required: true, message: '请输入联系人姓名' }]}><Input disabled={!isAdministrator} /></Form.Item>
-        <Row gutter={16}><Col span={12}><Form.Item label="手机号" name="phone"><Input /></Form.Item></Col><Col span={12}><Form.Item label="邮箱" name="email" rules={[{ type: 'email', message: '请输入正确的邮箱地址' }]}><Input /></Form.Item></Col></Row>
+        <Row gutter={16}><Col span={8}><Form.Item label="负责人" name="principalName" rules={[{ required: true, message: '请输入负责人姓名' }]}><Input disabled={!isAdministrator} /></Form.Item></Col><Col span={8}><Form.Item label="负责人手机号" name="principalPhone"><Input disabled={!isAdministrator} /></Form.Item></Col><Col span={8}><Form.Item label="负责人邮箱" name="principalEmail" rules={[{ type: 'email', message: '请输入正确的邮箱地址' }]}><Input disabled={!isAdministrator} /></Form.Item></Col></Row>
+        <Row gutter={16}><Col span={8}><Form.Item label="联系人" name="contactName" rules={[{ required: true, message: '请输入联系人姓名' }]}><Input /></Form.Item></Col><Col span={8}><Form.Item label="联系人手机号" name="contactPhone"><Input /></Form.Item></Col><Col span={8}><Form.Item label="联系人邮箱" name="contactEmail" rules={[{ type: 'email', message: '请输入正确的邮箱地址' }]}><Input /></Form.Item></Col></Row>
         {!editing && <Row gutter={16}><Col span={12}><Form.Item label="登录密码" name="password" rules={[{ required: true, message: '请输入登录密码' }, { min: 8, max: 72, message: '密码长度应为8至72位' }]}><Input.Password autoComplete="new-password" /></Form.Item></Col><Col span={12}><Form.Item label="确认密码" name="confirmPassword" dependencies={['password']} rules={[{ required: true, message: '请再次输入密码' }, ({ getFieldValue }) => ({ validator: (_, value) => !value || getFieldValue('password') === value ? Promise.resolve() : Promise.reject(new Error('两次输入的密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item></Col></Row>}
         {editing && isAdministrator && <Form.Item label="账号状态" name="enabled" valuePropName="checked"><Switch checkedChildren="启用" unCheckedChildren="停用" disabled={editing.id === currentUser?.id} /></Form.Item>}
       </Form>
