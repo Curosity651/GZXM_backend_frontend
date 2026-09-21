@@ -25,12 +25,8 @@ export function PaperFields({ workflowStage = 'PRE' }: { workflowStage?: 'PRE' |
         </Form.Item>
       </Col>
       <Col span={12}>
-        <Form.Item label="收录类别" name="paperType" rules={[{ required: true, message: '请选择收录类别' }]}>
-          <Select placeholder="选择收录类别">
-            {paperTypeOptions.map((t) => (
-              <Option key={t} value={t}>{t}</Option>
-            ))}
-          </Select>
+        <Form.Item label="论文收录类别" name="paperType" rules={[{ required: true, message: '请选择论文收录类别' }]}>
+          <Select placeholder="选择论文收录类别" options={paperTypeOptions.map((option) => ({ ...option }))} />
         </Form.Item>
       </Col>
       <Col span={12}>
